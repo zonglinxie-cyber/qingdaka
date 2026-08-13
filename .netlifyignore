@@ -1,0 +1,24 @@
+# 部署排除项（与 .gitignore / 审查打包规则一致）
+node_modules/
+__pycache__/
+*.pyc
+.DS_Store
+server.pid
+mobile-qr.png
+.netlify/
+.git/
+
+# 本地脚本 / 测试 / 非部署文件
+scripts/
+*.py
+test.html
+test_relay.py
+verify*.mjs
+probe*.mjs
+package.json
+package-lock.json
+code-review.md
+serve.json
+vercel.json
+api/
+README.md

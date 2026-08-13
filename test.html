@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>轻打卡 · 单元测试</title>
+<style>
+  body{font-family:system-ui,sans-serif;margin:0;padding:24px;background:#1a1814;color:#ede7da}
+  h1{font-size:20px;margin:0 0 4px}
+  #summary{font-size:15px;font-weight:700;margin:12px 0 20px;padding:12px 16px;border-radius:10px}
+  #summary.pass{background:#233026;color:#8cc79d}
+  #summary.fail{background:#3a2420;color:#e0655a}
+  .t{padding:7px 12px;border-radius:8px;margin:4px 0;font-size:13.5px;font-family:ui-monospace,monospace}
+  .t.ok{background:#1f2a22;color:#8cc79d}
+  .t.bad{background:#3a2420;color:#e0655a}
+  .t.bad b{color:#fff}
+  /* 隐藏注入的真实 app DOM，只用于让 app.js 顺利初始化 */
+  #app-host{display:none}
+</style>
+</head>
+<body>
+<h1>轻打卡 · 单元测试</h1>
+<div id="summary">运行中…</div>
+<div id="results"></div>
+<div id="app-host"></div>
+
+<script>
+// 在加载 app.js 前打开测试钩子
+window.__EXPOSE_FOR_TEST__ = true;
+</script>
+<script>
+(function(){
+  'use strict';
+  var results = document.getElementById('results');
+  var passed = 0, failed = 0;
+
+  function assert(cond, name){
+    var div = document.createElement('div');
+    if(cond){ passed++; div.className = 't ok'; div.textContent = '✓ ' + name; }
+    else { failed++; div.className = 't bad'; div.innerHTML = '✗ <b>' + name + '</b>'; }
+    results.appendChild(div);
+  }
+  function eq(a, b, name){ assert(a === b, name + '  (got ' + JSON.stringify(a) + ', want ' + JSON.stringify(b) + ')'); }
+
+  // 1) 抓取 index.html 的真实 body 结构注入页面，让 app.js 能找到所有 DOM 节点
+  fetch('./index.html').then(function(r){ return r.text(); }).then(function(html){
+    var body = html.replace(/^[\s\S]*?<body[^>]*>/, '').replace(/<\/body>[\s\S]*$/, '');
+    // 移除 index.html 里对 app.js 的引用（我们会手动加载）
+    body = body.replace(/<script src="\.\/app\.js"><\/script>/, '');
+    document.getElementById('app-host').innerHTML = body;
+
+    // 2) 动态加载 app.js
+    var s = document.createElement('script');
+    s.src = './app.js';
+    s.onload = runTests;
+    s.onerror = function(){ document.getElementById('summary').textContent = '无法加载 app.js'; document.getElementById('summary').className = 'fail'; };
+    document.body.appendChild(s);
+  }).catch(function(e){
+    document.getElementById('summary').textContent = '无法读取 index.html: ' + e;
+    document.getElementById('summary').className = 'fail';
+  });
+
+  function runTests(){
+    var T = window.__T;
+    if(!T){ document.getElementById('summary').textContent = '测试钩子未暴露'; document.getElementById('summary').className = 'fail'; return; }
+
+    /* ---- clampNumber ---- */
+    eq(T.clampNumber(50, 0, 100, 10), 50, 'clampNumber: 区间内返回原值');
+    eq(T.clampNumber(150, 0, 100, 10), 100, 'clampNumber: 超上限截断');
+    eq(T.clampNumber(-5, 0, 100, 10), 0, 'clampNumber: 低于下限截断');
+    eq(T.clampNumber(NaN, 0, 100, 10), 10, 'clampNumber: NaN 返回回退值');
+    eq(T.clampNumber('abc', 0, 100, 10), 10, 'clampNumber: 非数字返回回退值');
+
+    /* ---- cleanText ---- */
+    eq(T.cleanText('  鸡胸肉  ', 80, '食物'), '鸡胸肉', 'cleanText: 去除首尾空格');
+    eq(T.cleanText('', 80, '食物'), '食物', 'cleanText: 空串返回回退');
+    eq(T.cleanText(null, 80, '食物'), '食物', 'cleanText: null 返回回退');
+    eq(T.cleanText('abcdefgh', 3, 'x'), 'abc', 'cleanText: 超长截断');
+
+    /* ---- isPlainObject ---- */
+    assert(T.isPlainObject({}) === true, 'isPlainObject: {} 为真');
+    assert(T.isPlainObject([]) === false, 'isPlainObject: 数组为假');
+    assert(T.isPlainObject(null) === false, 'isPlainObject: null 为假');
+
+    /* ---- escapeHtml ---- */
+    eq(T.escapeHtml('<b>"a"&\'</b>'), '&lt;b&gt;&quot;a&quot;&amp;&#39;&lt;/b&gt;', 'escapeHtml: 转义全部特殊字符');
+
+    /* ---- dayStart ---- */
+    var d = new Date(2024, 5, 15, 13, 30, 0);
+    eq(T.dayStart(d.getTime()), new Date(2024, 5, 15, 0, 0, 0).getTime(), 'dayStart: 归零到当天 0 点');
+
+    /* ---- uid ---- */
+    assert(/^id-[a-z0-9]+-[a-z0-9]+$/.test(T.uid()), 'uid: 格式正确');
+    assert(T.uid() !== T.uid(), 'uid: 两次生成不重复');
+
+    /* ---- normalizeSettings ---- */
+    var st = T.normalizeSettings({ proteinTarget: 999, waterTarget: -1, routine: 'hacking', preset: 'x', reminderTime: 'bad' });
+    eq(st.proteinTarget, 300, 'normalizeSettings: 蛋白目标超上限截断到 300');
+    eq(st.waterTarget, 500, 'normalizeSettings: 饮水目标低于下限截断到 500');
+    eq(st.routine, 'bodyweight', 'normalizeSettings: 非法 routine 回退 bodyweight');
+    eq(T.normalizeSettings({ routine: 'stretch' }).routine, 'stretch', 'normalizeSettings: 保留 stretch 动作组');
+    eq(T.normalizeSettings({ routine: 'gym' }).routine, 'gym', 'normalizeSettings: 保留 gym 动作组');
+    var today = T.dayStart(Date.now());
+    eq(T.normalizeSettings({ readiness: 'yellow', readinessDay: today }).readiness, 'yellow', 'normalizeSettings: 当日保留 readiness');
+    eq(T.normalizeSettings({ readiness: 'yellow', readinessDay: today - 86400000 }).readiness, 'green', 'normalizeSettings: 跨天重置 readiness');
+    eq(st.preset, 'starter', 'normalizeSettings: 非法 preset 回退 starter');
+    eq(st.reminderTime, '19:30', 'normalizeSettings: 非法时间回退 19:30');
+    assert(T.normalizeSettings(null).proteinTarget === 100, 'normalizeSettings: null 返回默认');
+
+    /* ---- normalizeLogs ---- */
+    var now = Date.now();
+    eq(T.normalizeLogs('notarray').length, 0, 'normalizeLogs: 非数组返回空');
+    eq(T.normalizeLogs([{ type: 'protein', ts: 0, grams: 10 }]).length, 0, 'normalizeLogs: 丢弃非法时间戳(=0)');
+    eq(T.normalizeLogs([{ type: 'protein', ts: now, grams: 0 }]).length, 0, 'normalizeLogs: 丢弃 0 克蛋白');
+    eq(T.normalizeLogs([{ type: 'protein', ts: now, grams: 10 }]).length, 1, 'normalizeLogs: 保留合法蛋白记录');
+    eq(T.normalizeLogs([{ type: 'protein', ts: now, grams: 9999 }])[0].grams, 500, 'normalizeLogs: 蛋白超上限截断到 500');
+    eq(T.normalizeLogs([{ type: 'hacking', ts: now }]).length, 0, 'normalizeLogs: 丢弃未知类型');
+    eq(T.normalizeLogs([{ type: 'water', ts: now, ml: 250 }])[0].ml, 250, 'normalizeLogs: 保留合法饮水');
+    var dup = T.normalizeLogs([{ id: 'aaaa', type: 'protein', ts: now, grams: 10 }, { id: 'aaaa', type: 'protein', ts: now, grams: 20 }]);
+    eq(dup.length, 2, 'normalizeLogs: 重复 id 被重新分配，两条都保留');
+
+    /* ---- isActualTraining ---- */
+    assert(T.isActualTraining({ type: 'training', status: 'completed', workSeconds: 120 }) === true, 'isActualTraining: 完成且>60s 为真');
+    assert(T.isActualTraining({ type: 'training', status: 'completed', workSeconds: 30 }) === false, 'isActualTraining: <60s 为假');
+    assert(T.isActualTraining({ type: 'training', status: 'makeup', workSeconds: 999 }) === false, 'isActualTraining: makeup 排除');
+    assert(T.isActualTraining({ type: 'training', status: 'legacy', actualSeconds: 120 }) === true, 'isActualTraining: legacy 用 actualSeconds');
+    assert(T.isActualTraining({ type: 'protein', status: 'completed', workSeconds: 999 }) === false, 'isActualTraining: 非训练类型为假');
+    assert(T.isActualTraining(null) === false, 'isActualTraining: null 为假');
+
+    var trStretch = T.normalizeLogs([{ type: 'training', ts: now, status: 'completed', routine: 'stretch', workSeconds: 120 }]);
+    eq(trStretch.length, 1, 'normalizeLogs: 保留训练记录');
+    eq(trStretch[0].routine, 'stretch', 'normalizeLogs: 保留 stretch routine');
+    var trGym = T.normalizeLogs([{ type: 'training', ts: now, status: 'completed', routine: 'gym', workSeconds: 120 }]);
+    eq(trGym[0].routine, 'gym', 'normalizeLogs: 保留 gym routine');
+
+    /* ---- parseQwenContent ---- */
+    eq(T.parseQwenContent('{"food":"鸡蛋","protein":6}').protein, 6, 'parseQwenContent: 纯 JSON');
+    eq(T.parseQwenContent('```json\n{"food":"鸡蛋","protein":6}\n```').protein, 6, 'parseQwenContent: 带代码块');
+    eq(T.parseQwenContent('好的，结果是 {"food":"鸡蛋","protein":6} 完毕').protein, 6, 'parseQwenContent: 带前后缀文字');
+    assert(T.parseQwenContent('没有 JSON') === null, 'parseQwenContent: 无 JSON 返回 null');
+    assert(T.parseQwenContent(null) === null, 'parseQwenContent: null 返回 null');
+
+    /* ---- normalizeAiResult ---- */
+    var ai = T.normalizeAiResult({ food: '早餐', protein: 30, items: [{ name: '鸡蛋', amount: '2个', protein: 12 }], note: '估算' });
+    eq(ai.protein, 30, 'normalizeAiResult: 保留总蛋白');
+    eq(ai.items.length, 1, 'normalizeAiResult: 保留 items');
+    eq(T.normalizeAiResult({ food: 'x', protein: 9999 }).protein, 500, 'normalizeAiResult: 蛋白超上限截断');
+    assert(T.normalizeAiResult(null) === null, 'normalizeAiResult: null 返回 null');
+    assert(T.normalizeAiResult('str') === null, 'normalizeAiResult: 非对象返回 null');
+
+    /* ---- normalizeWeights ---- */
+    eq(T.normalizeWeights([{ ts: now, kg: 800 }])[0].kg, 400, 'normalizeWeights: 体重超上限截断到 400');
+    eq(T.normalizeWeights([{ ts: now, kg: NaN }]).length, 0, 'normalizeWeights: 丢弃 NaN 体重');
+
+    /* ---- migrateState ---- */
+    eq(T.migrateState({ v: 4 }).v, 5, 'migrateState: v4 升级到 v5');
+    assert(T.migrateState({ v: 99 }) === null, 'migrateState: 未知高版本拒绝');
+    assert(T.migrateState(null) === null, 'migrateState: null 返回 null');
+    eq(T.migrateState({ v: 5 }).v, 5, 'migrateState: v5 原样通过');
+
+    /* ---- defaultState ---- */
+    eq(T.defaultState().v, 5, 'defaultState: 版本为 5');
+    eq(T.defaultState().settings.proteinTarget, 100, 'defaultState: 默认蛋白目标 100');
+
+    var idx = T.rebuildLogIndexFromLogs([
+      { type: 'protein', ts: now, grams: 10, id: 'a1' },
+      { type: 'protein', ts: now, grams: 5, id: 'a2' },
+      { type: 'training', ts: now, status: 'completed', workSeconds: 120, id: 't1' }
+    ]);
+    eq(Math.round(idx.proteinByDay[T.dayStart(now)] * 10) / 10, 15, 'logIndex: 按日汇总蛋白');
+    eq(idx.trainingSessions.length, 1, 'logIndex: 有效训练条数');
+    eq(T.computeTrainingStreak(idx.trainingDays), 1, 'computeTrainingStreak: 含今天为 1');
+
+    /* ---- P1-4: 跟练计时组合场景 ---- */
+
+    // 辅助：构造一个最小 work step
+    function mkWork(id, sec){ return { type:'work', round:1, sec:sec, move:{ id:id, name:'测试动作', sideMode:'none' } }; }
+    function mkStretch(id, sec){ return { type:'stretch', round:0, sec:sec, move:{ id:id, name:'测试拉伸', target:'全身', position:'站姿' } }; }
+
+    // 场景 1：暂停再继续 → 总时长 = 实际经过，不多计不少计
+    T.resetSessionStats();
+    T.setSteps([ mkWork('pw1', 40) ]);
+    T.setStepIndex(0);
+    T.setLeft(20);            // 已过 20s
+    T.setStepElapsedCounted(0);
+    T.captureStepProgress('pause');   // 暂停：计入 20s
+    eq(T.getSessionElapsed(), 20, '计时·暂停: sessionElapsed = 20');
+    eq(T.getWorkElapsed(), 20, '计时·暂停: workElapsed = 20');
+    eq(T.getStepElapsedCounted(), 20, '计时·暂停: stepElapsedCounted = 20');
+    // 继续：剩余 20s 自然完成
+    T.setLeft(0);
+    T.captureStepProgress('natural');
+    eq(T.getSessionElapsed(), 40, '计时·暂停续: sessionElapsed = 40（不多计）');
+    eq(T.getWorkElapsed(), 40, '计时·暂停续: workElapsed = 40');
+    assert(!!T.getCompletedMoveIds()['pw1'], '计时·暂停续: 动作标记完成');
+
+    // 场景 2：跳过一个动作 → 不计入完成，skippedWork +1
+    T.resetSessionStats();
+    T.setSteps([ mkWork('sk1', 40) ]);
+    T.setStepIndex(0);
+    T.setLeft(30);            // 只做了 10s
+    T.setStepElapsedCounted(0);
+    T.captureStepProgress('skip');
+    eq(T.getSkippedWork(), 1, '计时·跳过: skippedWork = 1');
+    assert(!T.getCompletedMoveIds()['sk1'], '计时·跳过: 未完成动作不计入 completedMoveIds');
+    eq(T.getSessionElapsed(), 10, '计时·跳过: 已用 10s 仍计入 sessionElapsed');
+    eq(T.getWorkElapsed(), 10, '计时·跳过: workElapsed = 10');
+
+    // 场景 3：提前结束，当前动作 >= 50% → 算完成
+    T.resetSessionStats();
+    T.setSteps([ mkWork('half1', 40) ]);
+    T.setStepIndex(0);
+    T.setLeft(18);            // elapsed = 22, 22/40 = 55%
+    T.setStepElapsedCounted(0);
+    T.captureStepProgress('stop');
+    assert(!!T.getCompletedMoveIds()['half1'], '计时·提前结束≥50%: 标记完成');
+    eq(T.getSessionElapsed(), 22, '计时·提前结束≥50%: sessionElapsed = 22');
+
+    // 场景 4：提前结束，当前动作 < 50% → 不算完成
+    T.resetSessionStats();
+    T.setSteps([ mkWork('early1', 40) ]);
+    T.setStepIndex(0);
+    T.setLeft(25);            // elapsed = 15, 15/40 = 37.5%
+    T.setStepElapsedCounted(0);
+    T.captureStepProgress('stop');
+    assert(!T.getCompletedMoveIds()['early1'], '计时·提前结束<50%: 不标记完成');
+    eq(T.getSessionElapsed(), 15, '计时·提前结束<50%: sessionElapsed = 15');
+
+    // 场景 5：50% 精确边界（elapsed = sec*0.5）→ 算完成
+    T.resetSessionStats();
+    T.setSteps([ mkWork('edge1', 40) ]);
+    T.setStepIndex(0);
+    T.setLeft(20);            // elapsed = 20, 20/40 = 50% 恰好
+    T.setStepElapsedCounted(0);
+    T.captureStepProgress('stop');
+    assert(!!T.getCompletedMoveIds()['edge1'], '计时·50%边界: 标记完成');
+
+    // 场景 6：拉伸同样遵循 50% 规则
+    T.resetSessionStats();
+    T.setSteps([ mkStretch('st1', 28) ]);
+    T.setStepIndex(0);
+    T.setLeft(15);            // elapsed = 13, 13/28 ≈ 46% < 50%
+    T.setStepElapsedCounted(0);
+    T.captureStepProgress('stop');
+    assert(!T.getCompletedStretchIds()['st1'], '计时·拉伸<50%: 不标记完成');
+    T.resetSessionStats();
+    T.setSteps([ mkStretch('st2', 28) ]);
+    T.setStepIndex(0);
+    T.setLeft(13);            // elapsed = 15, 15/28 ≈ 54% >= 50%
+    T.setStepElapsedCounted(0);
+    T.captureStepProgress('stop');
+    assert(!!T.getCompletedStretchIds()['st2'], '计时·拉伸≥50%: 标记完成');
+
+    // 场景 7：多动作组合 — 完成第一个 + 跳过第二个 + 第三个自然完成
+    T.resetSessionStats();
+    T.setSteps([ mkWork('m1', 40), mkWork('m2', 40), mkWork('m3', 40) ]);
+    T.setStepIndex(0); T.setLeft(0); T.setStepElapsedCounted(0);
+    T.captureStepProgress('natural');   // m1 自然完成
+    T.setStepIndex(1); T.setLeft(30); T.setStepElapsedCounted(0);
+    T.captureStepProgress('skip');      // m2 跳过（只做了 10s）
+    T.setStepIndex(2); T.setLeft(0); T.setStepElapsedCounted(0);
+    T.captureStepProgress('natural');   // m3 自然完成
+    eq(Object.keys(T.getCompletedMoveIds()).length, 2, '计时·组合: 2 个动作完成');
+    assert(!!T.getCompletedMoveIds()['m1'] && !!T.getCompletedMoveIds()['m3'], '计时·组合: m1+m3 完成');
+    assert(!T.getCompletedMoveIds()['m2'], '计时·组合: m2 未完成');
+    eq(T.getSkippedWork(), 1, '计时·组合: skippedWork = 1');
+    eq(T.getSessionElapsed(), 90, '计时·组合: sessionElapsed = 40+10+40 = 90');
+    eq(T.getWorkElapsed(), 90, '计时·组合: workElapsed = 90');
+
+    /* ---- 汇总 ---- */
+    var sum = document.getElementById('summary');
+    var total = passed + failed;
+    sum.textContent = (failed === 0 ? '✅ 全部通过 ' : '❌ 有失败 ') + passed + ' / ' + total + ' 通过' + (failed ? '（' + failed + ' 个失败）' : '');
+    sum.className = failed === 0 ? 'pass' : 'fail';
+  }
+})();
+</script>
+</body>
+</html>

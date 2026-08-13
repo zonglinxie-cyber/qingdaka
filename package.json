@@ -1,0 +1,11 @@
+{
+  "name": "workbuddy-light-checkin",
+  "private": true,
+  "scripts": {
+    "test:relay": "python3 test_relay.py",
+    "test:e2e": "node scripts/e2e-test.mjs"
+  },
+  "devDependencies": {
+    "playwright": "^1.49.1"
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "name": "轻打卡 · 蛋白与跟练",
+  "short_name": "轻打卡",
+  "description": "拍照估算蛋白质 · 低冲击力量跟练 · 本地保存",
+  "lang": "zh-CN",
+  "dir": "ltr",
+  "start_url": "./index.html",
+  "scope": "./",
+  "id": "./index.html",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "portrait-primary",
+  "background_color": "#faf7f0",
+  "theme_color": "#faf7f0",
+  "categories": ["health", "fitness", "lifestyle"],
+  "icons": [
+    { "src": "./icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "./icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "./icons/icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

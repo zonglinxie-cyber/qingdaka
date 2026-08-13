@@ -1,0 +1,143 @@
+Exercise media provenance and release notes
+Updated: 2026-07-24
+
+1) Project-generated static illustrations used by this application
+
+Files:
+  generated/bird-dog-anatomy.png
+  generated/farmer-carry-anatomy.png
+  generated/wall-plank-anatomy.png
+
+Status:
+  PROJECT-ORIGINAL GENERATED ASSETS. These three 512 x 512 PNG stills were
+  generated specifically for Workbuddy to match its anatomical illustration
+  language. wall-plank-anatomy.png was generated from text-only project art
+  direction. That newly generated project-original wall-plank image was then
+  used only as the style reference for farmer-carry-anatomy.png and
+  bird-dog-anatomy.png. No RepDB image or legacy GIF/poster was supplied as an
+  image input, style reference, conditioning image, or training material at
+  any stage of the final generation.
+
+Usage:
+  These files are the deployed static references for bird dog, light farmer
+  carry / in-place hold, and wall plank. They are not complete motion
+  demonstrations. Keep the written regressions, safety cues, and
+  "static posture reference" labels with them.
+
+2) RepDB Free Tier assets retained only as historical source records
+
+Historical local files:
+  repdb/bird-dog-hold.webp
+  repdb/farmer-carry.webp
+  repdb/wall-plank.webp
+
+Historical source repository and pinned commit:
+  https://github.com/sergei-argutin/exercise-dataset
+  c21cb53136f3cb72014fa376f7509682d2a97baa
+
+Historical source paths:
+  images/flat/bird-dog-hold-main.webp
+  images/flat/dumbbell-farmers-walk-main.webp
+  images/flat/wall-push-ups-start.webp
+
+License record:
+  RepDB Free Tier License (custom application-use license; not an
+  OSI-approved open-source license)
+  https://github.com/sergei-argutin/exercise-dataset/blob/c21cb53136f3cb72014fa376f7509682d2a97baa/LICENSE-DATA.md
+
+Release status:
+  HISTORY ONLY / NOT DEPLOYED. build-deploy.py excludes the complete repdb/
+  directory, and the Service Worker does not cache these files. They were not
+  used as inputs or references for the final project-generated illustrations.
+
+The historical license requires attribution for in-app use, prohibits dataset
+or API redistribution, and prohibits use of the images as generative-AI input,
+reference, training, or conditioning material. Preserve this record while the
+historical files remain in the source tree.
+
+3) Legacy GIF and poster files
+
+Historical set:
+  0276, 0291, 0292, 0404, 0659, 0710, 1373, 1459, 1677, 3013, 3239
+  (.gif and -poster.png)
+
+Deployment scope:
+  0710.gif and 0710-poster.png are no longer referenced by the active routine
+  and are explicitly excluded from deploy/ and the PWA cache.
+  0659-plank-poster.png is deprecated and also excluded.
+  The other ten legacy GIF/poster pairs remain in the current personal
+  prototype and therefore retain the release restriction below.
+
+Current host:
+  https://github.com/omercotkd/exercises-gifs
+
+The host repository contains an MIT LICENSE file, but its README explicitly
+states that it is a backup of a Kaggle exercise-animation dataset, that the
+repository author does not own the content, and that rights belong to the
+original creators and dataset owner. Therefore the host's MIT file is not a
+complete or reliable chain of title for the media.
+
+Release status:
+  LEGACY / PROTOTYPE-ONLY. Do not describe the remaining ten deployed pairs as
+  copyright-cleared or commercially safe. Replace them with commissioned,
+  self-recorded, or otherwise clearly licensed continuous demonstrations
+  before treating the application as a public commercial release.
+
+No legacy GIF or poster was used as an input or reference for the three
+project-generated static illustrations.
+
+4) Warm-up and post-workout stretch media (added 2026-07-25)
+
+Files (GIF + first-frame -poster.png, 360x360, white background):
+  Warm-up:        3221, 1368, 0257, 1428, 1167
+  Stretch:        1377, 1576, 1271, 0643, 0794, 1365, 0669, 1424, 1403
+  (quad-stand is a text-only standing quad stretch with no media file.)
+
+Source repository and dataset:
+  https://github.com/omercotkd/exercises-gifs  (assets/<id>.gif)
+  Underlying Kaggle dataset: "Fitness Exercises with Animations"
+  (edoardoba) — the same source as the legacy strength GIFs in section 3.
+  Posters were generated locally from each GIF's first frame (PIL), with a
+  white background to match the dataset's illustration style.
+
+License record:
+  Same status as the legacy strength GIFs (section 3): the host repo carries
+  an MIT file but its README states the author does not own the media and
+  rights belong to the original creators / dataset owner. Therefore these
+  warm-up/stretch media are NOT copyright-cleared for commercial use.
+
+Release status:
+  LEGACY / PROTOTYPE-ONLY, consistent with the rest of the personal prototype.
+  Do not describe them as commercially safe. Replace with commissioned or
+  clearly licensed demonstrations before any public commercial release.
+  The exercise names, target muscles, positions, and Chinese cues shown in the
+  app are original text written for this project (not copied from the dataset,
+  which only provides English instructions).
+
+5) Gym machine (fixed-equipment) media (added 2026-08-04)
+
+Files (GIF + first-frame -poster.png, 360x360, white background):
+  Gym routine:    0576 (seated chest press), 0579 (front pulldown),
+                  0588 (seated row), 2287 (leg press), 0599 (seated leg curl),
+                  0603 (shoulder press), 0585 (leg extension),
+                  0596 (seated fly / pec deck), 0017 (assisted pull-up)
+
+Source repository and dataset:
+  https://github.com/omercotkd/exercises-gifs  (assets/<id>.gif)
+  Underlying Kaggle dataset: "Fitness Exercises with Animations"
+  (edoardoba) — the same source as the legacy strength and warm-up/stretch
+  GIFs in sections 3 and 4. Posters were generated locally from each GIF's
+  first frame (PIL), with a white background to match the dataset's
+  illustration style.
+
+License record:
+  Same status as the other dataset GIFs (sections 3-4): the host repo carries
+  an MIT file but its README states the author does not own the media and
+  rights belong to the original creators / dataset owner. Therefore these gym
+  machine media are NOT copyright-cleared for commercial use.
+
+Release status:
+  LEGACY / PROTOTYPE-ONLY, consistent with the rest of the personal prototype.
+  The exercise names, target muscles, and Chinese cues shown in the app are
+  original text written for this project (not copied from the dataset, which
+  only provides English instructions).

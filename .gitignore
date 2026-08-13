@@ -1,0 +1,12 @@
+node_modules/
+__pycache__/
+*.pyc
+.DS_Store
+server.pid
+mobile-qr.png
+
+# Local Netlify folder
+.netlify
+
+# 本机 token 无 workflow 权限；Pages 不依赖 CI
+.github/workflows/

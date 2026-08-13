@@ -1,0 +1,52 @@
+[
+  {
+    "key": "encourage-1",
+    "text": "坚持住，就快完成了",
+    "type": "encourage"
+  },
+  {
+    "key": "encourage-2",
+    "text": "保持呼吸，你做得很稳",
+    "type": "encourage"
+  },
+  {
+    "key": "encourage-3",
+    "text": "慢一点没关系，稳住就是胜利",
+    "type": "encourage"
+  },
+  {
+    "key": "encourage-4",
+    "text": "每一次坚持，都在帮你保住肌肉",
+    "type": "encourage"
+  },
+  {
+    "key": "encourage-5",
+    "text": "很好，注意动作质量，不抢时间",
+    "type": "encourage"
+  },
+  {
+    "key": "switch-side",
+    "text": "换另一侧",
+    "type": "static"
+  },
+  {
+    "key": "countdown-3",
+    "text": "3，2，1",
+    "type": "static"
+  },
+  {
+    "key": "countdown-start",
+    "text": "3，2，1，开始",
+    "type": "static"
+  },
+  {
+    "key": "finish-done",
+    "text": "训练完成，干得漂亮！记得补充蛋白质。",
+    "type": "static"
+  },
+  {
+    "key": "finish-stretch",
+    "text": "拉伸完成，放松一下。",
+    "type": "static"
+  }
+]

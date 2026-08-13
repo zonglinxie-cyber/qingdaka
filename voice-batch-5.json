@@ -1,0 +1,38 @@
+[
+  {
+    "key": "stretch-1424",
+    "text": "拉伸，坐姿臀部拉伸，拉到臀部。",
+    "type": "stretch",
+    "moveId": "1424"
+  },
+  {
+    "key": "stretch-1576",
+    "text": "拉伸，仰卧抬腿拉伸，拉到大腿后侧。",
+    "type": "stretch",
+    "moveId": "1576"
+  },
+  {
+    "key": "stretch-quad-stand",
+    "text": "拉伸，扶墙股四头拉伸，拉到大腿前侧。",
+    "type": "stretch",
+    "moveId": "quad-stand"
+  },
+  {
+    "key": "stretch-0643",
+    "text": "拉伸，过头三头拉伸，拉到上臂后侧。",
+    "type": "stretch",
+    "moveId": "0643"
+  },
+  {
+    "key": "stretch-0794",
+    "text": "拉伸，站姿侧拉伸，拉到侧腰 / 背阔。",
+    "type": "stretch",
+    "moveId": "0794"
+  },
+  {
+    "key": "stretch-0669",
+    "text": "拉伸，肩后拉伸，拉到肩后侧。",
+    "type": "stretch",
+    "moveId": "0669"
+  }
+]
