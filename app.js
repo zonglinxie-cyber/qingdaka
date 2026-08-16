@@ -876,7 +876,7 @@ var bodyweightMoves = [
   { id:'0710', name:'侧卧髋外展', area:'臀中肌', sideMode:'half', equipment:'', steps:['侧卧，身体和下侧腿稳定','上侧腿伸直，脚尖朝正前方','小幅抬起，停一下，再控制放下'], cue:'先做右侧，过半换左侧；骨盆不要向后翻。呼吸：抬腿时呼气，放下时吸气。', mistake:'常见错误：腿抬太高、脚尖转向天花板。' },
   { id:'0659', name:'靠墙俯卧撑', area:'胸肩与上肢推力', sideMode:'none', equipment:'', steps:['面对墙站立，双手略宽于肩','身体保持一条直线，屈肘靠近墙','手掌推墙，回到起始位'], cue:'脚离墙越远越难；先选能稳定控制的位置。呼吸：推墙时呼气，靠近时吸气。', mistake:'常见错误：只移动头部，或塌腰、耸肩。' },
   { id:'1373', name:'扶墙提踵', area:'小腿与踝稳定', sideMode:'none', equipment:'', steps:['双脚平行，轻扶稳定物体','脚跟垂直上提，重心保持在大脚趾根部附近','停一下，再慢慢落地'], cue:'保持脚踝正直；急性足趾或踝关节红肿热痛时不要做。呼吸：上提时呼气，落地时吸气。', mistake:'常见错误：脚踝向外翻，靠弹跳完成。' },
-  { id:'3239', name:'跪姿平板（可点肩）', area:'核心与肩稳定', sideMode:'alternate', equipment:'', steps:['膝盖着地、前臂撑地，头到膝保持直线','先稳住跪姿平板，能说话、不塌腰','稳了再轻点对侧肩；一晃就停在平板'], cue:'示范图是脚尖撑地的完整平板，请先跪着做。点肩会晃就只撑住。呼吸：不要憋气。', mistake:'常见错误：一上来跟图做完整平板、塌腰，或猛地点肩扭腰。' }
+  { id:'3239', name:'跪姿平板（可点肩）', area:'核心与肩稳定', sideMode:'alternate', equipment:'', steps:['膝盖着地、前臂撑地，头到膝保持直线','先稳住跪姿平板，能说话、不塌腰','稳了再轻点对侧肩；一晃就停在平板'], cue:'图是跪姿平板点肩。先撑住、能说话、不塌腰，稳了再轻点对侧肩；一晃就只撑住。呼吸：不要憋气。', mistake:'常见错误：塌腰，或猛地点肩扭腰。' }
 ];
 var dumbbellMoves = [
   { id:'0291', name:'扶凳箱式深蹲', area:'大腿前侧与臀部', sideMode:'none', equipment:'哑铃', steps:['身后放一把稳固的椅子，双脚与髋同宽，哑铃垂于体侧（先徒手亦可）','臀部向后坐，像要坐进椅子里，膝盖朝脚尖方向','轻触椅面后脚跟推地站起，顶端夹臀'], cue:'椅子越高越简单；下蹲幅度以膝盖无锐痛为准，全程背部中立。先徒手练熟再加哑铃。呼吸：下坐时吸气，站起时呼气。', mistake:'常见错误：膝盖内扣、脚跟离地，或下坐时塌腰、上身过度前倾。' },
@@ -943,32 +943,32 @@ var birdDogMove = {
   mistake:'常见错误：抬得过高、腰部旋转，或为了跟图而超出自己幅度。', level:'可选进阶'
 };
 var wallPlankMove = Object.assign({}, bodyweightMoves.filter(function(m){ return m.id === '0659'; })[0], {
-  id:'wall-plank', frames:['generated/wall-plank-anatomy.png'], staticOnly:true, name:'墙面斜板支撑', area:'站姿核心稳定', sideMode:'none',
+  id:'wall-plank', mediaId:'0658', name:'墙面斜板支撑', area:'站姿核心稳定', sideMode:'none',
   primary:'腹横肌、腹直肌', secondary:'腹斜肌、肩胛稳定肌',
   benefit:'练习抵抗塌腰，帮助站立和搬拿时保持躯干稳定。',
   steps:['面对墙站立，双手撑墙略宽于肩','双脚向后小步移动，让身体成一直线','轻轻收紧腹部，保持呼吸，时间到后走近墙面'],
-  cue:'墙越近越轻松；全程能说短句、不憋气。若肩痛，缩短距离。',
+  cue:'图是靠墙俯卧撑的轨迹；本课只撑在中间，不推起。墙越近越轻松，全程能说短句。若肩痛，走近一点。',
   mistake:'常见错误：塌腰、耸肩或屏住呼吸。', level:'起步'
 });
 var farmerCarryMove = {
-  id:'farmer-carry', frames:['generated/farmer-carry-anatomy.png'], staticOnly:true,
+  id:'farmer-carry', mediaId:'2133',
   name:'轻负重行走 / 原地持重', area:'站姿核心与全身稳定', sideMode:'none',
   equipment:'两只同重量轻哑铃或水瓶',
   primary:'腹壁稳定肌、竖脊肌', secondary:'前臂、斜方肌、臀中肌',
   benefit:'练习行走、提物时维持直立躯干和稳定呼吸。',
   steps:['选两只同重量轻物，先确认握得住且地面没有障碍','站高，肋骨和骨盆保持自然叠放，双手垂在体侧','空间安全就慢走；空间不足则原地交替抬脚，始终能说短句'],
-  cue:'重量宁轻勿重；肩膀放松，不侧弯、不憋气。脚下不稳或头晕时立即放下。',
+  cue:'图是双手持铃慢走。重量宁轻勿重；空间不够就原地踏步。肩膀放松，不侧弯、不憋气。',
   mistake:'常见错误：为了追求重量而耸肩、身体侧弯，或在狭窄空间勉强行走。',
   level:'起步·轻负重'
 };
 var towelRowMove = {
-  id:'towel-row', noMedia:true,
+  id:'towel-row', mediaId:'3165',
   name:'毛巾划船', area:'背部与上肢拉力', sideMode:'none',
   equipment:'长毛巾，或稳固桌沿',
   primary:'背阔肌、菱形肌', secondary:'肱二头肌、后三角肌',
   benefit:'补上肢拉力，改善含胸。',
   steps:['坐在稳固椅子上，毛巾从脚底绕过，两手各抓一头；或坐地拉住无法移动的桌沿','背部中立，肘贴身体把毛巾/桌沿拉向腰侧','停一下，再慢慢放回'],
-  cue:'没有拉力带就用毛巾。拉的是背，不是耸肩甩胳膊。呼吸：拉回时呼气，放回时吸气。',
+  cue:'图是站着拉毛巾；家里也可坐着把毛巾绕过脚底拉。拉的是背，不要耸肩。呼吸：拉回时呼气，放回时吸气。',
   mistake:'常见错误：弓背、耸肩，或靠后仰借力。', level:'起步'
 };
 var coreMoves = [wallPlankMove, chairStandMove, farmerCarryMove, birdDogMove, bodyweightMoves[1]];
@@ -1000,12 +1000,12 @@ var warmupMoves = [
 var STRETCH = {
   '1377':{ name:'扶墙小腿拉伸', sec:28, target:'小腿', position:'站姿·扶墙', cue:'双手扶墙，一腿在前一腿在后，后脚跟贴地、膝伸直，身体前倾直到小腿后侧有拉伸感，换腿。' },
   '1576':{ name:'仰卧抬腿拉伸', sec:28, target:'大腿后侧', position:'仰卧', cue:'平躺，一腿伸直放地，另一腿抬起、双手抱大腿后侧往胸口靠，膝可微屈，换腿。' },
-  'quad-stand':{ name:'扶墙股四头拉伸', sec:28, target:'大腿前侧', position:'站姿·扶墙', noMedia:true, cue:'单手扶墙或扶椅站稳，另一手抓同侧脚背拉向臀部，双膝并拢、骨盆别前倾；抓不到脚就用毛巾套住脚背，换边。' },
-  '1271':{ name:'胸前侧拉伸', sec:28, target:'胸 / 肩前侧', position:'站姿', noMedia:true, cue:'双手在身后交握（够不到就握毛巾），挺胸、肩向后向下沉，感受胸前打开。' },
-  '0643':{ name:'过头三头拉伸', sec:28, target:'上臂后侧', position:'站姿', noMedia:true, cue:'一臂上举屈肘、手摸背，另一手轻压肘尖；肋骨别外翻，换边。' },
-  '0794':{ name:'站姿侧拉伸', sec:28, target:'侧腰 / 背阔', position:'站姿', noMedia:true, cue:'一臂上举，身体向对侧轻弯，感受侧腰到背的拉伸，换边。' },
-  '1365':{ name:'上背拉伸', sec:28, target:'上背', position:'站姿', noMedia:true, cue:'双手在胸前交握向前推、含胸，把上背撑开；或一臂横抱胸前轻压。' },
-  '0669':{ name:'肩后拉伸', sec:28, target:'肩后侧', position:'站姿', noMedia:true, cue:'一臂横过胸前，另一手轻压肘部靠近身体，肩别耸起，换边。' },
+  'quad-stand':{ name:'扶墙股四头拉伸', sec:28, target:'大腿前侧', position:'站姿·扶墙', mediaId:'1512', cue:'图是跪姿拉脚背；跪不稳就扶墙站着，一手抓同侧脚背拉向臀部，双膝并拢。抓不到就用毛巾套住脚背，换边。' },
+  '1271':{ name:'胸前侧拉伸', sec:28, target:'胸 / 肩前侧', position:'站姿', cue:'图里用短杠举到脑后；家里双手在身后交握或握毛巾即可，挺胸、肩向后向下沉。' },
+  '0643':{ name:'过头三头拉伸', sec:28, target:'上臂后侧', position:'站姿', cue:'一臂上举屈肘、手摸背，另一手轻压肘尖；肋骨别外翻，换边。' },
+  '0794':{ name:'站姿侧拉伸', sec:28, target:'侧腰 / 背阔', position:'站姿', cue:'一臂上举，身体向对侧轻弯，感受侧腰到背的拉伸，换边。' },
+  '1365':{ name:'上背拉伸', sec:28, target:'上背', position:'站姿', cue:'双手在胸前交握向前推、含胸，把上背撑开；或一臂横抱胸前轻压。' },
+  '0669':{ name:'肩后拉伸', sec:28, target:'肩后侧', position:'站姿', cue:'一臂横过胸前，另一手轻压肘部靠近身体，肩别耸起，换边。' },
   '1424':{ name:'坐姿臀部拉伸', sec:28, target:'臀部', position:'坐姿', cue:'坐稳，一脚踝放到另一膝上成“4”字，挺胸轻轻前倾，感受臀部拉伸，换边。' },
   '1403':{ name:'颈侧拉伸', sec:28, target:'颈侧', position:'站姿', cue:'头轻偏向一侧，对侧手可轻扶头，肩放松下沉，不要用力掰，换边。' }
 };

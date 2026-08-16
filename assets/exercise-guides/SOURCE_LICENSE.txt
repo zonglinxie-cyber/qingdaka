@@ -121,6 +121,10 @@ Files (GIF + first-frame -poster.png, 360x360, white background):
                   0588 (seated row), 2287 (leg press), 0599 (seated leg curl),
                   0603 (shoulder press), 0585 (leg extension),
                   0596 (seated fly / pec deck), 0017 (assisted pull-up)
+  Added to match updated routines (same dataset):
+                  3165 (standing towel row), 2133 (farmers walk),
+                  0658 (wall push-up v.2, used as wall-plank hold reference),
+                  1512 (all-fours quad stretch; standing wall version is the home regression)
 
 Source repository and dataset:
   https://github.com/omercotkd/exercises-gifs  (assets/<id>.gif)
