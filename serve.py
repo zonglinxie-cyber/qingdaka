@@ -116,6 +116,11 @@ def main():
     parser = argparse.ArgumentParser(description="轻打卡本地服务（静态 + /api/protein-photo）")
     parser.add_argument("port", nargs="?", type=int, default=8899, help="端口，默认 8899")
     parser.add_argument(
+        "--directory",
+        default=".",
+        help="静态文件根目录，默认当前目录；部署产物验证时使用 dist",
+    )
+    parser.add_argument(
         "--host",
         default="127.0.0.1",
         help="监听地址，默认仅本机；手机联调可用 --host 0.0.0.0 或 --lan",
@@ -123,10 +128,13 @@ def main():
     parser.add_argument("--lan", action="store_true", help="等价 --host 0.0.0.0")
     args = parser.parse_args()
     host = "0.0.0.0" if args.lan else args.host
+    static_directory = Path(args.directory).resolve()
+    if not static_directory.is_dir():
+        parser.error(f"静态目录不存在：{static_directory}")
 
-    handler = partial(Handler, directory=".")
+    handler = partial(Handler, directory=str(static_directory))
     server = ThreadingHTTPServer((host, args.port), handler)
-    print(f"轻打卡 → http://127.0.0.1:{args.port}/index.html")
+    print(f"轻打卡 → http://127.0.0.1:{args.port}/index.html（静态目录：{static_directory}）")
     if host == "0.0.0.0":
         print_mobile_qr_hint(args.port)
     print("拍照 relay → POST /api/protein-photo")

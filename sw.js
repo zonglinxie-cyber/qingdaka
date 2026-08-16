@@ -1,6 +1,6 @@
 // 轻打卡 · Service Worker（离线可用 / 安装到主屏幕）
 // 仅在被通过 https:// 或 http://localhost 访问时生效；file:// 打开时浏览器不会注册 SW。
-var VERSION = 'v32-github-pages';
+var VERSION = 'v36-idb';
 var CACHE_PREFIX = 'workbuddy:' + encodeURIComponent(self.registration.scope) + ':';
 var SHELL = CACHE_PREFIX + 'shell-' + VERSION;
 var RUNTIME = CACHE_PREFIX + 'runtime-' + VERSION;
@@ -16,19 +16,40 @@ var APP_FILES = [
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/icon-512-maskable.png',
-  './icons/apple-touch-icon-180.png'
+  './icons/apple-touch-icon-180.png',
+  './voice-scripts.json'
 ];
+var VOICE_MANIFEST = './voice-scripts.json';
+
+function cacheFiles(cache, files){
+  return Promise.allSettled(files.map(function(url){
+    return fetch(url, { cache: 'no-cache' }).then(function(res){
+      if(res && res.ok){ return cache.put(url, res); }
+    }).catch(function(){});
+  }));
+}
+
+// voice-scripts.json 是语音 key 的单一清单。用它生成 m4a 列表，避免 SW 再维护一份名单。
+function cacheVoiceFiles(cache){
+  return fetch(VOICE_MANIFEST, { cache: 'no-cache' }).then(function(res){
+    if(!res || !res.ok){ throw new Error('voice-manifest-unavailable'); }
+    return res.json();
+  }).then(function(entries){
+    if(!Array.isArray(entries)){ return []; }
+    var urls = entries.map(function(entry){
+      var key = entry && typeof entry.key === 'string' ? entry.key : '';
+      return /^[a-z0-9-]+$/i.test(key) ? './assets/voice/' + key + '.m4a' : null;
+    }).filter(Boolean);
+    return cacheFiles(cache, urls);
+  }).catch(function(){ return []; });
+}
 
 self.addEventListener('install', function(e){
   e.waitUntil(
     caches.open(SHELL).then(function(cache){
-      // 只预缓存应用壳。示范动图首次跟练时再进 runtime（见 fetch）。
-      // 语音 assets/voice 走网络直连，不拦截。
-      return Promise.allSettled(APP_FILES.map(function(url){
-        return fetch(url, { cache: 'no-cache' }).then(function(res){
-          if(res && res.ok){ return cache.put(url, res); }
-        }).catch(function(){});
-      }));
+      // 应用壳 + 语音清单。动图首次跟练再进 runtime。
+      // 语音按清单预缓存；fetch 里把 Range 转成 206，避免 iOS 收到整包 200。
+      return cacheFiles(cache, APP_FILES).then(function(){ return cacheVoiceFiles(cache); });
     }).then(function(){ return self.skipWaiting(); })
   );
 });
@@ -51,6 +72,51 @@ function trimRuntimeCache(){
         var toDelete = keys.slice(0, keys.length - RUNTIME_MAX);
         toDelete.forEach(function(req){ cache.delete(req); });
       }
+    });
+  });
+}
+
+function rangeResponse(response, rangeHeader){
+  return response.arrayBuffer().then(function(buffer){
+    var match = /^bytes=(\d*)-(\d*)$/i.exec(String(rangeHeader || '').trim());
+    var size = buffer.byteLength;
+    var start, end;
+    if(!match || (!match[1] && !match[2])){
+      return new Response(null, { status:416, headers:{ 'Content-Range':'bytes */' + size } });
+    }
+    if(!match[1]){
+      var suffixLength = Number(match[2]);
+      if(!Number.isFinite(suffixLength) || suffixLength <= 0){
+        return new Response(null, { status:416, headers:{ 'Content-Range':'bytes */' + size } });
+      }
+      start = Math.max(0, size - suffixLength);
+      end = size - 1;
+    } else {
+      start = Number(match[1]);
+      end = match[2] ? Math.min(Number(match[2]), size - 1) : size - 1;
+    }
+    if(!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || start >= size || end < start){
+      return new Response(null, { status:416, headers:{ 'Content-Range':'bytes */' + size } });
+    }
+    var headers = new Headers(response.headers);
+    headers.set('Accept-Ranges', 'bytes');
+    headers.set('Content-Range', 'bytes ' + start + '-' + end + '/' + size);
+    headers.set('Content-Length', String(end - start + 1));
+    return new Response(buffer.slice(start, end + 1), { status:206, statusText:'Partial Content', headers:headers });
+  });
+}
+
+function voiceResponse(req, url){
+  var range = req.headers.get('Range');
+  return caches.match(url.href).then(function(hit){
+    if(hit){ return range ? rangeResponse(hit, range) : hit; }
+    // 首次 Range 请求也拉取完整 m4a 后再切片：缓存可用于后续离线播放，且
+    // 返回的仍是符合媒体元素预期的 206，而不是会触发 iOS 错误的整包 200。
+    return fetch(url.href, { cache:'no-store' }).then(function(res){
+      if(!res || !res.ok){ return res; }
+      return caches.open(SHELL).then(function(cache){
+        return cache.put(url.href, res.clone()).catch(function(){});
+      }).then(function(){ return range ? rangeResponse(res, range) : res; });
     });
   });
 }
@@ -80,10 +146,10 @@ self.addEventListener('fetch', function(e){
   }
 
   var url = new URL(req.url);
-  // 语音文件：不走 SW 缓存拦截，交给浏览器/ CDN 原生 Range 处理
-  // （微信 iOS Audio 常发 Range；SW 回整包 200 易触发 NotSupportedError）
+  // 语音文件：缓存完整 m4a，Range 请求从缓存切出 RFC 兼容的 206 响应。
   if (url.origin === self.location.origin && /\/assets\/voice\//.test(url.pathname)) {
-    return; // 不 respondWith = 默认网络，保留正确 Content-Type + Accept-Ranges
+    e.respondWith(voiceResponse(req, url));
+    return;
   }
   // 同源静态资源：缓存优先 + 后台更新（stale-while-revalidate）
   if (url.origin === self.location.origin) {

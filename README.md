@@ -47,7 +47,7 @@ npx serve .
 
 - 生产站点（Netlify）：**https://qingdaka-workbuddy-v6.netlify.app/index.html**
 - 手机浏览器打开后 → **添加到主屏幕**；数据仍在手机本地，**我的** 里填通义 Key。
-- 更新代码后在本目录执行：`netlify deploy --prod --dir . --functions netlify/functions --no-build`
+- 更新代码后：`npm run build && netlify deploy --prod --dir dist --functions netlify/functions --no-build`
 
 临时方案（电脑必须开着）：`cloudflared tunnel --url http://127.0.0.1:8899`，用手机打开终端里出现的 `https://….trycloudflare.com`（每次链接可能变）。
 
@@ -77,12 +77,28 @@ python3 serve.py 8899 &
 npm run test:e2e
 ```
 
+发布产物会先构建到 `dist/`，只包含运行时必需的前端文件、`assets/`、`icons/` 与 `voice-scripts.json`。交接文档、测试、Python relay 源码和本地脚本不会进入公开站点：
+
+```bash
+npm run build
+npm run check:dist
+python3 serve.py 8900 --directory dist
+TEST_BASE_URL=http://127.0.0.1:8900 TEST_UNIT_PAGE=0 npm run test:e2e
+```
+
 ## 生产部署
 
 PWA 安装与 Service Worker 在生产环境**必须 HTTPS**。推荐免费静态托管：
 
-- **GitHub Pages** — 把本目录推到仓库，Settings → Pages 开启即可（自带 HTTPS）。
+- **GitHub Pages** — 已开启：https://zonglinxie-cyber.github.io/qingdaka/ （自带 HTTPS）。纯静态，拍照走 FC relay。
 - **Cloudflare Pages / Netlify / Vercel** — 拖拽上传或连接仓库，自带 HTTPS + 压缩 + CDN。
+
+Netlify 使用 `npm run build`，发布目录为 `dist/`；不要把项目根目录直接作为发布目录，否则交接文档、测试和本地 relay 源码会暴露在公网。更新代码后：
+
+```bash
+npm run build
+netlify deploy --prod --dir dist --functions netlify/functions --no-build
+```
 
 `serve.json` 的缓存策略：
 - `sw.js` / `index.html` / `app.js` / `styles.css` → `no-cache`（每次校验，保证更新及时）
@@ -90,14 +106,14 @@ PWA 安装与 Service Worker 在生产环境**必须 HTTPS**。推荐免费静�
 
 ## 拍照识别（relay）
 
-`app.js` 中 `QWEN_RELAY = './api/protein-photo'`（同源 POST）。
+`app.js` 默认 `QWEN_RELAY = './api/protein-photo'`（同源 POST）。仅 GitHub Pages 因无 Functions 才直连 FC。
 
 | 场景 | 做法 |
 |------|------|
 | 本地开发 | `python3 serve.py` 或 `./scripts/dev.sh` |
-| **Netlify** | 连接仓库，使用根目录 `netlify.toml`（静态 + Function，`/api/protein-photo` 已 redirect） |
+| **Netlify** | 连接仓库，使用根目录 `netlify.toml`（`npm run build` → `dist/` + Function，`/api/protein-photo` 已 redirect） |
 | **Vercel** | 导入项目，根目录 `vercel.json` + `api/protein-photo.py` |
-| GitHub Pages 等纯静态 | 无 POST：需 Netlify/Vercel 或 VPS 跑 `serve.py` |
+| GitHub Pages | 纯静态；拍照走 FC relay（`connect-src` 已放行） |
 | 单机/VPS | `serve.py --lan` + Nginx/Caddy HTTPS 反代 |
 
 **上游**：`{DASHSCOPE_BASE_URL}/chat/completions`，默认 `https://dashscope.aliyuncs.com/compatible-mode/v1`。  

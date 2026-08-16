@@ -18,6 +18,7 @@ probe*.mjs
 package.json
 package-lock.json
 code-review.md
+HANDOVER.md
 serve.json
 vercel.json
 api/

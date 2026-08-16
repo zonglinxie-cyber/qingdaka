@@ -100,6 +100,7 @@ window.__EXPOSE_FOR_TEST__ = true;
     eq(st.routine, 'bodyweight', 'normalizeSettings: 非法 routine 回退 bodyweight');
     eq(T.normalizeSettings({ routine: 'stretch' }).routine, 'stretch', 'normalizeSettings: 保留 stretch 动作组');
     eq(T.normalizeSettings({ routine: 'gym' }).routine, 'gym', 'normalizeSettings: 保留 gym 动作组');
+    eq(T.getRoutineIds().join(','), 'bodyweight,dumbbell,core,gym,stretch', 'routine: 设置与日志共用唯一课程列表');
     var today = T.dayStart(Date.now());
     eq(T.normalizeSettings({ readiness: 'yellow', readinessDay: today }).readiness, 'yellow', 'normalizeSettings: 当日保留 readiness');
     eq(T.normalizeSettings({ readiness: 'yellow', readinessDay: today - 86400000 }).readiness, 'green', 'normalizeSettings: 跨天重置 readiness');
@@ -131,7 +132,53 @@ window.__EXPOSE_FOR_TEST__ = true;
     eq(trStretch.length, 1, 'normalizeLogs: 保留训练记录');
     eq(trStretch[0].routine, 'stretch', 'normalizeLogs: 保留 stretch routine');
     var trGym = T.normalizeLogs([{ type: 'training', ts: now, status: 'completed', routine: 'gym', workSeconds: 120 }]);
-    eq(trGym[0].routine, 'gym', 'normalizeLogs: 保留 gym routine');
+    eq(trGym.length, 1, 'normalizeLogs: 保留 gym 训练记录');
+    eq(trGym[0].routine, 'gym', 'normalizeLogs: gym 归一化后不降级为 bodyweight');
+    eq(T.getRelayUrl(), './api/protein-photo', 'relay: 本地/Netlify 走同源 /api/protein-photo');
+
+    /* ---- 第一期：四餐 / 体重目标 / 本周力量 ---- */
+    eq(T.mealFromTs(new Date(2026, 7, 16, 8, 0, 0).getTime()), 'breakfast', 'mealFromTs: 8 点算早餐');
+    eq(T.mealFromTs(new Date(2026, 7, 16, 12, 30, 0).getTime()), 'lunch', 'mealFromTs: 12 点算午餐');
+    eq(T.mealFromTs(new Date(2026, 7, 16, 18, 0, 0).getTime()), 'dinner', 'mealFromTs: 18 点算晚餐');
+    eq(T.mealFromTs(new Date(2026, 7, 16, 21, 0, 0).getTime()), 'snack', 'mealFromTs: 21 点算加餐');
+    var mt = T.mealTargets(121);
+    eq(mt.breakfast + mt.lunch + mt.dinner + mt.snack, 121, 'mealTargets: 四格之和等于目标');
+    eq(mt.breakfast, 31, 'mealTargets: 余数补给早餐');
+    eq(T.mealTargets(120).lunch, 30, 'mealTargets: 120 均分 30');
+    eq(T.suggestedProteinTarget(80, 1.4), 112, 'suggestedProteinTarget: 80×1.4=112');
+    assert(T.suggestedProteinTarget(10, 1.4) === null, 'suggestedProteinTarget: 体重过低返回 null');
+    eq(T.suggestedProteinTarget(80, 99), 200, 'suggestedProteinTarget: 系数超上限按 2.5 再截断到 300 内');
+    eq(new Date(T.weekStart(new Date(2026, 7, 16, 15, 0, 0).getTime())).getDay(), 1, 'weekStart: 任意一天回到周一');
+    assert(T.isStrengthTraining({ type:'training', status:'completed', workSeconds:120, routine:'gym' }) === true, 'isStrengthTraining: 器械算力量');
+    assert(T.isStrengthTraining({ type:'training', status:'completed', workSeconds:120, routine:'stretch' }) === false, 'isStrengthTraining: 拉伸不算力量');
+    var ws = T.weekStart(now);
+    eq(T.countWeekStrengthDays([
+      { type:'training', status:'completed', workSeconds:120, routine:'gym', ts: ws + 3600000 },
+      { type:'training', status:'completed', workSeconds:120, routine:'gym', ts: ws + 3600000 + 1000 },
+      { type:'training', status:'completed', workSeconds:120, routine:'stretch', ts: ws + 86400000 },
+      { type:'training', status:'completed', workSeconds:120, routine:'dumbbell', ts: ws + 2 * 86400000 }
+    ], ws + 3 * 86400000), 2, 'countWeekStrengthDays: 同日只计 1，拉伸不计');
+    eq(T.normalizeSettings({ bodyWeightKg: 80.25, proteinPerKg: 1.45 }).bodyWeightKg, 80.3, 'normalizeSettings: 体重复一位小数');
+    eq(T.normalizeSettings({ proteinPerKg: 9 }).proteinPerKg, 2.5, 'normalizeSettings: 蛋白系数截断到 2.5');
+    eq(T.normalizeLogs([{ type:'protein', ts: now, grams: 10 }])[0].meal, T.mealFromTs(now), 'normalizeLogs: 缺 meal 时按时间补');
+    eq(T.normalizeLogs([{ type:'protein', ts: now, grams: 10, meal:'lunch' }])[0].meal, 'lunch', 'normalizeLogs: 保留 meal');
+
+    /* ---- 第二期：重量 / 次数 / 建议加重 ---- */
+    eq(T.liftKind({ id:'0576', equipment:'坐姿推胸机' }), 'load', 'liftKind: 器械动作为 load');
+    T.setRoutine('gym');
+    eq(T.liftKind({ id:'0576', equipment:'坐姿推胸机' }), 'load', 'liftKind: gym 课为 load');
+    T.setRoutine('bodyweight');
+    eq(T.liftKind({ id:'0659' }), 'wall', 'liftKind: 靠墙俯卧撑为 wall');
+    eq(T.liftKind({ id:'chair-stand' }), 'chair', 'liftKind: 扶椅坐站为 chair');
+    eq(T.suggestNextKg(20, [{reps:10},{reps:10},{reps:10}], 10), 22.5, 'suggestNextKg: 三组满次数 +2.5');
+    eq(T.suggestNextKg(20, [{reps:10},{reps:6}], 10), 20, 'suggestNextKg: 没满次数不加重');
+    eq(T.nextLevelId('wall', 'near'), 'mid', 'nextLevelId: 近墙下一级是中距');
+    eq(T.nextLevelId('chair', 'db'), 'db', 'nextLevelId: 最高档保持');
+    var lifts = T.normalizeLifts({ '0576': { kg: 20, reps: 10, ts: now, history: [{ kg: 17.5, reps: 10, ts: now }] } });
+    eq(lifts['0576'].kg, 20, 'normalizeLifts: 保留 kg');
+    eq(lifts['0576'].history.length, 1, 'normalizeLifts: 保留 history');
+    assert(T.normalizeLiftSet({ kg:0, reps:0, level:'' }) === null, 'normalizeLiftSet: 空组丢掉');
+    eq(T.normalizeLiftSet({ kg: 20.2, reps: 8 }).kg, 20, 'normalizeLiftSet: kg 按 0.5 取整');
 
     /* ---- parseQwenContent ---- */
     eq(T.parseQwenContent('{"food":"鸡蛋","protein":6}').protein, 6, 'parseQwenContent: 纯 JSON');

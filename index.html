@@ -31,7 +31,10 @@
         </div>
         <h1>今天的<span class="accent">蛋白</span>，<br>吃够了吗？</h1>
         <div class="sub" id="todaySub"></div>
-        <span class="streak-chip" id="streakChip" hidden><span class="flame">🔥</span>连续训练 <b id="streakNum">0</b> 天</span>
+        <div class="chip-row">
+          <span class="week-chip" id="weekChip"><span class="wk-lab">本周力量</span><b id="weekStrengthNum">0</b><span class="wk-den">/3</span></span>
+          <span class="streak-chip" id="streakChip" hidden><span class="flame">🔥</span>连续 <b id="streakNum">0</b> 天</span>
+        </div>
       </div>
 
       <div class="section">
@@ -46,21 +49,48 @@
           </div>
           <div class="p-bar" id="pBarWrap"><i id="pBar"></i></div>
           <div class="p-cap"><span>0</span><span class="pct" id="pPct">0%</span><span id="pCapTarget"></span></div>
-          <button class="btn-photo" id="btnPhoto"><span class="cam">📷</span>拍照记蛋白</button>
+          <div class="meal-grid" id="mealGrid"></div>
+          <div class="chips" id="quickFoods"></div>
+          <div class="p-actions">
+            <button class="btn-photo" id="btnPhoto"><span class="cam">📷</span>拍照</button>
+            <button class="btn-manual" id="btnManualProtein">✍️ 手记</button>
+          </div>
           <div class="log-list" id="todayLogs"></div>
         </div>
       </div>
 
       <div class="section">
-        <div class="sec-head"><span class="idx">02</span><b>今天跟练</b><span class="en">Training</span><span class="spacer"></span><span class="aside" id="tAside"></span></div>
+        <div class="sec-head"><span class="idx">02</span><b>饮水与体重</b><span class="en">Body</span><span class="spacer"></span><span class="aside" id="bodyAside"></span></div>
+        <div class="card body-card">
+          <div class="body-row">
+            <div class="body-lab">水</div>
+            <div class="body-val"><span class="num" id="wToday">0</span><small id="wTargetLabel">/ 2000 ml</small></div>
+            <div class="body-btns">
+              <button class="chip" id="btnWater200">+200</button>
+              <button class="chip" id="btnWater350">+350</button>
+            </div>
+          </div>
+          <div class="w-bar" id="wBarWrap"><i id="wBar"></i></div>
+          <div class="body-row weight-row">
+            <div class="body-lab">体重</div>
+            <div class="body-val" id="weightVal">未记录</div>
+            <button class="chip" id="btnLogWeight">记下</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="sec-head"><span class="idx">03</span><b>今天跟练</b><span class="en">Training</span><span class="spacer"></span><span class="aside" id="tAside"></span></div>
         <div class="card t-card" id="todayTrainCard">
           <div class="t-ico" id="tIco">🏋️</div>
           <div class="t-body">
             <div class="n" id="tName"></div>
             <div class="d" id="tDesc"></div>
           </div>
-          <button class="t-go" id="tGo">开始</button>
-          <span class="t-done" id="tDone" hidden>✓ 今天已练</span>
+          <div class="t-actions">
+            <span class="t-done" id="tDone" hidden>✓ 今天已练</span>
+            <button class="t-go" id="tGo">开始</button>
+          </div>
         </div>
       </div>
     </section>
@@ -121,9 +151,14 @@
       </div>
       <div class="section">
         <div class="stat-row">
-          <div class="stat s"><div class="v num"><span id="stStreak">0</span><small>天</small></div><div class="l">训练连击</div></div>
+          <div class="stat s"><div class="v num"><span id="stWeek">0</span><small>/3</small></div><div class="l">本周力量</div></div>
           <div class="stat t"><div class="v num"><span id="stSessions">0</span><small>次</small></div><div class="l">累计训练</div></div>
           <div class="stat p"><div class="v num"><span id="stAvg">0</span><small>g</small></div><div class="l">近7天日均蛋白</div></div>
+        </div>
+        <div class="stat-row" style="margin-top:10px">
+          <div class="stat"><div class="v num"><span id="stStreak">0</span><small>天</small></div><div class="l">训练连击</div></div>
+          <div class="stat"><div class="v num" id="stWeightBox"><span id="stWeight">—</span><small>kg</small></div><div class="l">最近体重</div></div>
+          <div class="stat"><div class="v num"><span id="stWater">0</span><small>ml</small></div><div class="l">今日饮水</div></div>
         </div>
       </div>
       <div class="section">
@@ -132,6 +167,16 @@
           <div class="chart" id="proteinChart"></div>
           <div class="target-line" id="chartTarget"></div>
         </div>
+      </div>
+      <div class="section">
+        <div class="sec-head"><b>近 4 周体重</b><span class="en">Weight</span><span class="spacer"></span><span class="aside" id="weightChartAside"></span></div>
+        <div class="card">
+          <div class="chart" id="weightChart"></div>
+        </div>
+      </div>
+      <div class="section">
+        <div class="sec-head"><b>动作重量</b><span class="en">Lifts</span></div>
+        <div class="card" id="liftHist"><div class="empty-hint">跟练哑铃/器械时记下重量，会出在这里</div></div>
       </div>
       <div class="section">
         <div class="sec-head"><b>训练记录</b><span class="en">Sessions</span></div>
@@ -166,9 +211,25 @@
         <div class="field-label">目标 <span class="en">Target</span></div>
         <div class="card set-group">
           <div class="set-row">
+            <div class="ic">⚖️</div>
+            <div class="tx"><div class="n">当前体重</div><div class="d" id="weightHint">用来按体重估算蛋白目标</div></div>
+            <button class="chip" id="btnSetWeight" style="flex-shrink:0"><span class="num" id="weightSetVal">—</span>kg</button>
+          </div>
+          <div class="set-row">
+            <div class="ic">×</div>
+            <div class="tx"><div class="n">每公斤蛋白</div><div class="d">体重 × 这个数 = 建议目标</div></div>
+            <button class="chip" id="btnSetPerKg" style="flex-shrink:0"><span class="num" id="perKgVal">1.4</span></button>
+          </div>
+          <div class="set-row">
             <div class="ic">🎯</div>
-            <div class="tx"><div class="n">每日蛋白目标</div><div class="d">替尔泊肽期建议 1.2–1.5 g/kg 体重</div></div>
+            <div class="tx"><div class="n">每日蛋白目标</div><div class="d" id="targetHint">可手改，也可按体重计算</div></div>
+            <button class="chip" id="btnUseWeightTarget" style="flex-shrink:0">按体重算</button>
             <button class="chip" id="btnSetTarget" style="flex-shrink:0"><span class="num" id="targetVal">100</span>g</button>
+          </div>
+          <div class="set-row">
+            <div class="ic">💧</div>
+            <div class="tx"><div class="n">每日饮水目标</div><div class="d">今天页一键记入</div></div>
+            <button class="chip" id="btnSetWater" style="flex-shrink:0"><span class="num" id="waterTargetVal">2000</span>ml</button>
           </div>
         </div>
       </div>
@@ -209,7 +270,7 @@
       </div>
 
       <div class="section">
-        <div class="disclaimer">数据只保存在本浏览器（localStorage）。识别时使用你自己的通义千问 Key，经本站同域接口转发，服务器不保存 Key 与照片。换设备或清缓存前请先导出备份。</div>
+        <div class="disclaimer">数据只保存在本机浏览器（localStorage + IndexedDB）。识别用你自己的通义 Key，经本站接口转发，服务器不保存 Key 与照片。换设备或清缓存前请先导出备份。</div>
       </div>
     </section>
   </main>
@@ -239,6 +300,15 @@
       <span class="pl-badge" id="plBadge">示范</span>
     </div>
     <div class="pl-cue" id="plCue"></div>
+    <div class="pl-log" id="plLog" hidden>
+      <div class="pl-log-last" id="plLogLast"></div>
+      <div class="pl-log-row" id="plLogLoad">
+        <label>kg<input id="plKg" type="number" inputmode="decimal" step="0.5" min="0" max="400"></label>
+        <label>次<input id="plReps" type="number" inputmode="numeric" step="1" min="0" max="80"></label>
+      </div>
+      <div class="pl-log-levels" id="plLogLevels" hidden></div>
+      <div class="pl-log-hint" id="plLogHint"></div>
+    </div>
     <div class="pl-dots" id="plDots"></div>
     <div class="pl-next" id="plNext"></div>
   </div>
@@ -252,6 +322,7 @@
     <div class="big">🎉</div>
     <h3 id="plDoneTitle">训练完成</h3>
     <div class="sub" id="plDoneSub"></div>
+    <div class="pl-done-lifts" id="plDoneLifts"></div>
     <button class="btn" id="plDoneBtn">好的</button>
   </div>
 </div>
@@ -263,7 +334,7 @@
     <div class="grab"></div>
     <button class="close-x" id="photoClose" aria-label="关闭">✕</button>
     <h3>拍照记蛋白</h3>
-    <div class="psub">AI 识别食物并估算蛋白/碳水/脂肪/热量，照片只发给通义千问</div>
+    <div class="psub">AI 是估算，记入前可改克数。照片只发给通义千问。</div>
 
     <div class="key-gate" id="photoKeyGate">
       <p>拍照识别需要你自己的通义千问 Key：<strong>按量 Key</strong> 以 <code>sk-</code> 开头；<strong>Token Plan</strong> 以 <code>sk-sp-</code> 开头（二者接口不同，站点会自动匹配）。只存在本浏览器。</p>
@@ -319,6 +390,15 @@
     <div class="detail-list" id="mdSteps"></div>
     <div class="detail-box cue" id="mdCue"><b>要领</b><span id="mdCueTx"></span></div>
     <div class="detail-box mistake" id="mdMistake"><b>常见错误</b><span id="mdMistakeTx"></span></div>
+    <div class="md-lift" id="mdLift" hidden>
+      <div class="md-lift-h">记下重量，跟练时会带上</div>
+      <div class="pl-log-row" id="mdLiftLoad">
+        <label>kg<input id="mdKg" type="number" inputmode="decimal" step="0.5" min="0" max="400"></label>
+        <label>次<input id="mdReps" type="number" inputmode="numeric" step="1" min="0" max="80"></label>
+      </div>
+      <div class="pl-log-levels" id="mdLiftLevels" hidden></div>
+      <button class="chip" id="mdLiftSave" style="margin-top:10px">保存</button>
+    </div>
   </div>
 </div>
 
