@@ -87,6 +87,33 @@ try {
     throw new Error('CSP 缺少 m4a 或同源 relay 所需指令');
   }
 
+  await appPage.click('[data-page="data"]');
+  await appPage.waitForSelector('#stProteinDays');
+  const dataOk = await appPage.evaluate(() => !!(
+    document.getElementById('stWalk') &&
+    document.getElementById('stWeight') &&
+    document.getElementById('stProteinDays') &&
+    document.getElementById('stWeek')
+  ));
+  if (!dataOk) throw new Error('数据页缺统计节点');
+  await appPage.click('[data-page="me"]');
+  await appPage.waitForSelector('#btnSetHeight');
+  await appPage.click('[data-page="today"]');
+  await appPage.waitForSelector('#mealGrid .meal-cell');
+  const todayOk = await appPage.evaluate(() => (
+    document.querySelectorAll('#mealGrid .meal-cell').length === 4 &&
+    document.querySelectorAll('[data-walk]').length === 3 &&
+    !!document.getElementById('fiberRow') &&
+    !!document.getElementById('startHint')
+  ));
+  if (!todayOk) throw new Error('今天页缺四餐/走路/纤维/起步提示');
+  const beforeProtein = await appPage.textContent('#pToday');
+  await appPage.click('#quickFoods button');
+  await appPage.waitForFunction((prev) => {
+    const el = document.getElementById('pToday');
+    return el && el.textContent !== prev;
+  }, beforeProtein, { timeout: 5000 });
+
   if (!RUN_UNIT_PAGE) {
     const protectedPaths = await appPage.evaluate(async () => Promise.all(
       ['HANDOVER.md', 'serve.py', 'relay_routing.py', 'test.html'].map(async (name) => {

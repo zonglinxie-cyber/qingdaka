@@ -30,7 +30,9 @@ window.addEventListener('unhandledrejection', function(ev){
      proteinTarget: number,  // 每日蛋白目标 (g), 20-300
      waterTarget: number,    // 每日饮水目标 (ml), 500-6000
      bodyWeightKg: number,   // 当前体重，0 表示未设
+     heightCm: number,       // 身高，0 表示未设；BMI≥27.5 时按调整体重算蛋白
      proteinPerKg: number,   // 每公斤蛋白系数，默认 1.4
+     proteinWeightMode: 'adjusted' | 'actual' | 'manual',
      sound: boolean,         // 提示音
      voice: boolean,         // 语音指导
      motion: boolean,        // 动作动画
@@ -44,11 +46,12 @@ window.addEventListener('unhandledrejection', function(ev){
 
    LogEntry = {
      id: string,            // 唯一 ID
-     type: 'protein' | 'water' | 'training',
+     type: 'protein' | 'water' | 'training' | 'walk',
      ts: number             // Unix 毫秒时间戳
    }
      protein 额外字段:  { grams, food, source:'photo'|'quick'|'manual'|'legacy', meal:'breakfast'|'lunch'|'dinner'|'snack' }
      water 额外字段:    { ml }
+     walk 额外字段:     { minutes }
      training 额外字段:  {
        status: 'completed' | 'partial' | 'stopped' | 'legacy' | 'makeup',
          // completed = 全部完成; partial = 部分完成; stopped = 提前结束
@@ -108,13 +111,23 @@ var WEEK_STRENGTH_GOAL = 3;
 var MEAL_IDS = ['breakfast','lunch','dinner','snack'];
 var MEAL_NAMES = { breakfast:'早餐', lunch:'午餐', dinner:'晚餐', snack:'加餐' };
 var QUICK_FOODS = [
-  { id:'egg', name:'鸡蛋', grams:6, food:'鸡蛋 1 个' },
-  { id:'milk', name:'牛奶', grams:8, food:'牛奶 250ml' },
-  { id:'yogurt', name:'酸奶', grams:10, food:'酸奶 1 杯' },
-  { id:'tofu', name:'豆腐', grams:15, food:'豆腐 1 份' },
-  { id:'chicken', name:'鸡胸', grams:25, food:'鸡胸 100g' },
-  { id:'powder', name:'蛋白粉', grams:25, food:'蛋白粉 1 勺' }
+  { id:'egg2', name:'鸡蛋2个', grams:13, food:'鸡蛋 2 个', liquid:false },
+  { id:'milk', name:'纯牛奶', grams:8, food:'纯牛奶 250ml', liquid:true },
+  { id:'soy', name:'豆浆', grams:8, food:'无糖豆浆 300ml', liquid:true },
+  { id:'yogurt', name:'酸奶', grams:6, food:'原味酸奶 150g', liquid:true },
+  { id:'greek', name:'希腊酸奶', grams:15, food:'希腊酸奶 150g', liquid:true },
+  { id:'tofu', name:'北豆腐', grams:18, food:'北豆腐 150g', liquid:false },
+  { id:'doukan', name:'豆腐干', grams:8, food:'豆腐干 50g', liquid:false },
+  { id:'pork', name:'瘦猪肉', grams:15, food:'瘦猪肉 75g', liquid:false },
+  { id:'fish', name:'鱼肉', grams:18, food:'鱼净肉 100g', liquid:false },
+  { id:'shrimp', name:'虾仁', grams:15, food:'虾仁 80g', liquid:false },
+  { id:'chicken', name:'即食鸡胸', grams:25, food:'即食鸡胸 100g 熟', liquid:false },
+  { id:'powder', name:'蛋白粉', grams:24, food:'蛋白粉 1 平勺', liquid:true }
 ];
+var MEAL_FLOOR = 30;
+var pendingMeal = null;
+var HEIGHT_CM_MIN = 120;
+var HEIGHT_CM_MAX = 220;
 // 课程 ID 的唯一事实来源。设置、日志与 UI 都必须引用它，避免新增课程时只改一处。
 var ROUTINE_IDS = ['bodyweight','dumbbell','core','gym','stretch'];
 
@@ -127,19 +140,38 @@ function mealFromTs(ts){
 }
 function mealTargets(total){
   var t = Math.round(clampNumber(total, PROTEIN_TARGET_MIN, PROTEIN_TARGET_MAX, DEFAULT_PROTEIN));
-  var base = Math.floor(t / 4);
-  var rem = t - base * 4;
-  var out = { breakfast:base, lunch:base, dinner:base, snack:base };
-  for(var i = 0; i < rem; i++){ out[MEAL_IDS[i]] += 1; }
-  return out;
+  if(t < 75){
+    var each = Math.floor(t / 3);
+    return { breakfast:each, lunch:each, dinner:t - 2 * each, snack:0 };
+  }
+  var floor = Math.min(40, Math.max(25, MEAL_FLOOR));
+  if(floor * 3 > t){ floor = Math.floor(t / 3); }
+  return { breakfast:floor, lunch:floor, dinner:floor, snack:Math.max(0, t - floor * 3) };
 }
-function suggestedProteinTarget(kg, perKg){
+function idealWeightKg(heightCm){
+  var h = Number(heightCm);
+  if(!Number.isFinite(h) || h < HEIGHT_CM_MIN || h > HEIGHT_CM_MAX){ return null; }
+  var m = h / 100;
+  return Math.round(22 * m * m * 10) / 10;
+}
+function adjustedWeightKg(kg, heightCm){
   var w = Number(kg);
+  if(!Number.isFinite(w) || w < WEIGHT_KG_MIN){ return null; }
+  var ibw = idealWeightKg(heightCm);
+  if(!ibw){ return Math.round(w * 10) / 10; }
+  var m = Number(heightCm) / 100;
+  var bmi = w / (m * m);
+  if(bmi < 27.5){ return Math.round(w * 10) / 10; }
+  return Math.round((ibw + 0.25 * (w - ibw)) * 10) / 10;
+}
+function suggestedProteinTarget(kg, perKg, heightCm, mode){
   var r = Number(perKg);
-  if(!Number.isFinite(w) || w < WEIGHT_KG_MIN || w > WEIGHT_KG_MAX){ return null; }
   if(!Number.isFinite(r) || r <= 0){ r = PROTEIN_PER_KG_DEFAULT; }
   r = clampNumber(r, PROTEIN_PER_KG_MIN, PROTEIN_PER_KG_MAX, PROTEIN_PER_KG_DEFAULT);
-  return Math.round(clampNumber(w * r, PROTEIN_TARGET_MIN, PROTEIN_TARGET_MAX, DEFAULT_PROTEIN));
+  var w = (mode === 'actual') ? Number(kg) : (adjustedWeightKg(kg, heightCm) || Number(kg));
+  if(!Number.isFinite(w) || w < WEIGHT_KG_MIN || w > WEIGHT_KG_MAX){ return null; }
+  var raw = Math.round(w * r);
+  return Math.round(clampNumber(raw, PROTEIN_TARGET_MIN, 160, DEFAULT_PROTEIN));
 }
 function weekStart(ts){
   var d = new Date(dayStart(ts));
@@ -330,6 +362,8 @@ function defaultState(){
   var today = dayStart(Date.now());
   return { v:5, settings:{
     proteinTarget:DEFAULT_PROTEIN, waterTarget:DEFAULT_WATER, bodyWeightKg:0, proteinPerKg:PROTEIN_PER_KG_DEFAULT,
+    heightCm:0, proteinWeightMode:'adjusted',
+    fiberDay:0, fiberVeg:false, fiberSoy:false, fiberGrain:false,
     sound:true, voice:true, motion:true,
     voiceName:'', routine:'bodyweight', preset:'starter', profileLevel:'adapt', reminderTime:'19:30',
     readiness:'green', readinessDay:today
@@ -344,6 +378,20 @@ function normalizeSettings(s){
   var bw = Number(st.bodyWeightKg);
   out.bodyWeightKg = (Number.isFinite(bw) && bw >= WEIGHT_KG_MIN && bw <= WEIGHT_KG_MAX) ? Math.round(bw * 10) / 10 : 0;
   out.proteinPerKg = Math.round(clampNumber(st.proteinPerKg, PROTEIN_PER_KG_MIN, PROTEIN_PER_KG_MAX, PROTEIN_PER_KG_DEFAULT) * 10) / 10;
+  var hc = Number(st.heightCm);
+  out.heightCm = (Number.isFinite(hc) && hc >= HEIGHT_CM_MIN && hc <= HEIGHT_CM_MAX) ? Math.round(hc) : 0;
+  out.proteinWeightMode = ['adjusted','actual','manual'].indexOf(st.proteinWeightMode) >= 0 ? st.proteinWeightMode : 'adjusted';
+  var fd = Number(st.fiberDay);
+  var today0 = dayStart(Date.now());
+  if(Number.isFinite(fd) && fd === today0){
+    out.fiberDay = today0;
+    out.fiberVeg = st.fiberVeg === true;
+    out.fiberSoy = st.fiberSoy === true;
+    out.fiberGrain = st.fiberGrain === true;
+  } else {
+    out.fiberDay = today0;
+    out.fiberVeg = false; out.fiberSoy = false; out.fiberGrain = false;
+  }
   out.sound = st.sound !== false;
   out.voice = st.voice !== false;
   out.motion = st.motion !== false;
@@ -385,6 +433,10 @@ function normalizeLogs(arr){
       var ml = Math.round(clampNumber(item.ml, 0, WATER_ML_SINGLE, 0));
       if(ml <= 0){ return; }
       out.push({ id:id, type:'water', ts:ts, ml:ml });
+    } else if(item.type === 'walk'){
+      var mins = Math.round(clampNumber(item.minutes, 0, 180, 0));
+      if(mins <= 0){ return; }
+      out.push({ id:id, type:'walk', ts:ts, minutes:mins });
     } else if(item.type === 'training'){
       out.push({
         id:id, type:'training', ts:ts,
@@ -586,13 +638,45 @@ function addProtein(grams, food, source, extras){
   if(!grams || grams <= 0){ showToast('蛋白质克数需大于 0', 'error'); return; }
   var entry = { id:uid(), type:'protein', ts:Date.now(), grams:grams, food:cleanText(food,80,'食物'), source:source||'manual' };
   var ex = extras || {};
-  entry.meal = MEAL_IDS.indexOf(ex.meal) >= 0 ? ex.meal : mealFromTs(entry.ts);
+  entry.meal = MEAL_IDS.indexOf(ex.meal) >= 0 ? ex.meal : (pendingMeal || mealFromTs(entry.ts));
   var c = Number(ex.carbs);   if(Number.isFinite(c)   && c > 0){ entry.carbs = Math.round(Math.min(500, c)*10)/10; }
   var f = Number(ex.fat);     if(Number.isFinite(f)   && f > 0){ entry.fat = Math.round(Math.min(500, f)*10)/10; }
   var cal = Number(ex.calories); if(Number.isFinite(cal) && cal > 0){ entry.calories = Math.round(Math.min(3000, cal)); }
-  if(!canAddLog() || !mutateState(function(){ S.logs.push(entry); })){ return; }
+  if(!canAddLog() || !mutateState(function(){
+    S.logs.push(entry);
+    if(entry.food.indexOf('豆腐') >= 0 || entry.food.indexOf('豆浆') >= 0){
+      ensureFiberDay(); S.settings.fiberSoy = true;
+    }
+  })){ return; }
+  pendingMeal = null;
   renderToday();
-  showToast('已记入 +' + grams + 'g 蛋白' + (entry.calories ? ' · ' + entry.calories + ' kcal' : ''), 'success');
+  showToast('已记下 +' + grams + 'g · 今天有记录就成立', 'success');
+}
+function addWalk(minutes){
+  minutes = Math.round(clampNumber(minutes, 0, 180, 0));
+  if(!minutes){ return; }
+  if(!canAddLog() || !mutateState(function(){
+    S.logs.push({ id:uid(), type:'walk', ts:Date.now(), minutes:minutes });
+  })){ return; }
+  renderToday();
+  if(document.getElementById('page-data').classList.contains('active')){ renderData(); }
+  showToast('已记下走路 ' + minutes + ' 分钟（不算力量次数）', 'success');
+}
+function ensureFiberDay(){
+  var today0 = dayStart(Date.now());
+  if(S.settings.fiberDay !== today0){
+    S.settings.fiberDay = today0;
+    S.settings.fiberVeg = false;
+    S.settings.fiberSoy = false;
+    S.settings.fiberGrain = false;
+  }
+}
+function weekAvgWeight(){
+  var start = dayStart(Date.now()) - 6 * 86400000;
+  var vals = (S.weights || []).filter(function(w){ return w.ts >= start; }).map(function(w){ return w.kg; });
+  if(!vals.length){ return null; }
+  var s = 0; vals.forEach(function(v){ s += v; });
+  return Math.round(s / vals.length * 10) / 10;
 }
 function addTraining(meta){
   meta = meta || {};
@@ -634,26 +718,33 @@ function addWater(ml){
   if(document.getElementById('page-data').classList.contains('active')){ renderData(); }
   showToast('已记入 +' + ml + ' ml', 'success');
 }
-function addWeight(kg){
+function addWeight(kg, waist){
   kg = Math.round(clampNumber(kg, WEIGHT_KG_MIN, WEIGHT_KG_MAX, 0) * 10) / 10;
   if(!kg){ showToast('请输入有效体重', 'error'); return; }
+  var wcm = (waist === '' || waist == null) ? undefined : Math.round(clampNumber(waist, WAIST_CM_MIN, WAIST_CM_MAX, 0) * 10) / 10;
+  if(wcm === 0){ wcm = undefined; }
   if(!mutateState(function(){
-    S.weights.push({ ts:Date.now(), kg:kg });
+    var rec = { ts:Date.now(), kg:kg };
+    if(wcm){ rec.waist = wcm; }
+    S.weights.push(rec);
     if(S.weights.length > MAX_WEIGHTS){ S.weights = S.weights.slice(-MAX_WEIGHTS); }
     S.settings.bodyWeightKg = kg;
   })){ return; }
   renderToday();
   if(document.getElementById('page-me').classList.contains('active')){ renderSettings(); }
   if(document.getElementById('page-data').classList.contains('active')){ renderData(); }
-  showToast('已记下 ' + kg + ' kg', 'success');
+  showToast('已记下 ' + kg + ' kg。单日会波动，趋势看 7 日均。', 'success');
 }
 function applyProteinFromWeight(){
   var kg = S.settings.bodyWeightKg || (latestWeight() && latestWeight().kg);
-  var sug = suggestedProteinTarget(kg, S.settings.proteinPerKg);
+  var adj = adjustedWeightKg(kg, S.settings.heightCm);
+  var sug = suggestedProteinTarget(kg, S.settings.proteinPerKg, S.settings.heightCm, S.settings.proteinWeightMode);
   if(!sug){ showToast('先记下体重，才能按体重计算', 'error'); return false; }
-  if(!mutateState(function(){ S.settings.proteinTarget = sug; })){ return false; }
+  if(!mutateState(function(){ S.settings.proteinTarget = sug; S.settings.proteinWeightMode = S.settings.proteinWeightMode || 'adjusted'; })){ return false; }
   renderSettings(); renderToday();
-  showToast('目标已设为 ' + sug + ' g（' + kg + ' kg × ' + S.settings.proteinPerKg + '）', 'success');
+  var used = (S.settings.proteinWeightMode === 'actual') ? kg : (adj || kg);
+  var extra = (adj && S.settings.heightCm && adj < kg) ? '，已按调整体重，避免目标过高' : '';
+  showToast('目标 ' + sug + ' g（' + used + ' kg × ' + S.settings.proteinPerKg + extra + '）。可手改小一点先执行。', 'success');
   return true;
 }
 function deleteLog(id){
@@ -669,11 +760,22 @@ function deleteLog(id){
  *   'makeup' — 补打卡记录，不计入训练连击
  */
 function isActualTraining(log){
-  return !!(log && log.type === 'training' && log.status !== 'makeup' &&
-    (log.status === 'legacy' ? (Number(log.actualSeconds)||0) >= 60 : (Number(log.workSeconds)||0) >= 60));
+  if(!log || log.type !== 'training' || log.status === 'makeup'){ return false; }
+  if(log.status === 'legacy'){ return (Number(log.actualSeconds) || 0) >= 20; }
+  return (Number(log.workSeconds) || 0) >= 20
+    || (Number(log.completedMoves) || 0) > 0
+    || (Number(log.actualSeconds) || 0) >= 30;
 }
 function isStrengthTraining(log){
-  return isActualTraining(log) && log.routine !== 'stretch';
+  return isActualTraining(log) && log.routine !== 'stretch' && log.routine !== 'core';
+}
+function countRecentTrainingDays(trainingDays){
+  var start = dayStart(Date.now()) - 6 * 86400000;
+  var n = 0;
+  Object.keys(trainingDays || {}).forEach(function(k){
+    if(Number(k) >= start){ n++; }
+  });
+  return n;
 }
 function countWeekStrengthDays(sessions, now){
   var start = weekStart(now || Date.now());
@@ -695,6 +797,7 @@ function buildLogIndex(){
   var proteinByDay = {};
   var proteinLogsByDay = {};
   var waterByDay = {};
+  var walkByDay = {};
   var trainingDays = {};
   var trainingSessions = [];
   S.logs.forEach(function(l){
@@ -705,6 +808,8 @@ function buildLogIndex(){
       proteinLogsByDay[ds].push(l);
     } else if(l.type === 'water'){
       waterByDay[ds] = (waterByDay[ds] || 0) + (Number(l.ml) || 0);
+    } else if(l.type === 'walk'){
+      walkByDay[ds] = (walkByDay[ds] || 0) + (Number(l.minutes) || 0);
     } else if(isActualTraining(l)){
       trainingDays[ds] = true;
       trainingSessions.push(l);
@@ -719,6 +824,7 @@ function buildLogIndex(){
     proteinByDay: proteinByDay,
     proteinLogsByDay: proteinLogsByDay,
     waterByDay: waterByDay,
+    walkByDay: walkByDay,
     trainingDays: trainingDays,
     trainingSessions: trainingSessions
   };
@@ -1380,6 +1486,7 @@ var plLogLevel = '';
 
 function buildSteps(){
   var cfg = presets[S.settings.preset] || presets.starter;
+  var restSec = (S.settings.routine === 'gym' || S.settings.routine === 'dumbbell') ? Math.max(60, cfg.rest) : cfg.rest;
   steps = [];
   if(S.settings.routine === 'stretch'){
     stretchSets.stretch.forEach(function(s){ steps.push({ type:'stretch', round:0, sec:s.sec, move:s }); });
@@ -1388,7 +1495,7 @@ function buildSteps(){
     for(var r=1; r<=cfg.rounds; r++){
       moves.forEach(function(m, i){
         steps.push({ type:'work', round:r, sec:cfg.work, move:m });
-        if(i < moves.length-1){ steps.push({ type:'rest', round:r, sec:cfg.rest, next:moves[i+1] }); }
+        if(i < moves.length-1){ steps.push({ type:'rest', round:r, sec:restSec, next:moves[i+1] }); }
       });
       if(r < cfg.rounds){ steps.push({ type:'break', round:r, sec:cfg.roundBreak, next:moves[0] }); }
     }
@@ -1763,7 +1870,7 @@ function finishWorkout(early){
   var isStretch = S.settings.routine === 'stretch';
   var effectiveWork = isStretch ? stretchElapsed : workElapsed;
   var mvCount = isStretch ? Object.keys(completedStretchIds).length : Object.keys(completedMoveIds).length;
-  var shouldLog = effectiveWork >= 60;
+  var shouldLog = effectiveWork >= 20 || sessionElapsed >= 30 || mvCount > 0;
   var didLog = false;
   if(shouldLog){
     didLog = addTraining({
@@ -1776,9 +1883,9 @@ function finishWorkout(early){
   }
   var mins = (Math.round(sessionElapsed/6)/10);
   var unit = isStretch ? ' 个拉伸' : ' 个动作';
-  $('plDoneTitle').textContent = early ? '本次已提前结束' : (isStretch ? '拉伸完成 🎉' : '训练完成 🎉');
+  $('plDoneTitle').textContent = early ? '已按实际记录' : (isStretch ? '拉伸完成' : '训练完成');
   $('plDoneSub').textContent = '实际 ' + mins + ' 分钟 · 完成 ' + mvCount + unit +
-    (didLog ? ' · 已记录' : (shouldLog ? ' · 保存失败' : ' · 不足1分钟未计入'));
+    (didLog ? ' · 已写入' : (shouldLog ? ' · 保存失败' : ' · 太短未写入，下次做 1 个动作即可'));
   var liftBox = $('plDoneLifts');
   if(liftBox){
     var lines = [];
@@ -1803,15 +1910,15 @@ function finishWorkout(early){
   $('plDone').setAttribute('aria-hidden','false');
   // 用预生成 m4a；加载失败时带同一句 Web Speech 兜底。
   var doneKey = didLog ? (early ? 'finish-early' : (isStretch ? 'finish-stretch' : 'finish-done')) : null;
-  var doneText = early ? '本次已结束，已经按实际完成量记录。' : (isStretch ? '拉伸完成，放松一下。' : '训练完成，干得漂亮！记得补充蛋白质。');
+  var doneText = early ? '本次已按实际完成量记录。' : (isStretch ? '拉伸完成，放松一下。' : '先补 25 克蛋白，粉或酸奶即可。');
   if(doneKey){ speak(doneText, { mp3Key: doneKey }); }
-  else { speak(shouldLog ? '本次达到记录门槛，但保存失败。' : '实际不足一分钟，本次没有计入。'); }
+  else { speak(didLog ? '已记录。' : '下次做完一个动作再结束即可。'); }
 }
 $('plPause').addEventListener('click', function(){ pauseWorkout(); });
 $('plSkip').addEventListener('click', function(){ if(running && !inCountdown){ advance(1,'skip'); } });
 $('plPrev').addEventListener('click', function(){ if(running && !inCountdown && stepIndex > 0){ advance(-1,'back'); } });
 $('plEnd').addEventListener('click', function(){
-  showConfirm('结束本次并按实际完成量记录？不足 1 分钟不会计为训练。', function(){ finishWorkout(true); }, { title:'结束训练', okText:'结束并记录', danger:true });
+  showConfirm('按已经做完的记录下来？未做完的明天不必补罚。', function(){ finishWorkout(true); }, { title:'结束并记录', okText:'记下' });
 });
 $('plExit').addEventListener('click', function(){
   if(running){ pauseWorkout(); }
@@ -1915,19 +2022,38 @@ function openManualProtein(){
 }
 $('btnPhoto').addEventListener('click', openPhotoModal);
 $('btnManualProtein').addEventListener('click', openManualProtein);
-$('btnWater200').addEventListener('click', function(){ addWater(200); });
 $('btnWater350').addEventListener('click', function(){ addWater(350); });
+if($('btnWater500')){ $('btnWater500').addEventListener('click', function(){ addWater(500); }); }
 $('btnLogWeight').addEventListener('click', function(){
   var last = latestWeight();
-  showPrompt('记下现在的体重（kg）：', last ? String(last.kg) : '', function(v){
+  showPrompt('记下现在的体重（kg）。不想称就取消。', last ? String(last.kg) : '', function(v){
     if(v === '' || v == null){ return; }
     var n = Number(v);
     if(!Number.isFinite(n) || n < WEIGHT_KG_MIN || n > WEIGHT_KG_MAX){
       showToast('请输入 ' + WEIGHT_KG_MIN + '–' + WEIGHT_KG_MAX + ' 之间的数字', 'error'); return;
     }
-    addWeight(n);
-  }, { title:'记体重', okText:'记下', type:'number', placeholder:'例如 80' });
+    showPrompt('腰围厘米（可空，呼气末、皮尺不勒肉）：', last && last.waist ? String(last.waist) : '', function(w){
+      addWeight(n, w);
+    }, { title:'腰围（可选）', okText:'记下', type:'number', placeholder:'可留空' });
+  }, { title:'记体重', okText:'下一步', type:'number', placeholder:'例如 80' });
 });
+document.querySelectorAll('[data-walk]').forEach(function(b){
+  b.addEventListener('click', function(){ addWalk(Number(b.getAttribute('data-walk'))); });
+});
+if($('fiberRow')){
+  $('fiberRow').addEventListener('click', function(e){
+    var btn = e.target.closest('[data-fiber]');
+    if(!btn){ return; }
+    var which = btn.getAttribute('data-fiber');
+    mutateState(function(){
+      ensureFiberDay();
+      if(which === 'veg'){ S.settings.fiberVeg = !S.settings.fiberVeg; }
+      if(which === 'soy'){ S.settings.fiberSoy = !S.settings.fiberSoy; }
+      if(which === 'grain'){ S.settings.fiberGrain = !S.settings.fiberGrain; }
+    });
+    renderFiberRow();
+  });
+}
 $('photoClose').addEventListener('click', closePhotoModal);
 $('photoBackdrop').addEventListener('click', closePhotoModal);
 $('snapDrop').addEventListener('click', function(){ $('snapFile').click(); });
@@ -2031,7 +2157,7 @@ function callQwen(requestId){
         '只返回一个 JSON 对象，不要任何解释或代码块标记。格式：\n' +
         '{"food":"食物总称（中文）","items":[{"name":"食物名","amount":"份量","protein":数字,"carbs":数字,"fat":数字,"calories":数字}],"protein":总蛋白数字,"carbs":总碳水数字,"fat":总脂肪数字,"calories":总热量数字,"note":"估算依据，一句话"}\n' +
         '规则：1. protein/carbs/fat 单位克(g)，calories 单位千卡(kcal)，均为数字；2. 各总量 = items 对应项之和；3. 无食物返回 {"food":"","items":[],"protein":0,"carbs":0,"fat":0,"calories":0,"note":"未识别到食物"}；' +
-        '4. 参考：鸡蛋~6g蛋白/个，熟鸡胸~31g蛋白/100g，米饭~28g碳水/100g，牛奶~3.3g蛋白/100mL，豆腐~8g蛋白/100g，酸奶~3-5g蛋白/100g，蛋白粉~20-25g蛋白/勺；' +
+        '4. 参考：鸡蛋~6g蛋白/个，即食鸡胸~25-28g蛋白/100g，生鸡胸约31g/100g，米饭~28g碳水/100g，牛奶~3.3g蛋白/100mL，北豆腐~8g蛋白/100g，酸奶~3-5g蛋白/100g，希腊酸奶~8-10g/100g，蛋白粉~20-25g蛋白/勺；' +
         '5. 考虑烹饪方式（油炸/裹粉/红烧会明显增加脂肪与热量），在 note 说明；纯汤汁酱汁忽略。'
       }
     ]}]
@@ -2209,18 +2335,26 @@ function renderToday(){
   $('pBar').style.width = pct + '%';
   $('pBarWrap').classList.toggle('done', total >= target);
   $('pPct').textContent = pct + '%';
-  var remain = Math.max(0, Math.round((target - total)*10)/10);  // 勿用 left：与计时器模块变量同名
-  $('pLeft').innerHTML = total >= target ? '已达标，<em>干得漂亮 ✓</em>' : '还差 <em>' + remain + 'g</em>，加油';
+  var remain = Math.max(0, Math.round((target - total)*10)/10);
+  if(logs.length === 0){
+    $('pLeft').innerHTML = '点下面食物或手记一笔，<em>记了就算今天的监测</em>';
+  } else if(total >= target){
+    $('pLeft').innerHTML = '已记 <em>' + total + 'g · ' + logs.length + ' 笔</em>，目标碰到了';
+  } else {
+    $('pLeft').innerHTML = '已记 <em>' + total + 'g · ' + logs.length + ' 笔</em>' + (remain ? ' · 还可补 ' + remain + 'g' : '');
+  }
   var hour = now.getHours();
-  $('todaySub').textContent = hour < 11 ? '早上好，先把蛋白安排上' : (hour < 14 ? '中午好，记得补蛋白' : (hour < 18 ? '下午好，别忘了加餐' : '晚上好，收尾今天的蛋白'));
-  $('pAside').textContent = '今日 ' + logs.length + ' 条';
+  $('todaySub').textContent = hour < 11 ? '先记一笔就行' : (hour < 20 ? '下一笔从当前这餐记' : '晚上补一笔也算数');
+  $('pAside').textContent = '今日 ' + logs.length + ' 笔';
 
-  var streak = trainingStreak();
-  $('streakChip').hidden = streak < 1;
-  $('streakNum').textContent = streak;
-  var weekN = countWeekStrengthDays(getLogIndex().trainingSessions, now.getTime());
+  var idxToday = getLogIndex();
+  $('streakChip').hidden = false;
+  $('streakNum').textContent = countRecentTrainingDays(idxToday.trainingDays);
+  var weekN = countWeekStrengthDays(idxToday.trainingSessions, now.getTime());
   $('weekStrengthNum').textContent = weekN;
   $('weekChip').classList.toggle('hit', weekN >= WEEK_STRENGTH_GOAL);
+  if($('pNext')){ $('pNext').textContent = nextProteinAction(logs, target); }
+  renderStartHint(idxToday);
 
   renderMealGrid(logs, target);
   renderQuickFoods();
@@ -2228,7 +2362,7 @@ function renderToday(){
 
   var box = $('todayLogs'); box.innerHTML = '';
   if(!logs.length){
-    box.innerHTML = '<div class="empty-hint">今天还没有记录 —— 拍张照，或手动记一笔</div>';
+    box.innerHTML = '<div class="empty-hint">点鸡蛋或手记一笔。记了就算今天的监测。</div>';
   } else {
     logs.forEach(function(l){
       var div = document.createElement('div');
@@ -2254,12 +2388,16 @@ function renderToday(){
   var estMin = Math.round(totalDurationEstimate()/6)/10;
   $('tIco').textContent = isStretch ? '🧘' : ((S.settings.routine === 'dumbbell' || S.settings.routine === 'gym') ? '🏋️' : (S.settings.routine === 'core' ? '🧘' : '💪'));
   $('tName').textContent = rn + ' · ' + mvCount + (isStretch ? ' 个拉伸' : ' 个动作');
-  $('tDesc').textContent = (isStretch ? '全身放松拉伸' : (presetNames[S.settings.preset] + ' · 含热身+拉伸')) + ' · 约 ' + estMin + ' 分钟';
+  var isCore = S.settings.routine === 'core';
+  $('tDesc').textContent = (isStretch ? '放松拉伸，不计力量次数' : (isCore ? '稳定练习，不计本周 3 次力量' : (presetNames[S.settings.preset] + ' · 约 ' + estMin + ' 分钟 · 做完复合动作记下重量')));
   var done = trainedToday();
   $('tGo').hidden = false;
   $('tGo').textContent = done ? '再练一次' : '开始';
   $('tDone').hidden = !done;
-  $('tAside').textContent = done ? '已练 · 还可再练' : '待完成';
+  $('tAside').textContent = weekN >= WEEK_STRENGTH_GOAL ? '本周三力已满，今天走路或拉伸即可' : (done ? '今天已记 · 不必再上一节力' : '本周还差 ' + (WEEK_STRENGTH_GOAL - weekN) + ' 次力量');
+  var walkMin = (idxToday.walkByDay && idxToday.walkByDay[dayStart(now.getTime())]) || 0;
+  if($('walkToday')){ $('walkToday').textContent = '今日 ' + walkMin + ' 分钟'; }
+  renderFiberRow();
 }
 function renderMealGrid(logs, target){
   var grid = $('mealGrid');
@@ -2274,30 +2412,59 @@ function renderMealGrid(logs, target){
   MEAL_IDS.forEach(function(id){
     var have = Math.round(got[id] * 10) / 10;
     var need = tg[id];
-    var hit = have >= need && need > 0;
-    var pct = need > 0 ? Math.min(100, Math.round(have / need * 100)) : 0;
-    var cell = document.createElement('div');
-    cell.className = 'meal-cell' + (hit ? ' hit' : '');
+    var logged = have > 0;
+    var hit = need > 0 ? have >= need : logged;
+    var pct = need > 0 ? Math.min(100, Math.round(have / need * 100)) : (logged ? 100 : 0);
+    var cell = document.createElement('button');
+    cell.type = 'button';
+    cell.className = 'meal-cell' + (hit ? ' hit' : '') + (logged ? ' logged' : '') + (pendingMeal === id ? ' pick' : '');
     cell.innerHTML = '<span class="ml">' + MEAL_NAMES[id] + '</span>' +
       '<span class="mv num">' + have + '</span>' +
-      '<span class="mt">/ ' + need + 'g</span>' +
+      '<span class="mt">' + (id === 'snack' ? (need ? ('还可补 ' + Math.max(0, need - have) + 'g') : (logged ? '已记' : '补洞')) : ('门槛 ' + need + 'g')) + '</span>' +
       '<div class="mb2"><i style="width:' + pct + '%"></i></div>';
+    cell.addEventListener('click', function(){
+      pendingMeal = id;
+      showToast('下一笔记入' + MEAL_NAMES[id], '');
+      renderMealGrid(todayProteinLogs(), S.settings.proteinTarget);
+    });
     grid.appendChild(cell);
   });
 }
+function nextProteinAction(logs, target){
+  var tg = mealTargets(target);
+  var got = { breakfast:0, lunch:0, dinner:0, snack:0 };
+  (logs || []).forEach(function(l){
+    var m = MEAL_IDS.indexOf(l.meal) >= 0 ? l.meal : mealFromTs(l.ts);
+    got[m] += Number(l.grams) || 0;
+  });
+  var h = new Date().getHours();
+  var order = h < 11 ? ['breakfast','lunch','dinner'] : (h < 16 ? ['lunch','breakfast','dinner'] : ['dinner','lunch','breakfast']);
+  for(var i = 0; i < order.length; i++){
+    var id = order[i];
+    if(got[id] < (tg[id] || MEAL_FLOOR)){
+      var miss = Math.max(0, Math.round(((tg[id] || MEAL_FLOOR) - got[id]) * 10) / 10);
+      return MEAL_NAMES[id] + '还差 ' + miss + 'g · 点格子后选下面食物';
+    }
+  }
+  return logs && logs.length ? '正餐门槛到了。还想补就记加餐，不算失败。' : '先点一格，再点一个食物。';
+}
 function renderQuickFoods(){
   var box = $('quickFoods');
-  if(!box || box.dataset.ready === '1'){ return; }
-  box.innerHTML = '';
-  QUICK_FOODS.forEach(function(f){
-    var b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'chip';
-    b.innerHTML = escapeHtml(f.name) + '<small>+' + f.grams + '</small>';
-    b.addEventListener('click', function(){ addProtein(f.grams, f.food, 'quick'); });
-    box.appendChild(b);
-  });
-  box.dataset.ready = '1';
+  var liq = $('liquidFoods');
+  if(!box){ return; }
+  if(box.dataset.ready !== '1'){
+    box.innerHTML = '';
+    if(liq){ liq.innerHTML = ''; }
+    QUICK_FOODS.forEach(function(f){
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'chip';
+      b.innerHTML = escapeHtml(f.name) + '<small>+' + f.grams + '</small>';
+      b.addEventListener('click', function(){ addProtein(f.grams, f.food, 'quick'); });
+      (f.liquid && liq ? liq : box).appendChild(b);
+    });
+    box.dataset.ready = '1';
+  }
 }
 function renderBodyCard(nowTs){
   var idx = getLogIndex();
@@ -2309,14 +2476,55 @@ function renderBodyCard(nowTs){
   var wpct = Math.min(100, Math.round(wml / wTarget * 100));
   $('wBar').style.width = wpct + '%';
   $('wBarWrap').classList.toggle('done', wml >= wTarget);
-  $('bodyAside').textContent = wml >= wTarget ? '水已达标' : ('还差 ' + Math.max(0, wTarget - wml) + ' ml');
+  $('bodyAside').textContent = wml >= wTarget ? '水够了' : '渴了再点一杯';
   var last = latestWeight();
   if(last){
     var when = last.ts ? ((new Date(last.ts).getMonth()+1) + '/' + new Date(last.ts).getDate() + ' · ') : '';
-    $('weightVal').innerHTML = when + '<span class="num">' + last.kg + '</span><small>kg</small>';
+    var waist = last.waist ? (' · 腰围 ' + last.waist + 'cm') : '';
+    $('weightVal').innerHTML = when + '<span class="num">' + last.kg + '</span><small>kg</small>' + waist;
   } else {
-    $('weightVal').textContent = '未记录';
+    $('weightVal').textContent = '未记录 · 不想称可跳过';
   }
+  var avg = weekAvgWeight();
+  if($('weightHintLine')){
+    $('weightHintLine').textContent = avg ? ('近7日均 ' + avg + ' kg。单日涨跌主要是水和胃肠内容物。') : '体重可记可不记。有记录才看趋势，不看今天数字。';
+  }
+}
+function renderStartHint(idx){
+  var el = $('startHint');
+  if(!el){ return; }
+  idx = idx || getLogIndex();
+  var today0 = dayStart(Date.now());
+  var pDays = 0;
+  for(var i = 0; i < 14; i++){
+    if((idx.proteinByDay[today0 - i * 86400000] || 0) > 0){ pDays++; }
+  }
+  var bw = S.settings.bodyWeightKg || (latestWeight() && latestWeight().kg);
+  var weekN = countWeekStrengthDays(idx.trainingSessions, Date.now());
+  var walkToday = (idx.walkByDay && idx.walkByDay[today0]) || 0;
+  var msg = '';
+  if(!bw){
+    msg = '先去「我的」记下体重和身高。蛋白目标会按调整体重算，不会一下子定得太高。';
+  } else if(pDays === 0){
+    msg = '今天只做一件事：点一格餐次，再点一个食物。记了就算成功。';
+  } else if(pDays < 7){
+    msg = '起步期：正餐尽量各记一笔蛋白。吃不满目标也算数，不补罚。';
+  } else if(weekN === 0 && walkToday === 0){
+    msg = '蛋白已经在走。本周再加 1 次徒手跟练，或先走 20 分钟。';
+  }
+  if(!msg){ el.hidden = true; el.textContent = ''; return; }
+  el.hidden = false;
+  el.textContent = msg;
+}
+function renderFiberRow(){
+  ensureFiberDay();
+  document.querySelectorAll('#fiberRow .fiber-btn').forEach(function(b){
+    var key = 'fiber' + b.getAttribute('data-fiber').charAt(0).toUpperCase() + b.getAttribute('data-fiber').slice(1);
+    if(b.getAttribute('data-fiber') === 'veg') key = 'fiberVeg';
+    if(b.getAttribute('data-fiber') === 'soy') key = 'fiberSoy';
+    if(b.getAttribute('data-fiber') === 'grain') key = 'fiberGrain';
+    b.classList.toggle('on', S.settings[key] === true);
+  });
 }
 function totalDurationEstimate(){
   if(S.settings.routine === 'stretch'){
@@ -2552,21 +2760,41 @@ if($('mdLiftSave')){
 }
 
 /* ---- 数据页 ---- */
+function countProteinDays(n, idx){
+  idx = idx || getLogIndex();
+  var today0 = dayStart(Date.now());
+  var c = 0;
+  for(var i = 0; i < n; i++){
+    if((idx.proteinByDay[today0 - i * 86400000] || 0) > 0){ c++; }
+  }
+  return c;
+}
+function weekWalkMinutes(now, idx){
+  idx = idx || getLogIndex();
+  var start = weekStart(now || Date.now());
+  var end = start + 7 * 86400000;
+  var sum = 0;
+  Object.keys(idx.walkByDay || {}).forEach(function(k){
+    var t = Number(k);
+    if(t >= start && t < end){ sum += idx.walkByDay[k] || 0; }
+  });
+  return sum;
+}
 function renderData(){
   var idx = getLogIndex();
-  $('stStreak').textContent = computeTrainingStreak(idx.trainingDays);
-  $('stWeek').textContent = countWeekStrengthDays(idx.trainingSessions, Date.now());
   var sessions = idx.trainingSessions;
-  $('stSessions').textContent = sessions.length;
-  var lastW = latestWeight();
-  $('stWeight').textContent = lastW ? lastW.kg : '—';
-  $('stWater').textContent = Math.round(idx.waterByDay[dayStart(Date.now())] || 0);
+  if($('stWeek')){ $('stWeek').textContent = countWeekStrengthDays(sessions, Date.now()); }
+  if($('stSessions')){ $('stSessions').textContent = sessions.length; }
   var today0 = dayStart(Date.now());
   var sum7 = 0;
   for(var i = 0; i < 7; i++){
     sum7 += idx.proteinByDay[today0 - i * 86400000] || 0;
   }
-  $('stAvg').textContent = Math.round(sum7 / 7);
+  if($('stAvg')){ $('stAvg').textContent = Math.round(sum7 / 7); }
+  if($('stProteinDays')){ $('stProteinDays').textContent = countProteinDays(7, idx); }
+  var avgW = weekAvgWeight();
+  if($('stWeight')){ $('stWeight').textContent = avgW != null ? avgW : '—'; }
+  if($('stWalk')){ $('stWalk').textContent = weekWalkMinutes(Date.now(), idx); }
 
   var chart = $('proteinChart'); chart.innerHTML = '';
   var target = S.settings.proteinTarget;
@@ -2588,8 +2816,8 @@ function renderData(){
       '<span class="d' + (idx === 6 ? ' today' : '') + '">' + (dt.getMonth()+1) + '/' + dt.getDate() + '</span>';
     chart.appendChild(col);
   });
-  $('chartTarget').textContent = '— 目标 ' + target + 'g · 绿色为达标日';
-  $('chartAside').textContent = '日均 ' + $('stAvg').textContent + 'g';
+  if($('chartTarget')){ $('chartTarget').textContent = '— 参考 ' + target + 'g · 深绿是碰到目标的日子，浅色也算有记录'; }
+  if($('chartAside')){ $('chartAside').textContent = '日均 ' + ( $('stAvg') ? $('stAvg').textContent : Math.round(sum7 / 7) ) + 'g'; }
 
   renderWeightChart();
   renderLiftHist();
@@ -2652,7 +2880,12 @@ function renderWeightChart(){
     chart.appendChild(col);
   });
   var last = latestWeight();
-  if(aside){ aside.textContent = last ? (last.kg + ' kg') : ''; }
+  var avg = weekAvgWeight();
+  if(aside){
+    aside.textContent = last
+      ? (last.kg + ' kg' + (avg != null ? (' · 7日均 ' + avg) : '') + (last.waist ? (' · 腰 ' + last.waist) : ''))
+      : '';
+  }
 }
 function renderLiftHist(){
   var box = $('liftHist');
@@ -2696,10 +2929,17 @@ function renderSettings(){
   $('targetVal').textContent = S.settings.proteinTarget;
   var bw = S.settings.bodyWeightKg || (latestWeight() && latestWeight().kg) || 0;
   $('weightSetVal').textContent = bw ? bw : '—';
-  $('weightHint').textContent = bw ? ('当前 ' + bw + ' kg') : '用来按体重估算蛋白目标';
+  if($('heightSetVal')){ $('heightSetVal').textContent = S.settings.heightCm ? S.settings.heightCm : '—'; }
+  var adj = adjustedWeightKg(bw, S.settings.heightCm);
+  var sug = suggestedProteinTarget(bw, S.settings.proteinPerKg, S.settings.heightCm, S.settings.proteinWeightMode);
+  if(bw && adj && S.settings.heightCm && adj < bw){
+    $('weightHint').textContent = bw + ' kg · 调整体重 ' + adj + ' kg（BMI 较高时不全按实际体重算蛋白）';
+    $('targetHint').textContent = sug ? ('按调整体重约 ' + sug + ' g，也可手改小一点先执行') : '可手改目标';
+  } else {
+    $('weightHint').textContent = bw ? ('当前 ' + bw + ' kg') : '用来按体重估算蛋白目标';
+    $('targetHint').textContent = sug ? ('按体重约 ' + sug + ' g，也可手改') : '先记下体重和身高，或直接手改目标';
+  }
   $('perKgVal').textContent = S.settings.proteinPerKg;
-  var sug = suggestedProteinTarget(bw, S.settings.proteinPerKg);
-  $('targetHint').textContent = sug ? ('按体重约 ' + sug + ' g，也可手改') : '先记下体重，或直接手改目标';
   $('waterTargetVal').textContent = S.settings.waterTarget;
   $('setSound').checked = S.settings.sound !== false;
   $('setVoice').checked = S.settings.voice !== false;
@@ -2759,6 +2999,29 @@ $('btnSetTarget').addEventListener('click', function(){
     showToast('目标已更新为 ' + Math.round(n) + 'g', 'success');
   }, { title:'蛋白目标', okText:'保存', type:'number', placeholder:'100' });
 });
+if($('btnSetHeight')){
+  $('btnSetHeight').addEventListener('click', function(){
+    var cur = S.settings.heightCm || '';
+    showPrompt('身高厘米（用来按调整体重估算蛋白，可不填）：', cur ? String(cur) : '', function(v){
+      if(v === '' || v == null){ return; }
+      var n = Number(v);
+      if(!Number.isFinite(n) || n < HEIGHT_CM_MIN || n > HEIGHT_CM_MAX){
+        showToast('请输入 ' + HEIGHT_CM_MIN + '–' + HEIGHT_CM_MAX + ' 之间的数字', 'error'); return;
+      }
+      mutateState(function(){ S.settings.heightCm = Math.round(n); });
+      renderSettings();
+      var kg = S.settings.bodyWeightKg || (latestWeight() && latestWeight().kg);
+      var sug = suggestedProteinTarget(kg, S.settings.proteinPerKg, S.settings.heightCm, S.settings.proteinWeightMode);
+      if(sug && sug !== S.settings.proteinTarget){
+        showConfirm('按调整体重，把蛋白目标改成 ' + sug + ' g？也可继续用手改。', function(){
+          applyProteinFromWeight();
+        }, { title:'按身高更新目标', okText:'改成 ' + sug + ' g' });
+      } else {
+        showToast('身高已记下', 'success');
+      }
+    }, { title:'身高', okText:'保存', type:'number', placeholder:'例如 175' });
+  });
+}
 $('btnSetWeight').addEventListener('click', function(){
   var cur = S.settings.bodyWeightKg || (latestWeight() && latestWeight().kg) || '';
   showPrompt('当前体重（kg）：', cur ? String(cur) : '', function(v){
@@ -2768,9 +3031,11 @@ $('btnSetWeight').addEventListener('click', function(){
       showToast('请输入 ' + WEIGHT_KG_MIN + '–' + WEIGHT_KG_MAX + ' 之间的数字', 'error'); return;
     }
     addWeight(n);
-    var sug = suggestedProteinTarget(n, S.settings.proteinPerKg);
+    var sug = suggestedProteinTarget(n, S.settings.proteinPerKg, S.settings.heightCm, S.settings.proteinWeightMode);
     if(sug && sug !== S.settings.proteinTarget){
-      showConfirm('按 ' + n + ' kg × ' + S.settings.proteinPerKg + '，把蛋白目标改成 ' + sug + ' g？', function(){
+      var adj = adjustedWeightKg(n, S.settings.heightCm);
+      var used = (adj && S.settings.heightCm) ? adj : n;
+      showConfirm('按 ' + used + ' kg × ' + S.settings.proteinPerKg + '，把蛋白目标改成 ' + sug + ' g？可手改小一点。', function(){
         applyProteinFromWeight();
       }, { title:'按体重更新目标', okText:'改成 ' + sug + ' g' });
     }
@@ -2916,7 +3181,8 @@ if(window.__EXPOSE_FOR_TEST__){
     getRoutineMoveIds:function(r){ return (routines[r] || []).map(function(m){ return m.id; }); },
     getRelayUrl:function(){ return QWEN_RELAY; },
     mealFromTs:mealFromTs, mealTargets:mealTargets,
-    suggestedProteinTarget:suggestedProteinTarget, weekStart:weekStart,
+    suggestedProteinTarget:suggestedProteinTarget, adjustedWeightKg:adjustedWeightKg, idealWeightKg:idealWeightKg,
+    weekStart:weekStart, weekAvgWeight:weekAvgWeight,
     isStrengthTraining:isStrengthTraining, countWeekStrengthDays:countWeekStrengthDays,
     liftKind:liftKind, normalizeLifts:normalizeLifts, normalizeLiftSet:normalizeLiftSet,
     suggestNextKg:suggestNextKg, formatLiftLine:formatLiftLine, nextLevelId:nextLevelId,

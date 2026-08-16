@@ -123,12 +123,16 @@ window.__EXPOSE_FOR_TEST__ = true;
     eq(T.normalizeLogs([{ type: 'protein', ts: now, grams: 9999 }])[0].grams, 500, 'normalizeLogs: 蛋白超上限截断到 500');
     eq(T.normalizeLogs([{ type: 'hacking', ts: now }]).length, 0, 'normalizeLogs: 丢弃未知类型');
     eq(T.normalizeLogs([{ type: 'water', ts: now, ml: 250 }])[0].ml, 250, 'normalizeLogs: 保留合法饮水');
+    eq(T.normalizeLogs([{ type: 'walk', ts: now, minutes: 20 }])[0].minutes, 20, 'normalizeLogs: 保留走路');
+    eq(T.normalizeLogs([{ type: 'walk', ts: now, minutes: 0 }]).length, 0, 'normalizeLogs: 丢弃 0 分钟走路');
     var dup = T.normalizeLogs([{ id: 'aaaa', type: 'protein', ts: now, grams: 10 }, { id: 'aaaa', type: 'protein', ts: now, grams: 20 }]);
     eq(dup.length, 2, 'normalizeLogs: 重复 id 被重新分配，两条都保留');
 
     /* ---- isActualTraining ---- */
-    assert(T.isActualTraining({ type: 'training', status: 'completed', workSeconds: 120 }) === true, 'isActualTraining: 完成且>60s 为真');
-    assert(T.isActualTraining({ type: 'training', status: 'completed', workSeconds: 30 }) === false, 'isActualTraining: <60s 为假');
+    assert(T.isActualTraining({ type: 'training', status: 'completed', workSeconds: 120 }) === true, 'isActualTraining: 完成且>20s 为真');
+    assert(T.isActualTraining({ type: 'training', status: 'completed', workSeconds: 30 }) === true, 'isActualTraining: 做了 30s 也算一次');
+    assert(T.isActualTraining({ type: 'training', status: 'completed', workSeconds: 10, completedMoves: 0 }) === false, 'isActualTraining: 过短且无完成动作不算');
+    assert(T.isActualTraining({ type: 'training', status: 'completed', workSeconds: 10, completedMoves: 1 }) === true, 'isActualTraining: 完成 1 个动作就算');
     assert(T.isActualTraining({ type: 'training', status: 'makeup', workSeconds: 999 }) === false, 'isActualTraining: makeup 排除');
     assert(T.isActualTraining({ type: 'training', status: 'legacy', actualSeconds: 120 }) === true, 'isActualTraining: legacy 用 actualSeconds');
     assert(T.isActualTraining({ type: 'protein', status: 'completed', workSeconds: 999 }) === false, 'isActualTraining: 非训练类型为假');
@@ -149,21 +153,29 @@ window.__EXPOSE_FOR_TEST__ = true;
     eq(T.mealFromTs(new Date(2026, 7, 16, 21, 0, 0).getTime()), 'snack', 'mealFromTs: 21 点算加餐');
     var mt = T.mealTargets(121);
     eq(mt.breakfast + mt.lunch + mt.dinner + mt.snack, 121, 'mealTargets: 四格之和等于目标');
-    eq(mt.breakfast, 31, 'mealTargets: 余数补给早餐');
+    eq(mt.breakfast, 30, 'mealTargets: 正餐门槛 30g');
+    eq(mt.snack, 31, 'mealTargets: 余数进加餐');
     eq(T.mealTargets(120).lunch, 30, 'mealTargets: 120 均分 30');
-    eq(T.suggestedProteinTarget(80, 1.4), 112, 'suggestedProteinTarget: 80×1.4=112');
+    eq(T.suggestedProteinTarget(80, 1.4), 112, 'suggestedProteinTarget: 无身高时 80×1.4=112');
     assert(T.suggestedProteinTarget(10, 1.4) === null, 'suggestedProteinTarget: 体重过低返回 null');
-    eq(T.suggestedProteinTarget(80, 99), 200, 'suggestedProteinTarget: 系数超上限按 2.5 再截断到 300 内');
+    eq(T.suggestedProteinTarget(80, 99), 160, 'suggestedProteinTarget: 系数截断后上限 160');
+    eq(T.adjustedWeightKg(80, 170), 67.7, 'adjustedWeightKg: BMI≥27.5 用调整体重');
+    eq(T.adjustedWeightKg(70, 170), 70, 'adjustedWeightKg: BMI<27.5 用实际体重');
+    eq(T.suggestedProteinTarget(80, 1.4, 170), 95, 'suggestedProteinTarget: 调整体重 × 1.4');
+    eq(T.normalizeSettings({ heightCm: 175 }).heightCm, 175, 'normalizeSettings: 保留身高');
+    eq(T.normalizeSettings({ heightCm: 10 }).heightCm, 0, 'normalizeSettings: 非法身高清零');
     eq(new Date(T.weekStart(new Date(2026, 7, 16, 15, 0, 0).getTime())).getDay(), 1, 'weekStart: 任意一天回到周一');
     assert(T.isStrengthTraining({ type:'training', status:'completed', workSeconds:120, routine:'gym' }) === true, 'isStrengthTraining: 器械算力量');
     assert(T.isStrengthTraining({ type:'training', status:'completed', workSeconds:120, routine:'stretch' }) === false, 'isStrengthTraining: 拉伸不算力量');
+    assert(T.isStrengthTraining({ type:'training', status:'completed', workSeconds:120, routine:'core' }) === false, 'isStrengthTraining: 核心不算周力量');
     var ws = T.weekStart(now);
     eq(T.countWeekStrengthDays([
       { type:'training', status:'completed', workSeconds:120, routine:'gym', ts: ws + 3600000 },
       { type:'training', status:'completed', workSeconds:120, routine:'gym', ts: ws + 3600000 + 1000 },
       { type:'training', status:'completed', workSeconds:120, routine:'stretch', ts: ws + 86400000 },
+      { type:'training', status:'completed', workSeconds:120, routine:'core', ts: ws + 3 * 86400000 },
       { type:'training', status:'completed', workSeconds:120, routine:'dumbbell', ts: ws + 2 * 86400000 }
-    ], ws + 3 * 86400000), 2, 'countWeekStrengthDays: 同日只计 1，拉伸不计');
+    ], ws + 3 * 86400000), 2, 'countWeekStrengthDays: 同日只计 1，拉伸和核心不计');
     eq(T.normalizeSettings({ bodyWeightKg: 80.25, proteinPerKg: 1.45 }).bodyWeightKg, 80.3, 'normalizeSettings: 体重复一位小数');
     eq(T.normalizeSettings({ proteinPerKg: 9 }).proteinPerKg, 2.5, 'normalizeSettings: 蛋白系数截断到 2.5');
     eq(T.normalizeLogs([{ type:'protein', ts: now, grams: 10 }])[0].meal, T.mealFromTs(now), 'normalizeLogs: 缺 meal 时按时间补');
@@ -218,10 +230,12 @@ window.__EXPOSE_FOR_TEST__ = true;
     var idx = T.rebuildLogIndexFromLogs([
       { type: 'protein', ts: now, grams: 10, id: 'a1' },
       { type: 'protein', ts: now, grams: 5, id: 'a2' },
-      { type: 'training', ts: now, status: 'completed', workSeconds: 120, id: 't1' }
+      { type: 'training', ts: now, status: 'completed', workSeconds: 120, id: 't1' },
+      { type: 'walk', ts: now, minutes: 20, id: 'w1' }
     ]);
     eq(Math.round(idx.proteinByDay[T.dayStart(now)] * 10) / 10, 15, 'logIndex: 按日汇总蛋白');
     eq(idx.trainingSessions.length, 1, 'logIndex: 有效训练条数');
+    eq(idx.walkByDay[T.dayStart(now)], 20, 'logIndex: 按日汇总走路');
     eq(T.computeTrainingStreak(idx.trainingDays), 1, 'computeTrainingStreak: 含今天为 1');
 
     /* ---- P1-4: 跟练计时组合场景 ---- */
