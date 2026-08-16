@@ -1,6 +1,6 @@
 // 轻打卡 · Service Worker（离线可用 / 安装到主屏幕）
 // 仅在被通过 https:// 或 http://localhost 访问时生效；file:// 打开时浏览器不会注册 SW。
-var VERSION = 'v39-gifs';
+var VERSION = 'v40-birddog';
 var CACHE_PREFIX = 'workbuddy:' + encodeURIComponent(self.registration.scope) + ':';
 var SHELL = CACHE_PREFIX + 'shell-' + VERSION;
 var RUNTIME = CACHE_PREFIX + 'runtime-' + VERSION;

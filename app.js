@@ -934,12 +934,12 @@ var chairStandMove = Object.assign({}, dumbbellMoves.filter(function(m){ return 
   mistake:'常见错误：一开始就加重量、膝盖内扣，或借惯性猛坐猛起。', level:'起步·先徒手'
 });
 var birdDogMove = {
-  id:'bird-dog', frames:['generated/bird-dog-anatomy.png'], staticOnly:true,
+  id:'bird-dog',
   name:'鸟狗式分步', area:'核心与腰盆协调', sideMode:'alternate', equipment:'',
   primary:'多裂肌、竖脊肌', secondary:'腹壁、臀大肌、后三角肌',
   benefit:'练习四肢移动时保持腰盆稳定。',
   steps:['仅在能安全上下地面时做，四点跪姿起步','先只伸一只手或一条腿，稳定后再做对侧手脚','身体不晃、腰不塌，短暂停留后换侧'],
-  cue:'腹部较大时可把手撑在稳固沙发座面；先单肢，再考虑对侧手脚。',
+  cue:'图是对侧手脚一起伸。家里先只伸一只手或一条腿；腹部较大可把手撑在稳固沙发座面。',
   mistake:'常见错误：抬得过高、腰部旋转，或为了跟图而超出自己幅度。', level:'可选进阶'
 };
 var wallPlankMove = Object.assign({}, bodyweightMoves.filter(function(m){ return m.id === '0659'; })[0], {

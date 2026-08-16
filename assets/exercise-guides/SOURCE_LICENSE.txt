@@ -7,6 +7,13 @@ Files:
   generated/bird-dog-anatomy.png
   generated/farmer-carry-anatomy.png
   generated/wall-plank-anatomy.png
+  bird-dog.gif
+  bird-dog-poster.png
+
+The bird-dog.gif / bird-dog-poster.png pair is a project-original looping
+demonstration generated for this app (four-point kneel to contralateral
+reach). It was not derived from a RepDB or Kaggle GIF, and no third-party
+exercise GIF was used as an image input or style reference.
 
 Status:
   PROJECT-ORIGINAL GENERATED ASSETS. These three 512 x 512 PNG stills were
