@@ -1,0 +1,267 @@
+[
+  {
+    "key": "encourage-1",
+    "text": "坚持住，就快完成了",
+    "type": "encourage"
+  },
+  {
+    "key": "encourage-2",
+    "text": "保持呼吸，你做得很稳",
+    "type": "encourage"
+  },
+  {
+    "key": "encourage-3",
+    "text": "慢一点没关系，稳住就是胜利",
+    "type": "encourage"
+  },
+  {
+    "key": "encourage-4",
+    "text": "每一次坚持，都在帮你保住肌肉",
+    "type": "encourage"
+  },
+  {
+    "key": "encourage-5",
+    "text": "很好，注意动作质量，不抢时间",
+    "type": "encourage"
+  },
+  {
+    "key": "switch-side",
+    "text": "换另一侧",
+    "type": "static"
+  },
+  {
+    "key": "countdown-3",
+    "text": "3，2，1",
+    "type": "static"
+  },
+  {
+    "key": "countdown-start",
+    "text": "3，2，1，开始",
+    "type": "static"
+  },
+  {
+    "key": "finish-done",
+    "text": "训练完成，干得漂亮！记得补充蛋白质。",
+    "type": "static"
+  },
+  {
+    "key": "finish-stretch",
+    "text": "拉伸完成，放松一下。",
+    "type": "static"
+  },
+  {
+    "key": "finish-early",
+    "text": "本次已结束，已经按实际完成量记录。",
+    "type": "static"
+  },
+  {
+    "key": "work-3013",
+    "text": "接下来，臀桥。肋骨不要外翻；顶端夹臀，不要用腰向上拱。",
+    "type": "work",
+    "moveId": "3013"
+  },
+  {
+    "key": "work-0276",
+    "text": "接下来，死虫。范围由腰背能否保持稳定决定；宁可短一点。",
+    "type": "work",
+    "moveId": "0276"
+  },
+  {
+    "key": "work-0710",
+    "text": "接下来，侧卧髋外展。先做右侧，过半换左侧；骨盆不要向后翻。",
+    "type": "work",
+    "moveId": "0710"
+  },
+  {
+    "key": "work-0659",
+    "text": "接下来，靠墙俯卧撑。脚离墙越远越难；先选能稳定控制的位置。",
+    "type": "work",
+    "moveId": "0659"
+  },
+  {
+    "key": "work-1373",
+    "text": "接下来，扶墙提踵。保持脚踝正直；急性足趾或踝关节红肿热痛时不要做。",
+    "type": "work",
+    "moveId": "1373"
+  },
+  {
+    "key": "work-3239",
+    "text": "接下来，跪姿平板点肩。若点肩破坏稳定，保持跪姿平板即可。",
+    "type": "work",
+    "moveId": "3239"
+  },
+  {
+    "key": "work-0292",
+    "text": "接下来，扶椅单臂哑铃划船。先做右侧，过半换左侧；支撑物必须稳固且不会滑动。",
+    "type": "work",
+    "moveId": "0292"
+  },
+  {
+    "key": "work-0404",
+    "text": "接下来，坐姿中立握哑铃推举。肋骨收住、不要后仰；只有一只哑铃时，每次左右交替。",
+    "type": "work",
+    "moveId": "0404"
+  },
+  {
+    "key": "work-1677",
+    "text": "接下来，坐姿哑铃弯举。两只可同时做；只有一只时左右交替。",
+    "type": "work",
+    "moveId": "1677"
+  },
+  {
+    "key": "work-1459",
+    "text": "接下来，哑铃罗马尼亚硬拉。动作是\"髋向后\"，不是深蹲；幅度由背部能否保持中立决定，不必让哑铃碰地。",
+    "type": "work",
+    "moveId": "1459"
+  },
+  {
+    "key": "work-0291",
+    "text": "接下来，扶凳箱式深蹲。椅子越高越简单；下蹲幅度以膝盖无锐痛为准，全程背部中立。",
+    "type": "work",
+    "moveId": "0291"
+  },
+  {
+    "key": "work-2287",
+    "text": "接下来，腿举机。全身最大复合动作，放最先练；下放幅度以腰背贴稳靠背为准，膝盖不内扣。",
+    "type": "work",
+    "moveId": "2287"
+  },
+  {
+    "key": "work-0576",
+    "text": "接下来，坐姿推胸机。重量宁轻勿重；推起时肩胛贴稳靠背、不耸肩。",
+    "type": "work",
+    "moveId": "0576"
+  },
+  {
+    "key": "work-0579",
+    "text": "接下来，高位下拉机。与推胸一推一拉、相互平衡；用背带动手臂，不靠体重猛拉、不耸肩。",
+    "type": "work",
+    "moveId": "0579"
+  },
+  {
+    "key": "work-0585",
+    "text": "接下来，腿屈伸机。与腿举互补、专注大腿前侧；顶端不猛甩，下放有控制。",
+    "type": "work",
+    "moveId": "0585"
+  },
+  {
+    "key": "work-0603",
+    "text": "接下来，坐姿推肩机。不要后仰顶腰；肩部锐痛立即停止。",
+    "type": "work",
+    "moveId": "0603"
+  },
+  {
+    "key": "work-0588",
+    "text": "接下来，坐姿划船机。先挺胸再拉；拉到底时停顿一下。",
+    "type": "work",
+    "moveId": "0588"
+  },
+  {
+    "key": "work-0596",
+    "text": "接下来，蝴蝶机夹胸。用胸带动手臂、肩胛贴稳；展开幅度以肩无不适为准。",
+    "type": "work",
+    "moveId": "0596"
+  },
+  {
+    "key": "work-0599",
+    "text": "接下来，坐姿腿弯举机。与腿屈伸前后互补、练大腿后侧；动作慢而稳，骨盆不离开座垫。",
+    "type": "work",
+    "moveId": "0599"
+  },
+  {
+    "key": "work-0017",
+    "text": "接下来，辅助引体向上机。辅助重量越大越简单；用背发力、不耸肩。",
+    "type": "work",
+    "moveId": "0017"
+  },
+  {
+    "key": "warmup-3221",
+    "text": "热身，原地踏步激活。",
+    "type": "warmup",
+    "moveId": "3221"
+  },
+  {
+    "key": "warmup-1368",
+    "text": "热身，踝关节绕环。",
+    "type": "warmup",
+    "moveId": "1368"
+  },
+  {
+    "key": "warmup-0257",
+    "text": "热身，膝关节绕环。",
+    "type": "warmup",
+    "moveId": "0257"
+  },
+  {
+    "key": "warmup-1428",
+    "text": "热身，腕关节绕环。",
+    "type": "warmup",
+    "moveId": "1428"
+  },
+  {
+    "key": "warmup-1167",
+    "text": "热身，动态扩胸。",
+    "type": "warmup",
+    "moveId": "1167"
+  },
+  {
+    "key": "stretch-1271",
+    "text": "拉伸，胸前侧拉伸，拉到胸 / 肩前侧。",
+    "type": "stretch",
+    "moveId": "1271"
+  },
+  {
+    "key": "stretch-1365",
+    "text": "拉伸，上背拉伸，拉到上背。",
+    "type": "stretch",
+    "moveId": "1365"
+  },
+  {
+    "key": "stretch-1377",
+    "text": "拉伸，扶墙小腿拉伸，拉到小腿。",
+    "type": "stretch",
+    "moveId": "1377"
+  },
+  {
+    "key": "stretch-1403",
+    "text": "拉伸，颈侧拉伸，拉到颈侧。",
+    "type": "stretch",
+    "moveId": "1403"
+  },
+  {
+    "key": "stretch-1424",
+    "text": "拉伸，坐姿臀部拉伸，拉到臀部。",
+    "type": "stretch",
+    "moveId": "1424"
+  },
+  {
+    "key": "stretch-1576",
+    "text": "拉伸，仰卧抬腿拉伸，拉到大腿后侧。",
+    "type": "stretch",
+    "moveId": "1576"
+  },
+  {
+    "key": "stretch-quad-stand",
+    "text": "拉伸，扶墙股四头拉伸，拉到大腿前侧。",
+    "type": "stretch",
+    "moveId": "quad-stand"
+  },
+  {
+    "key": "stretch-0643",
+    "text": "拉伸，过头三头拉伸，拉到上臂后侧。",
+    "type": "stretch",
+    "moveId": "0643"
+  },
+  {
+    "key": "stretch-0794",
+    "text": "拉伸，站姿侧拉伸，拉到侧腰 / 背阔。",
+    "type": "stretch",
+    "moveId": "0794"
+  },
+  {
+    "key": "stretch-0669",
+    "text": "拉伸，肩后拉伸，拉到肩后侧。",
+    "type": "stretch",
+    "moveId": "0669"
+  }
+]

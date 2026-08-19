@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; worker-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: data:; manifest-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'">
+<meta name="robots" content="noindex,nofollow,noarchive">
+<meta name="theme-color" content="#faf7f0">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png">
+<link rel="apple-touch-icon" href="./icons/apple-touch-icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="轻打卡">
+<title>轻打卡 · 蛋白与跟练</title>
+<link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+<div class="app" id="app">
+  <main class="pages">
+
+    <!-- ================= 今天 ================= -->
+    <section class="page active" id="page-today">
+      <div class="masthead">
+        <div class="kicker">
+          <span class="date-serif" id="todayDate"></span>
+          <span class="rule"></span>
+          <span class="date-serif">第 <span class="num" id="weekNo"></span> 周</span>
+        </div>
+        <h1>先记下今天的<span class="accent">蛋白</span></h1>
+        <div class="sub" id="todaySub"></div>
+        <div class="chip-row">
+          <span class="week-chip" id="weekChip"><span class="wk-lab">本周力量</span><b id="weekStrengthNum">0</b><span class="wk-den">/3</span></span>
+          <span class="streak-chip" id="streakChip"><span class="wk-lab">近7天练了</span> <b id="streakNum">0</b> 天</span>
+        </div>
+        <div class="start-hint" id="startHint" hidden></div>
+      </div>
+
+      <div class="section">
+        <div class="sec-head"><span class="idx">01</span><b>蛋白质</b><span class="en">Protein</span><span class="spacer"></span><span class="aside" id="pAside"></span></div>
+        <div class="card">
+          <div class="p-hero">
+            <div class="p-bignum num"><span id="pToday">0</span><small>g</small></div>
+            <div class="p-goal">
+              <div class="of">/ 目标 <b class="num" id="pTarget">100</b> g</div>
+              <div class="left" id="pLeft"></div>
+            </div>
+          </div>
+          <div class="p-bar" id="pBarWrap"><i id="pBar"></i></div>
+          <div class="p-cap"><span>0</span><span class="pct" id="pPct">0%</span><span id="pCapTarget"></span></div>
+          <div class="p-next" id="pNext"></div>
+          <div class="meal-grid" id="mealGrid"></div>
+          <div class="chips" id="quickFoods"></div>
+          <div class="chips liquid" id="liquidFoods"></div>
+          <div class="p-actions">
+            <button class="btn-manual" id="btnManualProtein">✍️ 手记一笔</button>
+          </div>
+          <div class="fiber-row" id="fiberRow">
+            <button type="button" class="fiber-btn" data-fiber="veg">一拳蔬菜</button>
+            <button type="button" class="fiber-btn" data-fiber="soy">一份豆</button>
+            <button type="button" class="fiber-btn" data-fiber="grain">果或全谷</button>
+          </div>
+          <div class="log-list" id="todayLogs"></div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="sec-head"><span class="idx">02</span><b>饮水与体重</b><span class="en">Body</span><span class="spacer"></span><span class="aside" id="bodyAside"></span></div>
+        <div class="card body-card">
+          <div class="body-row">
+            <div class="body-lab">水</div>
+            <div class="body-val"><span class="num" id="wToday">0</span><small id="wTargetLabel">/ 2000 ml</small></div>
+            <div class="body-btns">
+              <button class="chip" id="btnWater350">+350</button>
+              <button class="chip" id="btnWater500">+500</button>
+            </div>
+          </div>
+          <div class="w-bar" id="wBarWrap"><i id="wBar"></i></div>
+          <div class="body-row weight-row">
+            <div class="body-lab">体重</div>
+            <div class="body-val" id="weightVal">未记录</div>
+            <button class="chip" id="btnLogWeight">记下</button>
+          </div>
+          <div class="dur-hint" id="weightHintLine" style="margin-top:8px"></div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="sec-head"><span class="idx">03</span><b>今天跟练</b><span class="en">Training</span><span class="spacer"></span><span class="aside" id="tAside"></span></div>
+        <div class="card t-card" id="todayTrainCard">
+          <div class="t-ico" id="tIco">🏋️</div>
+          <div class="t-body">
+            <div class="n" id="tName"></div>
+            <div class="d" id="tDesc"></div>
+          </div>
+          <div class="t-actions">
+            <span class="t-done" id="tDone" hidden>✓ 今天已记</span>
+            <button class="t-go" id="tGo">开始</button>
+          </div>
+        </div>
+        <div class="walk-row">
+          <span class="walk-lab">走路（不算力量次数）</span>
+          <button class="chip" data-walk="10">10分钟</button>
+          <button class="chip" data-walk="20">20分钟</button>
+          <button class="chip" data-walk="30">30分钟</button>
+          <span class="walk-sum" id="walkToday">今日 0 分钟</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= 训练 ================= -->
+    <section class="page" id="page-training">
+      <div class="page-head">
+        <div class="eyebrow">Strength · 低冲击力量</div>
+        <h2>跟练</h2>
+        <div class="lead">大体重友好的低冲击动作。跟着计时器做，不抢时间，稳住就好。</div>
+      </div>
+
+      <div class="section">
+        <div class="field-label">动作组 <span class="en">Routine</span></div>
+        <div class="seg forest" id="routineSeg">
+          <button data-routine="bodyweight" class="on">徒手基础</button>
+          <button data-routine="dumbbell">居家哑铃</button>
+          <button data-routine="core">腰腹稳定</button>
+          <button data-routine="gym">健身器械</button>
+          <button data-routine="stretch">拉伸</button>
+        </div>
+        <div class="dur-hint" style="margin-top:10px">预计 <b id="durHint">—</b> · <span id="roundHint"></span></div>
+        <div class="dur-hint" id="wrapNote" style="margin-top:4px"></div>
+      </div>
+
+      <div class="section" id="presetSection">
+        <div class="field-label">强度档位 <span class="en">Intensity</span></div>
+        <div class="seg forest" id="presetSeg">
+          <button data-preset="recovery">恢复</button>
+          <button data-preset="starter" class="on">入门</button>
+          <button data-preset="standard">标准</button>
+          <button data-preset="steady">进阶</button>
+        </div>
+      </div>
+
+      <div class="section" id="readySection">
+        <div class="field-label">今天身体状态 <span class="en">Readiness</span></div>
+        <div class="ready-row" id="readyRow">
+          <button class="ready-btn green on" data-ready="green"><span class="dot"></span><span>不错</span></button>
+          <button class="ready-btn yellow" data-ready="yellow"><span class="dot"></span><span>一般</span></button>
+          <button class="ready-btn red" data-ready="red"><span class="dot"></span><span>不适</span></button>
+        </div>
+        <div class="dur-hint" style="margin-top:10px" id="readyHint"></div>
+      </div>
+
+      <div class="section">
+        <div class="field-label">动作列表 <span class="en">Moves</span></div>
+        <div id="moveList"></div>
+        <button class="btn-start" id="btnStart">▶ &nbsp;开始跟练</button>
+      </div>
+    </section>
+
+    <!-- ================= 数据 ================= -->
+    <section class="page" id="page-data">
+      <div class="page-head">
+        <div class="eyebrow">Review · 回顾</div>
+        <h2>数据</h2>
+      </div>
+      <div class="section">
+        <div class="stat-row">
+          <div class="stat s"><div class="v num"><span id="stWeek">0</span><small>/3</small></div><div class="l">本周力量</div></div>
+          <div class="stat t"><div class="v num"><span id="stSessions">0</span><small>次</small></div><div class="l">累计训练</div></div>
+          <div class="stat p"><div class="v num"><span id="stAvg">0</span><small>g</small></div><div class="l">近7天日均蛋白</div></div>
+        </div>
+        <div class="stat-row" style="margin-top:10px">
+          <div class="stat"><div class="v num"><span id="stProteinDays">0</span><small>天</small></div><div class="l">近7天有记录</div></div>
+          <div class="stat"><div class="v num" id="stWeightBox"><span id="stWeight">—</span><small>kg</small></div><div class="l">7日均体重</div></div>
+          <div class="stat"><div class="v num"><span id="stWalk">0</span><small>分</small></div><div class="l">本周走路</div></div>
+        </div>
+      </div>
+      <div class="section">
+        <div class="sec-head"><b>近 7 天蛋白</b><span class="en">Protein</span><span class="spacer"></span><span class="aside" id="chartAside"></span></div>
+        <div class="card">
+          <div class="chart" id="proteinChart"></div>
+          <div class="target-line" id="chartTarget"></div>
+        </div>
+      </div>
+      <div class="section">
+        <div class="sec-head"><b>近 4 周体重</b><span class="en">Weight</span><span class="spacer"></span><span class="aside" id="weightChartAside"></span></div>
+        <div class="card">
+          <div class="chart" id="weightChart"></div>
+        </div>
+      </div>
+      <div class="section">
+        <div class="sec-head"><b>动作重量</b><span class="en">Lifts</span></div>
+        <div class="card" id="liftHist"><div class="empty-hint">跟练哑铃/器械时记下重量，会出在这里</div></div>
+      </div>
+      <div class="section">
+        <div class="sec-head"><b>训练记录</b><span class="en">Sessions</span></div>
+        <div class="card" id="trainHist"><div class="empty-hint">还没有训练记录</div></div>
+      </div>
+    </section>
+
+    <!-- ================= 我的 ================= -->
+    <section class="page" id="page-me">
+      <div class="page-head">
+        <div class="eyebrow">Settings · 设置</div>
+        <h2>我的</h2>
+      </div>
+
+      <div class="section">
+        <div class="field-label">目标 <span class="en">Target</span></div>
+        <div class="card set-group">
+          <div class="set-row">
+            <div class="ic">📏</div>
+            <div class="tx"><div class="n">身高</div><div class="d">用来按调整体重估算蛋白，可不填</div></div>
+            <button class="chip" id="btnSetHeight" style="flex-shrink:0"><span class="num" id="heightSetVal">—</span>cm</button>
+          </div>
+          <div class="set-row">
+            <div class="ic">⚖️</div>
+            <div class="tx"><div class="n">当前体重</div><div class="d" id="weightHint">用来按体重估算蛋白目标</div></div>
+            <button class="chip" id="btnSetWeight" style="flex-shrink:0"><span class="num" id="weightSetVal">—</span>kg</button>
+          </div>
+          <div class="set-row">
+            <div class="ic">×</div>
+            <div class="tx"><div class="n">每公斤蛋白</div><div class="d">先用 1.2–1.4，不必一上来 2.0</div></div>
+            <button class="chip" id="btnSetPerKg" style="flex-shrink:0"><span class="num" id="perKgVal">1.4</span></button>
+          </div>
+          <div class="set-row">
+            <div class="ic">🎯</div>
+            <div class="tx"><div class="n">每日蛋白目标</div><div class="d" id="targetHint">可手改，也可按体重计算</div></div>
+            <button class="chip" id="btnUseWeightTarget" style="flex-shrink:0">按体重算</button>
+            <button class="chip" id="btnSetTarget" style="flex-shrink:0"><span class="num" id="targetVal">100</span>g</button>
+          </div>
+          <div class="set-row">
+            <div class="ic">💧</div>
+            <div class="tx"><div class="n">每日饮水目标</div><div class="d">今天页一键记入</div></div>
+            <button class="chip" id="btnSetWater" style="flex-shrink:0"><span class="num" id="waterTargetVal">2000</span>ml</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="field-label">偏好 <span class="en">Preferences</span></div>
+        <div class="card set-group">
+          <div class="set-row">
+            <div class="ic">🔔</div>
+            <div class="tx"><div class="n">提示音</div><div class="d">计时器滴声与切换音</div></div>
+            <label class="switch"><input type="checkbox" id="setSound" checked><span class="track"></span></label>
+          </div>
+          <div class="set-row">
+            <div class="ic">🗣️</div>
+            <div class="tx"><div class="n">语音指导</div><div class="d">中文播报动作与倒数</div></div>
+            <label class="switch"><input type="checkbox" id="setVoice" checked><span class="track"></span></label>
+          </div>
+          <div class="set-row">
+            <div class="ic">🎙️</div>
+            <div class="tx"><div class="n">语音音色</div><div class="d" id="voiceHint">默认自动选自然女声</div></div>
+            <select id="setVoiceName" class="model-sel" aria-label="语音音色"></select>
+            <button class="chip" id="btnVoicePreview" style="flex-shrink:0">试听</button>
+          </div>
+          <div class="set-row">
+            <div class="ic">🎞️</div>
+            <div class="tx"><div class="n">动作动画</div><div class="d">关闭后只显示静态姿势图</div></div>
+            <label class="switch"><input type="checkbox" id="setMotion" checked><span class="track"></span></label>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="field-label">数据 <span class="en">Data</span></div>
+        <button class="set-btn" id="btnExport"><span class="em">📤</span>导出备份（JSON）</button>
+        <button class="set-btn" id="btnImport"><span class="em">📥</span>导入备份</button>
+        <button class="set-btn danger" id="btnClear"><span class="em">🗑️</span>清空本机数据</button>
+        <input type="file" id="importFile" accept="application/json" hidden>
+      </div>
+
+      <div class="section">
+        <div class="disclaimer">数据只保存在本机浏览器（localStorage + IndexedDB），不上传服务器。换设备或清缓存前请先导出备份。</div>
+      </div>
+    </section>
+  </main>
+
+  <!-- 底部导航 -->
+  <nav class="tabbar">
+    <button class="tab active" data-page="today" aria-current="page"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg><span>今天</span></button>
+    <button class="tab" data-page="training"><svg viewBox="0 0 24 24"><path d="M4 8v8M8 5v14M16 5v14M20 8v8M8 12h8"/></svg><span>训练</span></button>
+    <button class="tab" data-page="data"><svg viewBox="0 0 24 24"><path d="M5 20v-6M11 20V7M17 20v-9M3 20h18"/></svg><span>数据</span></button>
+    <button class="tab" data-page="me"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5"/></svg><span>我的</span></button>
+  </nav>
+</div>
+
+<!-- ================= 全屏播放器 ================= -->
+<div class="player" id="player" aria-hidden="true" inert>
+  <div class="pl-top">
+    <button class="pl-exit" id="plExit" aria-label="退出并暂停">✕</button>
+    <span class="pl-phase" id="plPhase">准备</span>
+    <span class="pl-round" id="plRound"></span>
+  </div>
+  <div class="pl-progress"><i id="plBar"></i></div>
+  <div class="pl-stage">
+    <div class="pl-clock num" id="plClock">0</div>
+    <div class="pl-mv" id="plMv"></div>
+    <div class="pl-demo-wrap" id="plDemoWrap" hidden>
+      <img id="plDemo" alt="">
+      <span class="pl-badge" id="plBadge">示范</span>
+    </div>
+    <div class="pl-cue" id="plCue"></div>
+    <div class="pl-log" id="plLog" hidden>
+      <div class="pl-log-last" id="plLogLast"></div>
+      <div class="pl-log-row" id="plLogLoad">
+        <label>kg<input id="plKg" type="number" inputmode="decimal" step="0.5" min="0" max="400"></label>
+        <label>次<input id="plReps" type="number" inputmode="numeric" step="1" min="0" max="80"></label>
+      </div>
+      <div class="pl-log-levels" id="plLogLevels" hidden></div>
+      <div class="pl-log-hint" id="plLogHint"></div>
+    </div>
+    <div class="pl-dots" id="plDots"></div>
+    <div class="pl-next" id="plNext"></div>
+  </div>
+  <div class="pl-controls">
+    <button class="pl-btn" id="plPrev" aria-label="上一个" disabled>⏮</button>
+    <button class="pl-btn main" id="plPause" aria-label="暂停/继续">⏸</button>
+    <button class="pl-btn" id="plSkip" aria-label="跳过">⏭</button>
+    <button class="pl-btn end" id="plEnd" aria-label="结束">■</button>
+  </div>
+  <div class="pl-done" id="plDone" aria-hidden="true">
+    <div class="big">🎉</div>
+    <h3 id="plDoneTitle">训练完成</h3>
+    <div class="sub" id="plDoneSub"></div>
+    <div class="pl-done-lifts" id="plDoneLifts"></div>
+    <button class="btn" id="plDoneBtn">好的</button>
+  </div>
+</div>
+
+<!-- ================= 动作详情弹层 ================= -->
+<div class="modal" id="moveModal" aria-hidden="true">
+  <div class="backdrop" id="moveBackdrop"></div>
+  <div class="panel" role="dialog" aria-label="动作详情">
+    <div class="grab"></div>
+    <button class="close-x" id="moveClose" aria-label="关闭">✕</button>
+    <h3 id="mdName"></h3>
+    <div class="psub" id="mdArea"></div>
+    <div class="md-media" id="mdMediaWrap" hidden><img id="mdMedia" alt="动作示范"></div>
+    <div class="muscle-tags" id="mdMuscles"></div>
+    <div class="detail-list" id="mdSteps"></div>
+    <div class="detail-box cue" id="mdCue"><b>要领</b><span id="mdCueTx"></span></div>
+    <div class="detail-box mistake" id="mdMistake"><b>常见错误</b><span id="mdMistakeTx"></span></div>
+    <div class="md-lift" id="mdLift" hidden>
+      <div class="md-lift-h">记下重量，跟练时会带上</div>
+      <div class="pl-log-row" id="mdLiftLoad">
+        <label>kg<input id="mdKg" type="number" inputmode="decimal" step="0.5" min="0" max="400"></label>
+        <label>次<input id="mdReps" type="number" inputmode="numeric" step="1" min="0" max="80"></label>
+      </div>
+      <div class="pl-log-levels" id="mdLiftLevels" hidden></div>
+      <button class="chip" id="mdLiftSave" style="margin-top:10px">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================= 练前计划预览 ================= -->
+<div class="modal" id="planModal" aria-hidden="true">
+  <div class="backdrop" id="planBackdrop"></div>
+  <div class="panel" role="dialog" aria-label="本次安排">
+    <div class="grab"></div>
+    <button class="close-x" id="planClose" aria-label="关闭">✕</button>
+    <h3 id="planTitle">本次安排</h3>
+    <div class="psub">确认后开始，可随时暂停或结束</div>
+    <div class="plan-total"><span class="t num" id="planTotal">0</span><span class="u">分钟 · 全程跟练</span></div>
+    <div id="planBody"></div>
+    <div class="plan-actions">
+      <button class="cancel" id="planCancel">再看看</button>
+      <button class="go" id="planGo">开始 ✓</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<!-- ================= 通用对话框（替代原生 confirm/prompt） ================= -->
+<div class="modal" id="dialogModal" aria-hidden="true">
+  <div class="backdrop" id="dialogBackdrop"></div>
+  <div class="panel dlg-panel" role="dialog" aria-modal="true" aria-labelledby="dlgTitle">
+    <div class="grab"></div>
+    <h3 id="dlgTitle">请确认</h3>
+    <div class="dlg-msg" id="dlgMsg"></div>
+    <input class="dlg-input" id="dlgInput" hidden autocomplete="off">
+    <div class="dlg-actions">
+      <button class="dlg-btn" id="dlgCancel">取消</button>
+      <button class="dlg-btn ok" id="dlgOk">确定</button>
+    </div>
+  </div>
+</div>
+
+<audio id="voicePlayer" playsinline webkit-playsinline preload="auto" hidden></audio>
+<script src="./app.js"></script>
+</body>
+</html>
