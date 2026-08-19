@@ -17,8 +17,8 @@
 
 1. **`.github/workflows/ci.yml` 被 `.gitignore` 忽略**（`.gitignore:12-13`，原因写在注释里：本机 GitHub token 没有 `workflow` scope，推不上去）。文件只在本地，从未在 GitHub 上运行过——这套 CI 只能手动本地跑。
 2. `npm run test:e2e` 默认打 `127.0.0.1:8899`；该端口若被别的项目占用，测试会误打过去并失败，且报错信息看不出是端口问题。需手动 `TEST_BASE_URL=` 换端口。
-3. GitHub Pages 镜像站（`zonglinxie-cyber.github.io/qingdaka`）无人维护，可能与 Netlify 生产版本不同步。
-4. **Pages 直接服务仓库根目录，且仓库公开**：`HANDOVER.md` / `README.md` / `serve.py` 等在公网可读（已验证 HTTP 200）。`check-dist.mjs` 只防住了 Netlify 那条路，Pages 绕过了它。已确认无 API Key 泄漏，但 `HANDOVER.md:28` 的 Netlify siteId 是公开的。
+3. **Netlify 站点 `qingdaka-workbuddy-v6` 是僵尸站**：并非连接仓库自动部署，而是很久以前 `netlify deploy` 手动推的一份快照，曾停在 `sw.js` `v30-voice-preload-sync` 且拍照功能仍在其上运行。**已于 2026-08-19 销毁**，`netlify.toml` / `.netlifyignore` / `netlify/` 一并删除。
+4. **生产（Pages）直接服务仓库根目录，且仓库公开**：`HANDOVER.md` / `README.md` / `serve.py` 等在公网可读（已验证 HTTP 200）。`npm run build` → `dist/` 与 `check-dist.mjs` 的防泄露清单因此**从未在生产生效**，是空转的。已确认无 API Key 泄漏，但 `HANDOVER.md:28` 的 Netlify siteId 是公开的。
 5. `HANDOVER.md` 是 2026-08-05 语音改造的历史记录，其中「当前部署状态」表（Service Worker 版本 `v28`）已过期，仅作历史查阅。
 6. 阿里云 FC 函数 `proteinto-relay-abwamgsilr` 已因欠费停服，代码里已无任何引用，但云上资源尚未销毁。
 

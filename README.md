@@ -38,9 +38,9 @@ npx serve .
 
 局域网二维码 **无效**。用 **HTTPS 公网地址**（电脑可关机）：
 
-- 生产站点（Netlify）：**https://qingdaka-workbuddy-v6.netlify.app/index.html**
+- 生产站点：**https://zonglinxie-cyber.github.io/qingdaka/**
 - 手机浏览器打开后 → **添加到主屏幕**。
-- 更新代码后：`npm run build && netlify deploy --prod --dir dist --no-build`
+- 更新代码后：`git push`（记得先把 `sw.js` 的 `VERSION` 加一）
 
 临时方案（电脑必须开着）：`cloudflared tunnel --url http://127.0.0.1:8899`，用手机打开终端里出现的 `https://….trycloudflare.com`（每次链接可能变）。
 
@@ -75,19 +75,16 @@ TEST_BASE_URL=http://127.0.0.1:8900 TEST_UNIT_PAGE=0 npm run test:e2e
 
 ## 生产部署
 
-PWA 安装与 Service Worker 在生产环境**必须 HTTPS**。当前两条路径：
+**唯一生产：GitHub Pages** —— https://zonglinxie-cyber.github.io/qingdaka/
 
-| 路径 | 地址 | 说明 |
-|---|---|---|
-| **Netlify** | https://qingdaka-workbuddy-v6.netlify.app/ | 当前生产。连接仓库，用根目录 `netlify.toml`（`npm run build` → `dist/`） |
-| **GitHub Pages** | https://zonglinxie-cyber.github.io/qingdaka/ | 静态镜像 |
+它服务 `main` 分支的**仓库根目录**，`git push` 之后自动更新，没有构建步骤。因此：
 
-Netlify 发布目录必须是 `dist/`，**不要把项目根目录直接作为发布目录**，否则交接文档、测试和本地脚本会暴露在公网。更新代码后：
+- 改完代码 `git push` 就是发布。
+- **必须把 `sw.js` 顶部的 `VERSION` 加一**，否则用户手机上会继续跑旧缓存。这是唯一的更新开关。
+- 仓库是公开的，根目录下的一切（含 `serve.py`、`README.md`、`HANDOVER.md`）在公网可读。别往仓库里放任何密钥。
+- `serve.json` 只作用于本地 `npx serve`，生产用 Pages 自己的 `max-age=600`。
 
-```bash
-npm run build
-netlify deploy --prod --dir dist --no-build
-```
+`npm run build` → `dist/` 与 `npm run check:dist` 目前**不参与生产发布**，只是本地校验工具（见 `BACKLOG.md`）。
 
 `serve.json` 的缓存策略：
 - `sw.js` / `index.html` / `app.js` / `styles.css` → `no-cache`（每次校验，保证更新及时）
@@ -106,7 +103,6 @@ serve.py              本地静态文件服务器
 manifest.webmanifest  PWA 清单
 test.html             单元测试页
 serve.json            npx serve 的缓存/压缩配置
-netlify.toml          Netlify 托管配置（headers + build）
 mobile-qr.png         --lan 时可选生成（pip install qrcode[pil]）
 scripts/              构建、校验、开发辅助脚本
 assets/               动作示范动图、姿势图、语音 m4a

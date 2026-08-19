@@ -54,7 +54,9 @@
 ## 5. 技术形态
 
 - 形态：纯静态网页 + Service Worker（PWA），无构建期转译，`app.js` 是直接跑的 ES5 风格 JS
-- 部署：**Netlify 为唯一生产**（`npm run build` → `dist/`）。GitHub Pages 是静态镜像。
+- 部署：**GitHub Pages 为唯一生产** —— `zonglinxie-cyber.github.io/qingdaka`，服务 `main` 分支的**仓库根目录**，`git push` 即发布。
+  注意由此产生的两个事实：① 仓库公开 + 发根目录 = `serve.py` / `README.md` / `HANDOVER.md` 等源码文档在公网可读；
+  ② 生产的缓存由 Pages 决定（`max-age=600`），仓库里的 `serve.json` 只作用于本地。SW 更新靠 `sw.js` 的 `VERSION` 递增。
 - 运行时依赖：**零**。无 CDN、无外部请求（CSP `default-src 'none'`，`connect-src 'self'`）
 - 开发期依赖：`playwright`（仅测试）、`python3`（仅本地静态服务）
 - 数据在哪：`localStorage`（主）+ `IndexedDB`（备份镜像），全在浏览器本机

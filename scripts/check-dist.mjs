@@ -17,9 +17,7 @@ const forbiddenFiles = [
   'test.html',
   'serve.py',
   'package.json',
-  'package-lock.json',
-  'netlify.toml',
-  '.netlifyignore'
+  'package-lock.json'
 ];
 
 async function exists(relativeName) {

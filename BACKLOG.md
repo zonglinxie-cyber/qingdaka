@@ -7,11 +7,13 @@
 
 - [ ] **修 CI**：`.github/workflows/` 被 gitignore，因为本机 GitHub token 没有 `workflow` scope。要么换个有权限的 token 让它真跑起来，要么把 `ci.yml` 删掉——现状是最差的（有一份看着像在跑、实际不跑的配置）。
 - [ ] **`npm run test:e2e` 自己起服务**，或至少在端口被占用时报出「8899 上不是本项目」而不是超时。这轮就被它坑了一次。
-- [ ] **Pages 泄露源码**：Pages 服务的是仓库根目录且仓库公开，`serve.py` / `HANDOVER.md` / `README.md` 公网可读，`check-dist.mjs` 的防泄露只对 Netlify 有效。要么把 Pages 改成只发 `dist/`（gh-pages 分支或 `/docs`），要么关掉 Pages。顺带把 `HANDOVER.md:28` 的 Netlify siteId 摘掉。
-- [ ] **GitHub Pages 镜像站怎么办**：要么接上自动部署跟 Netlify 同步，要么关掉。留着一个可能过期的旧版本在公网，比没有更糟。
+- [ ] **`dist/` 构建链现在没人用**：生产（Pages）发的是仓库根目录，`npm run build` / `check-dist.mjs` 全是空转。二选一——要么把 Pages 改成只发 `dist/`（gh-pages 分支或 `/docs`）让防泄露真正生效，要么把这套构建机制整个删掉。**别维持现状**，一套看着在防、实际不防的机制比没有更糟。
+- [ ] 把 `HANDOVER.md:28` 的 Netlify siteId 摘掉（仓库公开）。
 - [ ] 销毁阿里云 FC 函数 `proteinto-relay-abwamgsilr`（已欠费停服，代码里已无引用，纯遗留云资源）。
 
 ## 已放弃
+
+- ✗ **Netlify 部署** —— 2026-08-19 销毁站点 `qingdaka-workbuddy-v6`。它从来不是自动部署，是一份停在 v30 的手动快照，公网上挂着带拍照功能的旧版本，且让文档误以为它是生产。生产一直是 GitHub Pages。
 
 - ✗ **拍照识别蛋白质** —— 2026-08-19 整体移除。一个功能拖着 BYOK Key 机制、两套 relay 实现（Python 429 行 + JS 255 行）、三条部署路径，是这个项目复杂度失控的唯一来源。手记一笔够用。
 - ✗ **Vercel 部署路径** —— 随识图一起移除，从未真正投入使用。
