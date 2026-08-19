@@ -84,7 +84,7 @@ try {
     return meta ? meta.getAttribute('content') || '' : '';
   });
   if (!csp.includes("media-src 'self' blob: data:") || !csp.includes("connect-src 'self'")) {
-    throw new Error('CSP 缺少 m4a 或同源 relay 所需指令');
+    throw new Error('CSP 缺少 m4a 或同源加载所需指令');
   }
 
   await appPage.click('[data-page="data"]');
@@ -116,7 +116,7 @@ try {
 
   if (!RUN_UNIT_PAGE) {
     const protectedPaths = await appPage.evaluate(async () => Promise.all(
-      ['HANDOVER.md', 'serve.py', 'relay_routing.py', 'test.html'].map(async (name) => {
+      ['HANDOVER.md', 'serve.py', 'test.html'].map(async (name) => {
         const response = await fetch(`./${name}`);
         return [name, response.status];
       })

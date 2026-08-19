@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="color-scheme" content="light">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; worker-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: data:; manifest-src 'self'; connect-src 'self' https://proteinto-relay-abwamgsilr.cn-beijing.fcapp.run; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; worker-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: data:; manifest-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'">
 <meta name="robots" content="noindex,nofollow,noarchive">
 <meta name="theme-color" content="#faf7f0">
 <link rel="manifest" href="./manifest.webmanifest">
@@ -56,7 +56,6 @@
           <div class="chips liquid" id="liquidFoods"></div>
           <div class="p-actions">
             <button class="btn-manual" id="btnManualProtein">✍️ 手记一笔</button>
-            <button class="btn-photo" id="btnPhoto"><span class="cam">📷</span>拍照</button>
           </div>
           <div class="fiber-row" id="fiberRow">
             <button type="button" class="fiber-btn" data-fiber="veg">一拳蔬菜</button>
@@ -208,22 +207,6 @@
       </div>
 
       <div class="section">
-        <div class="field-label">拍照识别 <span class="en">Photo AI</span></div>
-        <div class="card set-group">
-          <div class="set-row">
-            <div class="ic">🔑</div>
-            <div class="tx"><div class="n">通义千问 Key</div><div class="d" id="keyStatus"></div></div>
-            <button class="chip" id="btnSetKey" style="flex-shrink:0">设置</button>
-          </div>
-          <div class="key-warn" id="keyWarn" hidden>🔐 Key 以明文保存在本浏览器 localStorage 中。请勿在共享设备上使用，清除浏览器数据会一并删除。</div>
-          <div class="set-row">
-            <div class="ic">🧠</div>
-            <div class="tx"><div class="n">识别模型</div><div class="d" id="modelStatus"></div></div>
-          </div>
-        </div>
-      </div>
-
-      <div class="section">
         <div class="field-label">目标 <span class="en">Target</span></div>
         <div class="card set-group">
           <div class="set-row">
@@ -291,7 +274,7 @@
       </div>
 
       <div class="section">
-        <div class="disclaimer">数据只保存在本机浏览器（localStorage + IndexedDB）。识别用你自己的通义 Key，经本站接口转发，服务器不保存 Key 与照片。换设备或清缓存前请先导出备份。</div>
+        <div class="disclaimer">数据只保存在本机浏览器（localStorage + IndexedDB），不上传服务器。换设备或清缓存前请先导出备份。</div>
       </div>
     </section>
   </main>
@@ -345,56 +328,6 @@
     <div class="sub" id="plDoneSub"></div>
     <div class="pl-done-lifts" id="plDoneLifts"></div>
     <button class="btn" id="plDoneBtn">好的</button>
-  </div>
-</div>
-
-<!-- ================= 拍照弹层 ================= -->
-<div class="modal" id="photoModal" aria-hidden="true">
-  <div class="backdrop" id="photoBackdrop"></div>
-  <div class="panel" role="dialog" aria-label="拍照记蛋白">
-    <div class="grab"></div>
-    <button class="close-x" id="photoClose" aria-label="关闭">✕</button>
-    <h3>拍照记蛋白</h3>
-    <div class="psub">AI 是估算，记入前可改克数。照片只发给通义千问。</div>
-
-    <div class="key-gate" id="photoKeyGate">
-      <p>拍照识别需要你自己的通义千问 Key：<strong>按量 Key</strong> 以 <code>sk-</code> 开头；<strong>Token Plan</strong> 以 <code>sk-sp-</code> 开头（二者接口不同，站点会自动匹配）。只存在本浏览器。</p>
-      <div class="row">
-        <input type="password" id="photoKeyInput" placeholder="sk-…" autocomplete="off">
-        <button class="save" id="photoKeySave">保存</button>
-      </div>
-    </div>
-
-    <div class="snap-drop" id="snapDrop" tabindex="0" role="button">
-      <div class="em">📷</div>
-      <div class="t1">点这里选照片 / 拍照</div>
-      <div class="t2">会自动压缩并去掉位置等元数据</div>
-    </div>
-    <input type="file" id="snapFile" accept="image/*" hidden>
-
-    <div class="snap-preview" id="snapPreview"><img id="snapImg" alt="照片预览"></div>
-    <div class="ai-loading" id="aiLoading"><div class="spin"></div><p>AI 正在识别食物…</p></div>
-    <div class="ai-error" id="aiError"></div>
-    <div class="ai-result" id="aiResult">
-      <div class="ai-head">
-        <div class="g num"><span id="aiGrams">0</span><small>g</small></div>
-        <div class="fd"><div class="n" id="aiFood"></div><div class="note" id="aiNote"></div></div>
-      </div>
-      <div class="ai-macros" id="aiMacros">
-        <div class="macro"><span class="v num" id="aiMacroCarbs">0</span><small>g</small><label>碳水</label></div>
-        <div class="macro"><span class="v num" id="aiMacroFat">0</span><small>g</small><label>脂肪</label></div>
-        <div class="macro"><span class="v num" id="aiMacroCal">0</span><small>kcal</small><label>热量</label></div>
-      </div>
-      <div class="ai-items" id="aiItems"></div>
-      <div class="ai-adjust">实际摄入 <input type="number" id="aiAdjust" min="0" max="500" step="0.5"> g</div>
-      <div class="ai-actions">
-        <button class="ghost" id="aiRetry">重拍</button>
-        <button class="confirm" id="aiConfirm">记入 ✓</button>
-      </div>
-    </div>
-    <div class="snap-actions" id="snapFallback" style="display:none">
-      <button class="ghost" id="snapManual">改为手动输入</button>
-    </div>
   </div>
 </div>
 

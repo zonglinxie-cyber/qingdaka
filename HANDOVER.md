@@ -1,7 +1,7 @@
 # 轻打卡 v6 · 语音改造 交接文档
 
 > 接手日期：2026-08-05
-> 项目：/Users/derekfly3/Active/轻打卡v6（纯静态网页，部署在 Netlify）
+> 项目：/Users/derekfly3/Documents/轻打卡v6（纯静态网页，部署在 Netlify）
 > 给谁看：任何接手排查"试听没声音"问题的 AI / 工程师
 
 ---
@@ -175,7 +175,7 @@ function speak(text, opts){
 ## 6. 关键文件清单
 
 ```
-/Users/derekfly3/Active/轻打卡v6/
+/Users/derekfly3/Documents/轻打卡v6/
 ├── app.js                          # 主逻辑；speak/playVoiceMp3/VOICE_FILES
 ├── sw.js                           # Service Worker，VERSION=v27
 ├── index.html                      # 主页面
@@ -231,7 +231,7 @@ iOS Safari → 设置 → 高级 → Web 检查器 → 打开 Safari 访问 URL 
 ### 7.4 重新合成所有 mp3（如果要换音色 / 调参数）
 
 ```bash
-cd /Users/derekfly3/Active/轻打卡v6
+cd /Users/derekfly3/Documents/轻打卡v6
 
 # 1. 提取要合成的句子
 node scripts/extract-voice-scripts.js
@@ -259,7 +259,7 @@ netlify deploy --prod --dir=. --message="..."
 ### 7.5 mp3 → m4a（如果接手的人想试 AAC 格式）
 
 ```bash
-cd /Users/derekfly3/Active/轻打卡v6/assets/voice
+cd /Users/derekfly3/Documents/轻打卡v6/assets/voice
 for f in *.mp3; do
   ffmpeg -y -i "$f" -c:a aac -b:a 128k "${f%.mp3}.m4a" -loglevel error
 done

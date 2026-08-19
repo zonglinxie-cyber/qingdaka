@@ -4,7 +4,6 @@
   "scripts": {
     "build": "node scripts/build-dist.mjs",
     "check:dist": "node scripts/check-dist.mjs",
-    "test:relay": "python3 test_relay.py",
     "test:e2e": "node scripts/e2e-test.mjs"
   },
   "devDependencies": {

@@ -1,0 +1,18 @@
+# BACKLOG · 轻打卡 v6
+
+> 冻结（`v6-frozen`，2026-08-19）后所有新想法进这里，不进当前版本。
+> 只增不删；不做了就标 ✗ 并写一行理由。
+
+## 待考虑
+
+- [ ] **修 CI**：`.github/workflows/` 被 gitignore，因为本机 GitHub token 没有 `workflow` scope。要么换个有权限的 token 让它真跑起来，要么把 `ci.yml` 删掉——现状是最差的（有一份看着像在跑、实际不跑的配置）。
+- [ ] **`npm run test:e2e` 自己起服务**，或至少在端口被占用时报出「8899 上不是本项目」而不是超时。这轮就被它坑了一次。
+- [ ] **Pages 泄露源码**：Pages 服务的是仓库根目录且仓库公开，`serve.py` / `HANDOVER.md` / `README.md` 公网可读，`check-dist.mjs` 的防泄露只对 Netlify 有效。要么把 Pages 改成只发 `dist/`（gh-pages 分支或 `/docs`），要么关掉 Pages。顺带把 `HANDOVER.md:28` 的 Netlify siteId 摘掉。
+- [ ] **GitHub Pages 镜像站怎么办**：要么接上自动部署跟 Netlify 同步，要么关掉。留着一个可能过期的旧版本在公网，比没有更糟。
+- [ ] 销毁阿里云 FC 函数 `proteinto-relay-abwamgsilr`（已欠费停服，代码里已无引用，纯遗留云资源）。
+
+## 已放弃
+
+- ✗ **拍照识别蛋白质** —— 2026-08-19 整体移除。一个功能拖着 BYOK Key 机制、两套 relay 实现（Python 429 行 + JS 255 行）、三条部署路径，是这个项目复杂度失控的唯一来源。手记一笔够用。
+- ✗ **Vercel 部署路径** —— 随识图一起移除，从未真正投入使用。
+- ✗ **阿里云 FC relay** —— 随识图一起移除，且账号已欠费停服。

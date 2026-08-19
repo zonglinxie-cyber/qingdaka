@@ -9,23 +9,16 @@ const requiredFiles = [
   'styles.css',
   'sw.js',
   'manifest.webmanifest',
-  '_redirects',
   'voice-scripts.json'
 ];
 const forbiddenFiles = [
   'HANDOVER.md',
   'README.md',
-  'code-review.md',
   'test.html',
-  'test_relay.py',
   'serve.py',
-  'relay_http.py',
-  'relay_protein_photo.py',
-  'relay_routing.py',
   'package.json',
   'package-lock.json',
   'netlify.toml',
-  'vercel.json',
   '.netlifyignore'
 ];
 

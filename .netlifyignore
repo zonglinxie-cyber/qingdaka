@@ -12,14 +12,10 @@ mobile-qr.png
 scripts/
 *.py
 test.html
-test_relay.py
 verify*.mjs
 probe*.mjs
 package.json
 package-lock.json
-code-review.md
 HANDOVER.md
 serve.json
-vercel.json
-api/
 README.md

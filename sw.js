@@ -1,6 +1,6 @@
 // 轻打卡 · Service Worker（离线可用 / 安装到主屏幕）
 // 仅在被通过 https:// 或 http://localhost 访问时生效；file:// 打开时浏览器不会注册 SW。
-var VERSION = 'v40-birddog';
+var VERSION = 'v41-birddog';
 var CACHE_PREFIX = 'workbuddy:' + encodeURIComponent(self.registration.scope) + ':';
 var SHELL = CACHE_PREFIX + 'shell-' + VERSION;
 var RUNTIME = CACHE_PREFIX + 'runtime-' + VERSION;
@@ -123,7 +123,7 @@ function voiceResponse(req, url){
 
 self.addEventListener('fetch', function(e){
   var req = e.request;
-  if (req.method !== 'GET') return; // 不拦截 POST（如拍照识别请求）
+  if (req.method !== 'GET') return;
 
   // 页面导航：联网优先，断网时回退到缓存的应用页（保证离线可打开）
   if (req.mode === 'navigate') {

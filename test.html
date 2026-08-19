@@ -144,7 +144,6 @@ window.__EXPOSE_FOR_TEST__ = true;
     var trGym = T.normalizeLogs([{ type: 'training', ts: now, status: 'completed', routine: 'gym', workSeconds: 120 }]);
     eq(trGym.length, 1, 'normalizeLogs: 保留 gym 训练记录');
     eq(trGym[0].routine, 'gym', 'normalizeLogs: gym 归一化后不降级为 bodyweight');
-    eq(T.getRelayUrl(), './api/protein-photo', 'relay: 本地/Netlify 走同源 /api/protein-photo');
 
     /* ---- 第一期：四餐 / 体重目标 / 本周力量 ---- */
     eq(T.mealFromTs(new Date(2026, 7, 16, 8, 0, 0).getTime()), 'breakfast', 'mealFromTs: 8 点算早餐');
@@ -197,21 +196,6 @@ window.__EXPOSE_FOR_TEST__ = true;
     eq(lifts['0576'].history.length, 1, 'normalizeLifts: 保留 history');
     assert(T.normalizeLiftSet({ kg:0, reps:0, level:'' }) === null, 'normalizeLiftSet: 空组丢掉');
     eq(T.normalizeLiftSet({ kg: 20.2, reps: 8 }).kg, 20, 'normalizeLiftSet: kg 按 0.5 取整');
-
-    /* ---- parseQwenContent ---- */
-    eq(T.parseQwenContent('{"food":"鸡蛋","protein":6}').protein, 6, 'parseQwenContent: 纯 JSON');
-    eq(T.parseQwenContent('```json\n{"food":"鸡蛋","protein":6}\n```').protein, 6, 'parseQwenContent: 带代码块');
-    eq(T.parseQwenContent('好的，结果是 {"food":"鸡蛋","protein":6} 完毕').protein, 6, 'parseQwenContent: 带前后缀文字');
-    assert(T.parseQwenContent('没有 JSON') === null, 'parseQwenContent: 无 JSON 返回 null');
-    assert(T.parseQwenContent(null) === null, 'parseQwenContent: null 返回 null');
-
-    /* ---- normalizeAiResult ---- */
-    var ai = T.normalizeAiResult({ food: '早餐', protein: 30, items: [{ name: '鸡蛋', amount: '2个', protein: 12 }], note: '估算' });
-    eq(ai.protein, 30, 'normalizeAiResult: 保留总蛋白');
-    eq(ai.items.length, 1, 'normalizeAiResult: 保留 items');
-    eq(T.normalizeAiResult({ food: 'x', protein: 9999 }).protein, 500, 'normalizeAiResult: 蛋白超上限截断');
-    assert(T.normalizeAiResult(null) === null, 'normalizeAiResult: null 返回 null');
-    assert(T.normalizeAiResult('str') === null, 'normalizeAiResult: 非对象返回 null');
 
     /* ---- normalizeWeights ---- */
     eq(T.normalizeWeights([{ ts: now, kg: 800 }])[0].kg, 400, 'normalizeWeights: 体重超上限截断到 400');

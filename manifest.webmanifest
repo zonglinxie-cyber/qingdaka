@@ -1,7 +1,7 @@
 {
   "name": "轻打卡 · 蛋白与跟练",
   "short_name": "轻打卡",
-  "description": "拍照估算蛋白质 · 低冲击力量跟练 · 本地保存",
+  "description": "记录蛋白质 · 低冲击力量跟练 · 本地保存",
   "lang": "zh-CN",
   "dir": "ltr",
   "start_url": "./index.html",

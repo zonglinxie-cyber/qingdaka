@@ -15,7 +15,6 @@ const files = [
   'styles.css',
   'sw.js',
   'manifest.webmanifest',
-  '_redirects',
   'voice-scripts.json',
   '.nojekyll'
 ];

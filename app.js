@@ -73,19 +73,7 @@ function cleanText(v, max, fallback){ if(typeof v !== 'string'){ return fallback
 function isPlainObject(v){ return !!v && typeof v === 'object' && !Array.isArray(v); }
 
 var V5KEY = 'workbuddy-v5';
-var APIKEY_STORAGE = 'workbuddy-qwen-key';
-// GitHub Pages 没有 Functions，只能走 FC。Netlify/Vercel/本地一律同源
-// /api/protein-photo，避免前端直连 FC 触发 CORS 预检或 OPTIONS 故障。
-var QWEN_RELAY = /\.github\.io$/i.test(location.hostname)
-  ? 'https://proteinto-relay-abwamgsilr.cn-beijing.fcapp.run/protein-photo'
-  : './api/protein-photo';
-function isTokenPlanKey(k){ return /^sk-sp-/i.test(k || ''); }
-/* 拍照识图固定视觉模型，不受文字对话模型设置影响 */
-function getPhotoModel(){
-  return isTokenPlanKey(getApiKey()) ? 'qwen3.6-flash' : 'qwen-vl-max';
-}
 var assetBase = 'assets/exercise-guides/';
-var MAX_DIM = 896, JPEG_QUALITY = 0.82;  // 896 比 1280 上传更快、模型响应更快，识菜够用
 var MAX_LOGS = 3000;
 /* ---- 数据边界常量 ---- */
 var TIMESTAMP_MIN = 946684800000;   // 2000-01-01
@@ -1944,72 +1932,6 @@ window.addEventListener('beforeunload', function(e){
   }
 });
 
-/* ============================================================
-   拍照识别（BYOK · 同源 relay）
-   ============================================================ */
-var photoModal = $('photoModal');
-var currentImageData = null, currentImageMime = 'image/jpeg';
-var activePhotoController = null, photoRequestId = 0;
-var currentAiParsed = null; // 当前 AI 识别结果（含三大营养素+热量），供展示/记录复用
-function normalizeApiKey(k){
-  return String(k || '').trim().replace(/[\u200B-\u200D\uFEFF\u00A0]/g, '');
-}
-function getApiKey(){ try{ return normalizeApiKey(window.localStorage.getItem(APIKEY_STORAGE) || ''); }catch(e){ return ''; } }
-function validApiKey(k){
-  k = normalizeApiKey(k);
-  return !k || (k.length >= 16 && k.length <= 256 && /^sk-[^\s]+$/i.test(k));
-}
-function setApiKey(k){
-  k = normalizeApiKey(k);
-  if(!validApiKey(k)){ return false; }
-  try{
-    if(k){ window.localStorage.setItem(APIKEY_STORAGE, k); } else { window.localStorage.removeItem(APIKEY_STORAGE); }
-    return true;
-  }catch(e){ return false; }
-}
-function canUsePhotoAi(){ var k = getApiKey(); return Boolean(k) && validApiKey(k); }
-function refreshPhotoKeyGate(){
-  var ready = canUsePhotoAi();
-  $('photoKeyGate').classList.toggle('show', !ready);
-  if(ready){ $('photoKeyInput').value = ''; }
-}
-$('photoKeySave').addEventListener('click', function(){
-  var key = $('photoKeyInput').value.trim();
-  if(!key){ showToast('请输入以 sk- 开头的 Key', 'error'); return; }
-  if(!setApiKey(key)){ showToast('Key 格式不正确，应以 sk- 开头且不含空格', 'error'); return; }
-  refreshPhotoKeyGate(); renderSettings();
-  $('aiError').classList.remove('show');
-  showToast('识别已就绪，可以拍照', 'success');
-});
-$('photoKeyInput').addEventListener('keydown', function(e){ if(e.key === 'Enter'){ e.preventDefault(); $('photoKeySave').click(); } });
-
-function openPhotoModal(){
-  resetPhotoState();
-  photoModal.classList.add('open');
-  photoModal.setAttribute('aria-hidden','false');
-  refreshPhotoKeyGate();
-}
-function closePhotoModal(){
-  cancelPhotoRequest();
-  photoModal.classList.remove('open');
-  photoModal.setAttribute('aria-hidden','true');
-}
-function cancelPhotoRequest(){
-  photoRequestId++;
-  if(activePhotoController){ try{ activePhotoController.abort(); }catch(e){} activePhotoController = null; }
-}
-function resetPhotoState(){
-  cancelPhotoRequest();
-  currentImageData = null;
-  currentAiParsed = null;
-  $('snapPreview').classList.remove('show');
-  $('snapDrop').style.display = '';
-  $('aiLoading').classList.remove('show');
-  $('aiError').classList.remove('show');
-  $('aiResult').classList.remove('show');
-  $('snapFallback').style.display = 'none';
-  $('snapFile').value = '';
-}
 function openManualProtein(){
   showPrompt('输入这餐的蛋白质克数（g）：', '', function(g){
     if(g === '' || g == null){ return; }
@@ -2020,7 +1942,6 @@ function openManualProtein(){
     }, { title:'食物名称', okText:'记入' });
   }, { title:'手动记录蛋白', okText:'下一步', type:'number', placeholder:'例如 25' });
 }
-$('btnPhoto').addEventListener('click', openPhotoModal);
 $('btnManualProtein').addEventListener('click', openManualProtein);
 $('btnWater350').addEventListener('click', function(){ addWater(350); });
 if($('btnWater500')){ $('btnWater500').addEventListener('click', function(){ addWater(500); }); }
@@ -2053,250 +1974,6 @@ if($('fiberRow')){
     });
     renderFiberRow();
   });
-}
-$('photoClose').addEventListener('click', closePhotoModal);
-$('photoBackdrop').addEventListener('click', closePhotoModal);
-$('snapDrop').addEventListener('click', function(){ $('snapFile').click(); });
-$('snapDrop').addEventListener('keydown', function(e){ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); $('snapFile').click(); } });
-$('snapFile').addEventListener('change', function(e){
-  var f = e.target.files && e.target.files[0];
-  if(f){ onImageChosen(f); }
-});
-$('aiRetry').addEventListener('click', function(){ resetPhotoState(); $('snapFile').click(); });
-$('snapManual').addEventListener('click', function(){
-  closePhotoModal();
-  openManualProtein();
-});
-$('aiConfirm').addEventListener('click', function(){
-  var g = Number($('aiAdjust').value);
-  if(!Number.isFinite(g) || g <= 0 || g > 500){ showToast('蛋白质应为 0–500 g 之间的有效数值', 'error'); return; }
-  var p = currentAiParsed || {};
-  var base = Number(p.protein) || 0;
-  var scale = base > 0 ? (g / base) : 1;
-  var extras = {
-    carbs: Math.round((Number(p.carbs)||0)*scale*10)/10,
-    fat: Math.round((Number(p.fat)||0)*scale*10)/10,
-    calories: Math.round((Number(p.calories)||0)*scale)
-  };
-  addProtein(g, $('aiFood').textContent || '拍照记录', 'photo', extras);
-  closePhotoModal();
-});
-$('aiAdjust').addEventListener('input', renderAiMacros);
-
-function compressImage(file, callback, requestId){
-  var img = new Image();
-  var url = URL.createObjectURL(file);
-  img.onload = function(){
-    URL.revokeObjectURL(url);
-    if(requestId !== photoRequestId || !photoModal.classList.contains('open')){ return; }
-    var w = img.naturalWidth, h = img.naturalHeight;
-    var scale = Math.min(1, MAX_DIM / Math.max(w, h));
-    var canvas = document.createElement('canvas');
-    canvas.width = Math.round(w*scale); canvas.height = Math.round(h*scale);
-    var ctx = canvas.getContext('2d');
-    ctx.fillStyle = '#fff'; ctx.fillRect(0,0,canvas.width,canvas.height);
-    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-    callback(canvas.toDataURL('image/jpeg', JPEG_QUALITY), 'image/jpeg');
-  };
-  img.onerror = function(){
-    URL.revokeObjectURL(url);
-    if(requestId !== photoRequestId || !photoModal.classList.contains('open')){ return; }
-    $('aiError').textContent = '无法安全读取并重编码这张图片；原文件没有上传。请换一张照片或改用手动记录。';
-    $('aiError').classList.add('show');
-    $('snapFallback').style.display = '';
-  };
-  img.src = url;
-}
-function onImageChosen(file){
-  cancelPhotoRequest();
-  currentImageData = null;
-  $('aiResult').classList.remove('show');
-  if(!file){ return; }
-  if(!/^image\//.test(file.type)){ showToast('请选择图片文件', 'error'); return; }
-  if(file.size > 10*1024*1024){ showToast('图片过大（>10MB）', 'error'); return; }
-  if(!canUsePhotoAi()){
-    $('aiError').textContent = '请先保存通义千问 Key；这张照片没有上传。也可以改用手动记录。';
-    $('aiError').classList.add('show');
-    $('snapFallback').style.display = '';
-    refreshPhotoKeyGate();
-    return;
-  }
-  $('aiError').classList.remove('show');
-  $('snapFallback').style.display = 'none';
-  var requestId = photoRequestId;
-  compressImage(file, function(dataUrl, mime){
-    if(requestId !== photoRequestId || !photoModal.classList.contains('open')){ return; }
-    currentImageMime = mime;
-    $('snapImg').src = dataUrl;
-    $('snapPreview').classList.add('show');
-    $('snapDrop').style.display = 'none';
-    var comma = dataUrl.indexOf(',');
-    currentImageData = comma >= 0 ? dataUrl.slice(comma+1) : dataUrl;
-    callQwen(requestId);
-  }, requestId);
-}
-function qwenFetch(payload, signal){
-  return window.fetch(QWEN_RELAY, {
-    method:'POST',
-    headers:{ 'Content-Type':'application/json', 'X-DashScope-Key':getApiKey() },
-    body:JSON.stringify(payload),
-    signal:signal
-  });
-}
-function callQwen(requestId){
-  if(!currentImageData || requestId !== photoRequestId || !photoModal.classList.contains('open')){ return; }
-  $('aiLoading').classList.add('show');
-  $('aiError').classList.remove('show');
-  $('aiResult').classList.remove('show');
-  var body = {
-    model: getPhotoModel(),
-    messages: [{ role:'user', content:[
-      { type:'image_url', image_url:{ url:'data:' + currentImageMime + ';base64,' + currentImageData } },
-      { type:'text', text:
-        '你是专业营养助手。识别图片中所有食物，逐项估算营养（蛋白质/碳水/脂肪/热量）。\n' +
-        '只返回一个 JSON 对象，不要任何解释或代码块标记。格式：\n' +
-        '{"food":"食物总称（中文）","items":[{"name":"食物名","amount":"份量","protein":数字,"carbs":数字,"fat":数字,"calories":数字}],"protein":总蛋白数字,"carbs":总碳水数字,"fat":总脂肪数字,"calories":总热量数字,"note":"估算依据，一句话"}\n' +
-        '规则：1. protein/carbs/fat 单位克(g)，calories 单位千卡(kcal)，均为数字；2. 各总量 = items 对应项之和；3. 无食物返回 {"food":"","items":[],"protein":0,"carbs":0,"fat":0,"calories":0,"note":"未识别到食物"}；' +
-        '4. 参考：鸡蛋~6g蛋白/个，即食鸡胸~25-28g蛋白/100g，生鸡胸约31g/100g，米饭~28g碳水/100g，牛奶~3.3g蛋白/100mL，北豆腐~8g蛋白/100g，酸奶~3-5g蛋白/100g，希腊酸奶~8-10g/100g，蛋白粉~20-25g蛋白/勺；' +
-        '5. 考虑烹饪方式（油炸/裹粉/红烧会明显增加脂肪与热量），在 note 说明；纯汤汁酱汁忽略。'
-      }
-    ]}]
-  };
-  var controller = new AbortController();
-  activePhotoController = controller;
-  var timeoutId = window.setTimeout(function(){ controller.abort(); }, 15000);
-  qwenFetch(body, controller.signal).then(function(res){
-    window.clearTimeout(timeoutId);
-    if(requestId !== photoRequestId || !photoModal.classList.contains('open')){ throw { stale:true }; }
-    return res.text().then(function(txt){
-      var data; try{ data = JSON.parse(txt); }catch(e){ throw { status: res.status, raw: txt }; }
-      if(!res.ok){ throw { status: res.status, data: data }; }
-      return data;
-    });
-  }).then(function(data){
-    if(requestId !== photoRequestId || !photoModal.classList.contains('open')){ return; }
-    if(activePhotoController === controller){ activePhotoController = null; }
-    $('aiLoading').classList.remove('show');
-    var content = data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
-    var parsed = normalizeAiResult(parseQwenContent(content));
-    if(!parsed || !parsed.food || !(Number(parsed.protein) > 0)){
-      $('aiError').textContent = (parsed && parsed.note) ? 'AI：' + parsed.note : '未能识别食物，请换张清晰照片或手动输入。';
-      $('aiError').classList.add('show');
-      $('snapFallback').style.display = '';
-      return;
-    }
-    showAiResult(parsed);
-  }).catch(function(err){
-    window.clearTimeout(timeoutId);
-    if(activePhotoController === controller){ activePhotoController = null; }
-    if((err && err.stale) || requestId !== photoRequestId || !photoModal.classList.contains('open')){ return; }
-    $('aiLoading').classList.remove('show');
-    $('snapFallback').style.display = '';
-    var msg;
-    if(err && err.name === 'AbortError'){ msg = '识别超时（>15s）：换张光线好、食物少的照片再试，或改用手动记录'; }
-    else if(err && err.status === 401){
-      var em = err.data && err.data.error;
-      if(em && em.code === 'relay_key_format'){
-        msg = 'Key 格式未通过校验：请在「我的」重新完整粘贴（sk- 开头、无空格换行）';
-      } else if(em && (em.code === 'invalid_api_key' || /api key/i.test(String(em.message || '')))){
-        if(isTokenPlanKey(getApiKey())){
-          msg = 'Token Plan（sk-sp-）Key 被拒：请确认是 Token 控制台生成的 Key，且套餐含视觉能力；普通 sk- Key 请改用百炼按量 Key';
-        } else {
-          msg = '通义返回 Key 无效或过期：请确认 Key 未禁用；国际控制台 Key 会自动走国际接口';
-        }
-      } else { msg = 'API Key 无效或已过期，请在「我的」重新设置'; }
-    }
-    else if(err && err.status === 403){ msg = '当前 Key 没有 qwen-vl-max 视觉模型权限'; }
-    else if(err && err.status === 429){ msg = '调用过频或额度不足'; }
-    else if(err && err.status === 413){ msg = '图片请求过大，请换一张更小或更简单的照片'; }
-    else if(err && (err.status === 404 || err.status === 405)){ msg = '本站拍照接口尚未正确发布，请刷新后重试'; }
-    else if(err && err.status === 501){ msg = '当前服务不支持拍照识别（静态文件服务不支持 POST），请启动完整后端服务'; }
-    else if(err && (err.status === 502 || err.status === 503)){ msg = '本站拍照接口暂时无法连接识别服务，请稍后重试'; }
-    else if(err && err.status === 504){ msg = '识别服务超时，请稍后重试或改用手动记录'; }
-    else if(err && err.data && err.data.error && err.data.error.message){ msg = String(err.data.error.message).replace(/\s+/g,' ').slice(0,120); }
-    else if(err && err.raw){ msg = '识别接口返回异常（HTTP ' + (err.status || '?') + '），请稍后重试'; }
-    else { msg = '暂时连不上识别服务，请检查网络后重试或改用手动记录。'; }
-    $('aiError').textContent = msg;
-    $('aiError').classList.add('show');
-  });
-}
-function parseQwenContent(content){
-  if(!content || typeof content !== 'string'){ return null; }
-  var cleaned = content.replace(/```json/gi, '').replace(/```/g, '').trim();
-  try{ return JSON.parse(cleaned); }catch(e){}
-  var start = cleaned.indexOf('{');
-  while(start !== -1){
-    var depth = 0, inStr = false, esc = false;
-    for(var i = start; i < cleaned.length; i++){
-      var ch = cleaned[i];
-      if(esc){ esc = false; continue; }
-      if(ch === '\\'){ esc = true; continue; }
-      if(ch === '"'){ inStr = !inStr; continue; }
-      if(inStr){ continue; }
-      if(ch === '{'){ depth++; }
-      else if(ch === '}'){ depth--; if(depth === 0){
-        var candidate = cleaned.slice(start, i+1);
-        try{ return JSON.parse(candidate); }catch(e){ break; }
-      }}
-    }
-    start = cleaned.indexOf('{', start + 1);
-  }
-  return null;
-}
-function clampMacro(v, max){
-  var n = Number(v);
-  if(!Number.isFinite(n)){ n = 0; }
-  return Math.round(Math.max(0, Math.min(max, n))*10)/10;
-}
-function normalizeAiResult(value){
-  if(!isPlainObject(value)){ return null; }
-  var protein = clampMacro(value.protein, 500);
-  var carbs = clampMacro(value.carbs, 500);
-  var fat = clampMacro(value.fat, 500);
-  var calories = Math.round(clampMacro(value.calories, 3000));
-  var items = Array.isArray(value.items) ? value.items.slice(0,20).map(function(item){
-    if(!isPlainObject(item)){ return null; }
-    return {
-      name:cleanText(item.name,60,'食物'), amount:cleanText(item.amount,40,''),
-      protein:clampMacro(item.protein,500), carbs:clampMacro(item.carbs,500),
-      fat:clampMacro(item.fat,500), calories:Math.round(clampMacro(item.calories,3000))
-    };
-  }).filter(Boolean) : [];
-  return { food:cleanText(value.food,80,''), items:items, protein:protein, carbs:carbs, fat:fat, calories:calories, note:cleanText(value.note,200,'') };
-}
-function showAiResult(parsed){
-  currentAiParsed = parsed;
-  var total = Number(parsed.protein) || 0;
-  $('aiFood').textContent = parsed.food;
-  $('aiAdjust').value = Math.round(total*10)/10;
-  $('aiNote').textContent = parsed.note ? '🤖 ' + parsed.note : '';
-  var box = $('aiItems'); box.innerHTML = '';
-  (parsed.items || []).forEach(function(it){
-    var p = Number(it.protein) || 0;
-    var pct = total > 0 ? Math.min(100, Math.round(p/total*100)) : 0;
-    var meta = '碳水 ' + (Number(it.carbs)||0) + 'g · 脂肪 ' + (Number(it.fat)||0) + 'g · ' + (Number(it.calories)||0) + ' kcal';
-    var div = document.createElement('div');
-    div.className = 'ai-item';
-    div.innerHTML = '<div class="top"><b>' + escapeHtml(it.name) + (it.amount ? ' · ' + escapeHtml(it.amount) : '') + '</b><span class="g">' + p + 'g</span></div>' +
-      '<div class="meta">' + meta + '</div>' +
-      '<div class="bar"><i style="width:' + pct + '%"></i></div>';
-    box.appendChild(div);
-  });
-  renderAiMacros();
-  $('aiResult').classList.add('show');
-}
-/* 按「实际摄入」蛋白等比缩放，实时刷新蛋白/碳水/脂肪/热量展示 */
-function renderAiMacros(){
-  var p = currentAiParsed;
-  if(!p){ return; }
-  var base = Number(p.protein) || 0;
-  var adj = Number($('aiAdjust').value);
-  var valid = Number.isFinite(adj) && adj >= 0;
-  var scale = (base > 0 && valid) ? (adj / base) : 1;
-  $('aiGrams').textContent = valid ? (Math.round(adj*10)/10) : (Math.round(base*10)/10);
-  $('aiMacroCarbs').textContent = Math.round((Number(p.carbs)||0)*scale*10)/10;
-  $('aiMacroFat').textContent = Math.round((Number(p.fat)||0)*scale*10)/10;
-  $('aiMacroCal').textContent = Math.round((Number(p.calories)||0)*scale);
 }
 
 /* ============================================================
@@ -2919,13 +2596,6 @@ function renderLiftHist(){
 
 /* ---- 我的页 ---- */
 function renderSettings(){
-  var ready = canUsePhotoAi();
-  var k = getApiKey();
-  $('keyStatus').textContent = ready ? (isTokenPlanKey(k) ? '已设置 · 百炼 Token Plan（sk-sp-）' : '已设置 · 经本站同域接口识别') : '未设置 · 拍照识别不可用';
-  $('keyWarn').hidden = !ready;
-  $('modelStatus').textContent = ready
-    ? ('拍照模型 · ' + getPhotoModel() + (isTokenPlanKey(k) ? '（Token Plan 专用接口）' : ''))
-    : '需先设置 Key';
   $('targetVal').textContent = S.settings.proteinTarget;
   var bw = S.settings.bodyWeightKg || (latestWeight() && latestWeight().kg) || 0;
   $('weightSetVal').textContent = bw ? bw : '—';
@@ -2981,14 +2651,6 @@ if('speechSynthesis' in window){
   window.speechSynthesis.addEventListener('voiceschanged', onSpeechVoicesChanged);
   flushVoiceSpeakQueue();
 }
-$('btnSetKey').addEventListener('click', function(){
-  showPrompt('输入通义千问 API Key。普通 Key 以 sk- 开头；百炼 Token Plan 以 sk-sp- 开头（两者都支持，会自动选接口与模型）。留空保存则清除。', getApiKey(), function(k){
-    if(k === null || k === undefined){ return; }
-    if(!setApiKey(k)){ showToast('Key 格式不正确，应以 sk- 开头且不含空格', 'error'); return; }
-    renderSettings();
-    showToast(k ? 'Key 已保存' : 'Key 已清除', 'success');
-  }, { title:'设置 API Key', okText:'保存', type:'password', placeholder:'sk-…' });
-});
 $('btnSetTarget').addEventListener('click', function(){
   showPrompt('设置每日蛋白目标（20–300 g）：', String(S.settings.proteinTarget), function(t){
     if(t === '' || t == null){ return; }
@@ -3119,7 +2781,6 @@ $('btnClear').addEventListener('click', function(){
     showConfirm('真的清空吗？包括所有蛋白、训练记录。', function(){
       try{
         window.localStorage.removeItem(V5KEY);
-        window.localStorage.removeItem(APIKEY_STORAGE);
         window.localStorage.removeItem(CORRUPT_KEY);
       }catch(e){}
       idbClear(idbHandle);
@@ -3173,13 +2834,12 @@ window.addEventListener('storage', function(e){
 if(window.__EXPOSE_FOR_TEST__){
   window.__T = {
     normalizeLogs:normalizeLogs, normalizeSettings:normalizeSettings, normalizeWeights:normalizeWeights,
-    isActualTraining:isActualTraining, parseQwenContent:parseQwenContent, normalizeAiResult:normalizeAiResult,
+    isActualTraining:isActualTraining,
     clampNumber:clampNumber, cleanText:cleanText, isPlainObject:isPlainObject, escapeHtml:escapeHtml,
     dayStart:dayStart, uid:uid, migrateState:migrateState, defaultState:defaultState, pad2:pad2,
     computeTrainingStreak:computeTrainingStreak, rebuildLogIndexFromLogs:rebuildLogIndexFromLogs,
     getRoutineIds:function(){ return ROUTINE_IDS.slice(); },
     getRoutineMoveIds:function(r){ return (routines[r] || []).map(function(m){ return m.id; }); },
-    getRelayUrl:function(){ return QWEN_RELAY; },
     mealFromTs:mealFromTs, mealTargets:mealTargets,
     suggestedProteinTarget:suggestedProteinTarget, adjustedWeightKg:adjustedWeightKg, idealWeightKg:idealWeightKg,
     weekStart:weekStart, weekAvgWeight:weekAvgWeight,
