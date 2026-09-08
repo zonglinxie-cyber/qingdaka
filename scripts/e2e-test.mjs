@@ -71,6 +71,8 @@ try{
   page.on('pageerror', err => errors.push(err.message));
   await page.goto(base + '/index.html');
   await page.waitForFunction(() => /已就绪|可离线/.test(document.getElementById('offlineStatus')?.textContent || ''));
+  await page.waitForFunction(() => !!navigator.serviceWorker.controller);
+  assert.notEqual(await page.locator('#btnUpdateApp').getAttribute('hidden'),null,'首次安装完成后不应残留无效的更新按钮');
   await page.reload();
   await page.waitForFunction(() => !!navigator.serviceWorker.controller);
   console.log('✓ 应用及离线资源已加载');

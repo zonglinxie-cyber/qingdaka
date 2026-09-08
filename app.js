@@ -2590,6 +2590,7 @@ function renderAll(){
 /* ---- 离线准备与用户确认更新 ---- */
 var appRegistration = null, updateRequested = false, offlineProbe = 0;
 function updateOfflineStatus(){
+  showWaitingUpdate();
   var probe = ++offlineProbe;
   var active = appRegistration && appRegistration.active;
   if(!active){ $('offlineStatus').textContent = '离线资源准备中，完成前请保持联网。'; return; }
