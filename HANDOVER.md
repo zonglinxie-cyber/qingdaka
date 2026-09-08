@@ -1,7 +1,7 @@
 # 轻打卡 v6 · 语音改造 交接文档
 
 > 接手日期：2026-08-05
-> 项目：/Users/derekfly3/Documents/轻打卡v6（纯静态网页，部署在 Netlify）
+> 项目：/Users/derekfly3/Documents/轻打卡v6（纯静态网页，部署在 GitHub Pages）
 > 给谁看：任何接手排查"试听没声音"问题的 AI / 工程师
 
 ---
@@ -22,13 +22,13 @@
 
 ## 2. 当前部署状态
 
+> 2026-08-19 起生产是 GitHub Pages。Netlify 站已销毁，siteId 已从本文删除。下表其余项是 2026-08-05 语音改造时的快照。
+
 | 项 | 值 |
 |---|---|
-| Netlify production URL | `https://qingdaka-workbuddy-v6.netlify.app` |
-| Netlify siteId | `c592b655-be54-49cc-8d2f-c8171e11f116` |
+| 生产站点 | `https://zonglinxie-cyber.github.io/qingdaka/` |
 | Service Worker version | `v28-voice-m4a-yujie`（**用户可能还是 v25–v27，需硬刷**） |
 | 本地 dev server | `python3 serve.py 12000 --lan`（PID 7767，端口 12000） |
-| 部署 CLI | `netlify` 已登录（用户 `Zonglin Xie`） |
 
 ---
 

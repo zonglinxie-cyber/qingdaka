@@ -1,0 +1,26 @@
+[
+  {
+    "key": "work-towel-row",
+    "moveId": "towel-row",
+    "type": "work",
+    "text": "接下来，坐姿毛巾划船。保持坐稳，毛巾绕过脚底。拉的是背，不要耸肩。呼吸：拉回时呼气，放回时吸气。"
+  },
+  {
+    "key": "work-wall-plank",
+    "moveId": "wall-plank",
+    "type": "work",
+    "text": "接下来，墙面斜板支撑。按静态姿势撑住，双脚踩稳，不做推起动作。墙越近越轻松，全程能说短句。若肩痛，走近一点。"
+  },
+  {
+    "key": "work-farmer-carry",
+    "moveId": "farmer-carry",
+    "type": "work",
+    "text": "接下来，轻负重行走 / 原地持重。图是双手持铃慢走。重量宁轻勿重；空间不够就原地踏步。肩膀放松，不侧弯、不憋气。"
+  },
+  {
+    "key": "work-bird-dog",
+    "moveId": "bird-dog",
+    "type": "work",
+    "text": "接下来，鸟狗式分步。图是对侧手脚一起伸。家里先只伸一只手或一条腿；腹部较大可把手撑在稳固沙发座面。"
+  }
+]

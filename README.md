@@ -40,7 +40,7 @@ npx serve .
 
 - 生产站点：**https://zonglinxie-cyber.github.io/qingdaka/**
 - 手机浏览器打开后 → **添加到主屏幕**。
-- 更新代码后：`git push`（记得先把 `sw.js` 的 `VERSION` 加一）
+- 更新代码后运行 `npm run deploy`；构建自动按代码和素材生成缓存版本（只 `git push` main 不会更新生产站）。已安装用户在「我的」确认更新。
 
 临时方案（电脑必须开着）：`cloudflared tunnel --url http://127.0.0.1:8899`，用手机打开终端里出现的 `https://….trycloudflare.com`（每次链接可能变）。
 
@@ -57,54 +57,81 @@ http://localhost:8899/test.html
 ```bash
 npm ci
 npx playwright install chromium
-python3 serve.py 8899 &
 npm run test:e2e
+npm run test:reliability
 ```
 
-> `npm run test:e2e` 默认打 `127.0.0.1:8899`。如果那个端口上蹲着别的项目的服务，测试会误打过去并失败——换端口跑：
-> `TEST_BASE_URL=http://127.0.0.1:8951 npm run test:e2e`
+`test:e2e` 自动启动随机端口的本机服务和临时浏览器，结束后清理；不读取日常浏览器记录。也可用 `TEST_BASE_URL=http://127.0.0.1:8951` 指定服务，测试会先确认是本项目。
 
-发布产物会先构建到 `dist/`，只包含运行时必需的前端文件、`assets/`、`icons/` 与 `voice-scripts.json`。交接文档、测试和本地脚本不会进入公开站点：
+发布产物构建到 `dist/`，只含运行时前端文件、`assets/`、`icons/` 与 `voice-scripts.json`。交接文档、测试和本地脚本不会进公开站点：
 
 ```bash
 npm run build
 npm run check:dist
-python3 serve.py 8900 --directory dist
-TEST_BASE_URL=http://127.0.0.1:8900 TEST_UNIT_PAGE=0 npm run test:e2e
+TEST_UNIT_PAGE=0 npm run test:e2e
 ```
 
 ## 生产部署
 
 **唯一生产：GitHub Pages** —— https://zonglinxie-cyber.github.io/qingdaka/
 
-它服务 `main` 分支的**仓库根目录**，`git push` 之后自动更新，没有构建步骤。因此：
+站点发的是 `gh-pages` 分支上的 `dist/`，不是 `main` 仓库根目录。本机 GitHub token 没有 `workflow` 权限，所以没有 Actions 代构建。发布命令：
 
-- 改完代码 `git push` 就是发布。
-- **必须把 `sw.js` 顶部的 `VERSION` 加一**，否则用户手机上会继续跑旧缓存。这是唯一的更新开关。
-- 仓库是公开的，根目录下的一切（含 `serve.py`、`README.md`、`HANDOVER.md`）在公网可读。别往仓库里放任何密钥。
+```bash
+npm run deploy
+```
+
+- **只 `git push` main 不会更新生产站。**
+- `build` 按发布文件的 SHA-256 生成 SW 版本，无需手动加版本号。应用核心文件和预录语音全部下载成功后才提供更新；正在跟练时先结束记录。
+- 仓库仍公开，源码在 GitHub 上可读；Pages 上不再挂 `HANDOVER.md` / `serve.py` / `test.html`。别往仓库里放任何密钥。
 - `serve.json` 只作用于本地 `npx serve`，生产用 Pages 自己的 `max-age=600`。
 
-`npm run build` → `dist/` 与 `npm run check:dist` 目前**不参与生产发布**，只是本地校验工具（见 `BACKLOG.md`）。
-
 `serve.json` 的缓存策略：
-- `sw.js` / `index.html` / `app.js` / `styles.css` → `no-cache`（每次校验，保证更新及时）
+- `sw.js` / `index.html` / `app.js` / `content.js` / `styles.css` → `no-cache`
 - `assets/**` 和 `icons/**` → `immutable` 一年（动图/图标不变，长期缓存省流量）
-
-改了 `app.js` / `styles.css` / 语音资源后，记得把 `sw.js` 顶部的 `VERSION` 加一，否则用户手机上会继续跑旧缓存。
 
 ## 文件结构
 
 ```
 index.html            页面结构（无内联脚本/样式）
 styles.css            全部样式（含暗色模式、reduced-motion）
-app.js                全部逻辑（IIFE 包裹，无全局污染）
+app.js                页面、记录、训练、存储逻辑（IIFE）
+content.js            动作、课程、档位、热身与拉伸内容
 sw.js                 Service Worker（离线缓存 + 运行时缓存裁剪）
 serve.py              本地静态文件服务器
 manifest.webmanifest  PWA 清单
 test.html             单元测试页
 serve.json            npx serve 的缓存/压缩配置
 mobile-qr.png         --lan 时可选生成（pip install qrcode[pil]）
-scripts/              构建、校验、开发辅助脚本
+scripts/              构建、校验、发布（deploy-pages）、开发辅助脚本
 assets/               动作示范动图、姿势图、语音 m4a
 icons/                应用图标
 ```
+
+## 记录与离线更新
+
+当前页面按日常操作重排：
+
+- 「今天」默认只展示蛋白、喝水、跟练；体重、走路、饮食习惯在「更多记录」。
+- 「记蛋白」默认只填克数；食物名、餐次可选，常用食物也从这个弹层记入。
+- 「跟练」先显示当前课程与开始按钮，直接开始；课程/强度、动作示范按需展开，完整安排可单独查看。
+- 「回顾」默认三个指标与蛋白图，其余历史分组展开；「我的」默认两个每日目标，其余设置按需展开。
+
+- 写入操作排队，并等待 IndexedDB 或 localStorage 至少一处真正写入成功后显示成功；两处都失败会保留原状态。启动时按更新时间恢复较新副本。
+- 日志不再有 3,000 条上限，体重记录不再静默截断。数据页可按月查看、翻页、导出；月度文件用于查阅，完整迁移仍用「我的 → 导出备份」。浏览器可用空间仍有限，需定期把备份保存在浏览器外。
+- 导入先显示记录数量和日期范围，确认后覆盖；不完整或含无效记录的文件会被拒绝。旧 v4/v5 备份与历史拍照记录继续兼容。
+- 「7天日均已记录蛋白」按 7 天计算，另列有记录天数，未记录不表示未摄入。
+- 应用和 46 段预录音频完整下载后显示离线就绪；示范图按联网浏览缓存。更新保留已缓存示范，确认后才切换版本。
+
+## 内容与语音维护
+
+动作说明集中在 `content.js`。墙面斜板支撑使用静态图；坐姿毛巾划船、站姿股四头拉伸撤下不匹配示范，保留文字指导。未经审查的 `_preview-hot-girl/` 素材未接入应用。
+
+当前仍有 4 段预录语音待补，应用明确提示并尝试系统语音回退。生成需本机 MiniMax CLI 登录与 ffmpeg；运行时没有 API Key 或外部模型请求。
+
+```bash
+npm run voice:prepare   # 对照实际课程生成 voice-pending.json
+npm run voice:generate  # 已登录 mmx 时生成 female-yujie，试听后再发布
+```
+
+生成脚本仅在四段全部生成成功后更新清单，替换四段已退出课程的旧语音；`check:dist` 校验课程素材、语音映射和明确登记的缺口。命令准备完成不代表录音已生成或试听通过。

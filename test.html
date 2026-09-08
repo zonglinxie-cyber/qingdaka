@@ -46,13 +46,13 @@ window.__EXPOSE_FOR_TEST__ = true;
   fetch('./index.html').then(function(r){ return r.text(); }).then(function(html){
     var body = html.replace(/^[\s\S]*?<body[^>]*>/, '').replace(/<\/body>[\s\S]*$/, '');
     // 移除 index.html 里对 app.js 的引用（我们会手动加载）
-    body = body.replace(/<script src="\.\/app\.js"><\/script>/, '');
+    body = body.replace(/<script src="\.\/(?:app|content)\.js"><\/script>/g, '');
     document.getElementById('app-host').innerHTML = body;
 
     // 2) 动态加载 app.js
     var s = document.createElement('script');
-    s.src = './app.js';
-    s.onload = runTests;
+    s.src = './content.js';
+    s.onload = function(){ var app = document.createElement('script'); app.src = './app.js'; app.onload = runTests; app.onerror = s.onerror; document.body.appendChild(app); };
     s.onerror = function(){ document.getElementById('summary').textContent = '无法加载 app.js'; document.getElementById('summary').className = 'fail'; };
     document.body.appendChild(s);
   }).catch(function(e){
@@ -132,6 +132,7 @@ window.__EXPOSE_FOR_TEST__ = true;
     assert(T.isActualTraining({ type: 'training', status: 'completed', workSeconds: 120 }) === true, 'isActualTraining: 完成且>20s 为真');
     assert(T.isActualTraining({ type: 'training', status: 'completed', workSeconds: 30 }) === true, 'isActualTraining: 做了 30s 也算一次');
     assert(T.isActualTraining({ type: 'training', status: 'completed', workSeconds: 10, completedMoves: 0 }) === false, 'isActualTraining: 过短且无完成动作不算');
+    assert(T.isActualTraining({ type:'training', status:'stopped', actualSeconds:300, workSeconds:0, completedMoves:0 }) === false, 'isActualTraining: 只热身或休息不会计为已完成跟练');
     assert(T.isActualTraining({ type: 'training', status: 'completed', workSeconds: 10, completedMoves: 1 }) === true, 'isActualTraining: 完成 1 个动作就算');
     assert(T.isActualTraining({ type: 'training', status: 'makeup', workSeconds: 999 }) === false, 'isActualTraining: makeup 排除');
     assert(T.isActualTraining({ type: 'training', status: 'legacy', actualSeconds: 120 }) === true, 'isActualTraining: legacy 用 actualSeconds');

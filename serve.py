@@ -75,9 +75,10 @@ def main():
 
     handler = partial(Handler, directory=str(static_directory))
     server = ThreadingHTTPServer((host, args.port), handler)
-    print(f"轻打卡 → http://127.0.0.1:{args.port}/index.html（静态目录：{static_directory}）")
+    port = server.server_address[1]
+    print(f"轻打卡 → http://127.0.0.1:{port}/index.html（静态目录：{static_directory}）", flush=True)
     if host == "0.0.0.0":
-        print_mobile_qr_hint(args.port)
+        print_mobile_qr_hint(port)
     print("按 Ctrl+C 停止")
     try:
         server.serve_forever()

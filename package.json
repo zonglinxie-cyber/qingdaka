@@ -4,7 +4,11 @@
   "scripts": {
     "build": "node scripts/build-dist.mjs",
     "check:dist": "node scripts/check-dist.mjs",
-    "test:e2e": "node scripts/e2e-test.mjs"
+    "deploy": "node scripts/deploy-pages.mjs",
+    "test:e2e": "node scripts/e2e-test.mjs",
+    "test:reliability": "node scripts/test-reliability.mjs",
+    "voice:prepare": "node scripts/extract-voice-scripts.js",
+    "voice:generate": "node scripts/generate-voices.mjs"
   },
   "devDependencies": {
     "playwright": "^1.49.1"

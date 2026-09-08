@@ -1,4 +1,5 @@
-import { cp, mkdir, rm } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { cp, mkdir, rm, readFile, writeFile, readdir } from 'node:fs/promises';
 import { resolve, sep } from 'node:path';
 
 const projectRoot = process.cwd();
@@ -12,6 +13,7 @@ if (outputDir === projectRoot || !outputDir.startsWith(projectRoot + sep)) {
 const files = [
   'index.html',
   'app.js',
+  'content.js',
   'styles.css',
   'sw.js',
   'manifest.webmanifest',
@@ -19,6 +21,7 @@ const files = [
   '.nojekyll'
 ];
 const directories = ['assets', 'icons'];
+const voiceKeys = new Set(JSON.parse(await readFile(resolve(projectRoot, 'voice-scripts.json'), 'utf8')).map(entry => entry.key + '.m4a'));
 
 await rm(outputDir, { recursive: true, force: true });
 await mkdir(outputDir, { recursive: true });
@@ -28,10 +31,26 @@ await Promise.all(
   directories.map((name) =>
     cp(resolve(projectRoot, name), resolve(outputDir, name), {
       recursive: true,
-      // 运行时代码只引用 m4a；不把废弃 mp3 打进发布产物。
-      filter: (sourcePath) => !sourcePath.toLowerCase().endsWith('.mp3')
+      // 运行时代码只引用 m4a；不把废弃 mp3 和 macOS 垃圾文件打进发布产物。
+      filter: (sourcePath) => {
+        const lower = sourcePath.toLowerCase();
+        return !lower.endsWith('.mp3') && !lower.endsWith('.ds_store') && (!lower.endsWith('.m4a') || voiceKeys.has(sourcePath.split(sep).pop()));
+      }
     })
   )
 );
 
-console.log(`Built deploy artifact: ${outputDir}`);
+// 版本由完整发布产物决定，代码或素材改变都会得到新缓存版本。
+const digest = createHash('sha256');
+async function hashTree(dir){
+  for(const entry of (await readdir(dir, {withFileTypes:true})).sort((a,b)=>a.name.localeCompare(b.name))){
+    const path = resolve(dir, entry.name);
+    if(entry.isDirectory()){ await hashTree(path); }
+    else { digest.update(path.slice(outputDir.length)); digest.update(await readFile(path)); }
+  }
+}
+await hashTree(outputDir);
+const swPath = resolve(outputDir, 'sw.js');
+const version = 'v42-' + digest.digest('hex').slice(0,16);
+await writeFile(swPath, (await readFile(swPath, 'utf8')).replace(/var VERSION = '[^']+';/, `var VERSION = '${version}';`));
+console.log(`Built deploy artifact: ${outputDir} (${version})`);
