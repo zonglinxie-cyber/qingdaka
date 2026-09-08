@@ -74,7 +74,6 @@ function isPlainObject(v){ return !!v && typeof v === 'object' && !Array.isArray
 
 var V5KEY = 'workbuddy-v5';
 var assetBase = 'assets/exercise-guides/';
-var MAX_LOGS = 3000;
 /* ---- 数据边界常量 ---- */
 var TIMESTAMP_MIN = 946684800000;   // 2000-01-01
 var TIMESTAMP_MAX = 4102444800000;  // 2100-01-01
@@ -88,8 +87,7 @@ var WEIGHT_KG_MIN = 20;             // 体重下限 (kg)
 var WEIGHT_KG_MAX = 400;            // 体重上限 (kg)
 var WAIST_CM_MIN = 30;              // 腰围下限 (cm)
 var WAIST_CM_MAX = 250;             // 腰围上限 (cm)
-var IMPORT_MAX_BYTES = 5 * 1024 * 1024;
-var MAX_WEIGHTS = 5000;             // 最大体重记录条数
+var IMPORT_MAX_BYTES = 20 * 1024 * 1024;
 var DEFAULT_PROTEIN = 100;          // 默认蛋白目标 (g)
 var DEFAULT_WATER = 2000;           // 默认饮水目标 (ml)
 var PROTEIN_PER_KG_DEFAULT = 1.4;
@@ -113,7 +111,6 @@ var QUICK_FOODS = [
   { id:'powder', name:'蛋白粉', grams:24, food:'蛋白粉 1 平勺', liquid:true }
 ];
 var MEAL_FLOOR = 30;
-var pendingMeal = null;
 var HEIGHT_CM_MIN = 120;
 var HEIGHT_CM_MAX = 220;
 // 课程 ID 的唯一事实来源。设置、日志与 UI 都必须引用它，避免新增课程时只改一处。
@@ -278,12 +275,25 @@ function moveById(id){
 
 /* ---- Toast ---- */
 var toastTimer = null;
-function showToast(msg, type){
-  var el = $('toast');
-  el.textContent = msg;
+function showToast(msg, type, undo){
+  var el = $('toast'), button = $('toastUndo');
+  $('toastText').textContent = msg;
+  button.hidden = !undo;
+  button.disabled = false;
+  button.onclick = undo ? async function(){
+    button.disabled = true;
+    if(await undo()){ renderAll(); showToast('已撤销', 'success'); }
+    else { button.disabled = false; }
+  } : null;
   el.className = 'toast show' + (type ? ' ' + type : '');
   if(toastTimer){ window.clearTimeout(toastTimer); }
-  toastTimer = window.setTimeout(function(){ el.classList.remove('show'); }, 2600);
+  toastTimer = window.setTimeout(function(){ el.classList.remove('show'); }, undo ? 10000 : 4000);
+}
+function undoLog(entry, restore){
+  return function(){ return mutateState(function(){
+    S.logs = S.logs.filter(function(l){ return l.id !== entry.id; });
+    if(restore){ restore(); }
+  }); };
 }
 
 /* ============================================================
@@ -299,12 +309,14 @@ function closeDialog(){
   $('dialogModal').classList.remove('open');
   $('dialogModal').setAttribute('aria-hidden','true');
   dlgOnOk = null;
+  $('dlgOk').disabled = false;
   if(dlgPrevFocus && dlgPrevFocus.focus){ try{ dlgPrevFocus.focus(); }catch(e){} }
 }
 function showConfirm(msg, onOk, opts){
   opts = opts || {};
   $('dlgTitle').textContent = opts.title || '请确认';
   $('dlgMsg').textContent = msg;
+  $('dlgFields').hidden = true;
   $('dlgInput').hidden = true;
   $('dlgInput').value = '';
   $('dlgOk').textContent = opts.okText || '确定';
@@ -318,6 +330,7 @@ function showPrompt(msg, defaultVal, onOk, opts){
   opts = opts || {};
   $('dlgTitle').textContent = opts.title || '请输入';
   $('dlgMsg').textContent = msg;
+  $('dlgFields').hidden = true;
   var inp = $('dlgInput');
   inp.hidden = false;
   inp.type = opts.type || 'text';
@@ -397,7 +410,7 @@ function normalizeSettings(s){
   out.readinessDay = today;
   return out;
 }
-function getReadiness(){ return (S.settings && S.settings.readiness) || 'green'; }
+function getReadiness(){ return S.settings.readinessDay === dayStart(Date.now()) ? S.settings.readiness : 'green'; }
 function normalizeLogs(arr){
   if(!Array.isArray(arr)){ return []; }
   var out = [], seen = {};
@@ -441,7 +454,6 @@ function normalizeLogs(arr){
       });
     }
   });
-  if(out.length > MAX_LOGS){ out = out.slice(out.length - MAX_LOGS); }
   return out;
 }
 function normalizeSessionLifts(raw){
@@ -463,7 +475,7 @@ function normalizeWeights(arr){
     if(!Number.isFinite(ts) || !Number.isFinite(kg)){ return; }
     out.push({ ts:ts, kg:Math.round(clampNumber(kg,WEIGHT_KG_MIN,WEIGHT_KG_MAX,kg)*10)/10, waist:item.waist?Math.round(clampNumber(item.waist,WAIST_CM_MIN,WAIST_CM_MAX,0)*10)/10:undefined });
   });
-  return out.slice(-MAX_WEIGHTS);
+  return out;
 }
 function migrateState(raw){
   // 按版本号逐步升级数据结构。新增迁移时在末尾追加 if 分支。
@@ -488,7 +500,7 @@ function quarantineRawState(rawText){
       window.localStorage.setItem(CORRUPT_KEY, rawText);
     }
   }catch(e){}
-  console.error('[轻打卡] 本机数据解析失败，原文已隔离保存，未覆盖。');
+  console.error('[轻打卡] 本机数据解析失败，原文未覆盖，可导出检查。');
 }
 /* 返回 { state, hadData }：hadData 表示本机确实存过数据 */
 function readState(){
@@ -500,155 +512,148 @@ function readState(){
   raw = migrateState(raw);
   if(!isPlainObject(raw) || raw.v !== 5){
     quarantineRawState(rawText);
-    return { state:null, hadData:true };
+    return { state:null, hadData:true, rawText:rawText };
   }
   return { state:hydrateState(raw), hadData:true };
 }
 function hydrateState(raw){
   return {
     v:5,
+    updatedAt:clampNumber(raw.updatedAt, 0, TIMESTAMP_MAX, 0),
+    lastBackupAt:clampNumber(raw.lastBackupAt, 0, TIMESTAMP_MAX, 0),
     settings:normalizeSettings(raw.settings),
     logs:normalizeLogs(raw.logs),
     weights:normalizeWeights(raw.weights),
     lifts:normalizeLifts(raw.lifts)
   };
 }
-var lastPersistedStateJson = null;
-var storageReady = false;
+var storageReady = false, storageInit = null, mutationQueue = Promise.resolve();
 var idbHandle = null;
-var IDB_NAME = 'qingdaka-v6';
-var IDB_STORE = 'kv';
-var IDB_KEY = 'state';
-function openIdb(done){
-  if(!window.indexedDB){ done(null); return; }
-  var req;
-  try{ req = window.indexedDB.open(IDB_NAME, 1); }
-  catch(e){ done(null); return; }
-  req.onupgradeneeded = function(){
-    if(!req.result.objectStoreNames.contains(IDB_STORE)){ req.result.createObjectStore(IDB_STORE); }
-  };
-  req.onsuccess = function(){ done(req.result); };
-  req.onerror = function(){ done(null); };
+var IDB_NAME = 'qingdaka-v6', IDB_STORE = 'kv', IDB_KEY = 'state';
+function openIdb(){
+  return new Promise(function(resolve){
+    if(!window.indexedDB){ resolve(null); return; }
+    try{
+      var req = window.indexedDB.open(IDB_NAME, 1);
+      req.onupgradeneeded = function(){
+        if(!req.result.objectStoreNames.contains(IDB_STORE)){ req.result.createObjectStore(IDB_STORE); }
+      };
+      req.onsuccess = function(){
+        req.result.onversionchange = function(){ req.result.close(); idbHandle = null; };
+        resolve(req.result);
+      };
+      req.onerror = req.onblocked = function(){ resolve(null); };
+    }catch(e){ resolve(null); }
+  });
 }
-function idbGet(db, done){
-  if(!db){ done(null); return; }
-  try{
-    var tx = db.transaction(IDB_STORE, 'readonly');
-    var req = tx.objectStore(IDB_STORE).get(IDB_KEY);
-    req.onsuccess = function(){ done(req.result || null); };
-    req.onerror = function(){ done(null); };
-  }catch(e){ done(null); }
+function idbGet(db){
+  return new Promise(function(resolve){
+    if(!db){ resolve(null); return; }
+    try{
+      var req = db.transaction(IDB_STORE, 'readonly').objectStore(IDB_STORE).get(IDB_KEY);
+      req.onsuccess = function(){ resolve(req.result || null); };
+      req.onerror = function(){ resolve(null); };
+    }catch(e){ resolve(null); }
+  });
 }
 function idbSet(db, value){
-  if(!db){ return; }
-  try{
-    db.transaction(IDB_STORE, 'readwrite').objectStore(IDB_STORE).put(value, IDB_KEY);
-  }catch(e){}
+  return new Promise(function(resolve){
+    if(!db){ resolve(false); return; }
+    try{
+      var tx = db.transaction(IDB_STORE, 'readwrite');
+      tx.oncomplete = function(){ resolve(true); };
+      tx.onerror = tx.onabort = function(){ resolve(false); };
+      tx.objectStore(IDB_STORE).put(value, IDB_KEY);
+    }catch(e){ resolve(false); }
+  });
 }
-function idbClear(db){
-  if(!db){ return; }
-  try{
-    db.transaction(IDB_STORE, 'readwrite').objectStore(IDB_STORE).delete(IDB_KEY);
-  }catch(e){}
-}
-function writeState(s){
-  if(storageReadOnly){ showToast('当前为只读模式，数据未保存', 'error'); return false; }
+async function writeState(s){
   var json;
-  try{ json = JSON.stringify(s); }catch(e){ showToast('本地存储写入失败，数据可能未保存', 'error'); return false; }
-  if(json === lastPersistedStateJson){ return true; }
-  var lsOk = false;
-  try{
-    window.localStorage.setItem(V5KEY, json);
-    lsOk = true;
-  }catch(e){}
-  idbSet(idbHandle, s);
-  if(lsOk || idbHandle){
-    lastPersistedStateJson = json;
-    return true;
+  try{ json = JSON.stringify(s); }catch(e){ return false; }
+  // IndexedDB 必须等事务完成。localStorage 只在写入成功时算可用副本。
+  var idbOk = await idbSet(idbHandle, s), lsOk = false;
+  try{ window.localStorage.setItem(V5KEY, json); lsOk = true; }catch(e){}
+  if(!idbOk && !lsOk){
+    showToast('保存失败，原数据已保留。请释放空间或先导出备份。', 'error');
+    return false;
   }
-  storageReadOnly = true;
-  showToast('本地存储写入失败（空间不足或隐私模式），已转为只读，请先导出备份', 'error');
-  return false;
+  return true;
 }
 var __boot = readState();
 var S = __boot.state || defaultState();
 storageReadOnly = !__boot.state && __boot.hadData;
-storageReady = true;
-lastPersistedStateJson = null;
-if(!storageReadOnly){ writeState(S); }
-else {
-  window.setTimeout(function(){
-    showToast('本机数据读取异常，已进入只读模式；原始数据未被覆盖，请到「我的 → 导出备份」取出', 'error');
-  }, 400);
-}
-function recoverFromIdb(){
-  openIdb(function(db){
-    idbHandle = db;
-    if(storageReadOnly){ return; }
-    idbGet(db, function(idbRaw){
-      var migrated = isPlainObject(idbRaw) ? migrateState(idbRaw) : null;
-      var idbState = (migrated && migrated.v === 5) ? hydrateState(migrated) : null;
-      if(idbState && !__boot.state && !__boot.hadData){
-        S = idbState;
-        lastPersistedStateJson = null;
-        writeState(S);
-        bumpLogIndex();
-        moves = routines[S.settings.routine] || bodyweightMoves;
-        if(typeof buildSteps === 'function'){ buildSteps(); }
-        if(typeof renderAll === 'function'){ renderAll(); }
-        else if(typeof renderToday === 'function'){ renderToday(); }
-        return;
-      }
-      if(!idbState && S){ idbSet(db, S); }
-    });
-  });
-}
-function mutateState(apply){
-  if(storageReadOnly){ showToast('当前为只读模式', 'error'); return false; }
-  var snapshot;
-  try{ snapshot = JSON.stringify(S); }catch(e){ return false; }
-  try{ apply(); }catch(e){
-    try{ S = JSON.parse(snapshot); }catch(_){}
-    showToast('操作失败，原数据未改变', 'error'); return false;
+async function recoverFromIdb(){
+  idbHandle = await openIdb();
+  var raw = await idbGet(idbHandle), migrated = migrateState(raw);
+  var backup = migrated ? hydrateState(migrated) : null;
+  if(backup && (!__boot.state || backup.updatedAt > (S.updatedAt || 0))){
+    S = backup;
+    storageReadOnly = false;
   }
-  if(writeState(S)){ bumpLogIndex(); return true; }
-  try{ S = JSON.parse(snapshot); }catch(_){}
-  return false;
+  if(storageReadOnly){ showToast('数据读取异常，原文已保留。请到「我的」导出或导入备份。', 'error'); }
+  else { await writeState(S); }
+  storageReady = true;
+  bumpLogIndex();
+  moves = routines[S.settings.routine] || bodyweightMoves;
+  resetWorkout(); renderAll();
 }
-function canAddLog(){
-  if(S.logs.length >= MAX_LOGS){ showToast('记录已达上限，请先导出并清理', 'error'); return false; }
-  return true;
+function mutateState(apply, allowRecovery){
+  var task = mutationQueue.then(async function(){
+    await storageInit;
+    if(storageReadOnly && !allowRecovery){ showToast('当前为只读模式，请先导出或导入备份', 'error'); return false; }
+    var previous = S, next;
+    try{
+      S = JSON.parse(JSON.stringify(previous));
+      apply();
+      next = S;
+      next.updatedAt = Math.max(Date.now(), (previous.updatedAt || 0) + 1);
+    }catch(e){ showToast('操作失败，原数据未改变', 'error'); return false; }
+    finally { S = previous; }
+    if(!await writeState(next)){ return false; }
+    S = next;
+    storageReadOnly = false;
+    bumpLogIndex();
+    return true;
+  });
+  mutationQueue = task.catch(function(){ return false; });
+  return mutationQueue;
 }
 
 /* ---- 记录操作 ---- */
-function addProtein(grams, food, source, extras){
+async function addProtein(grams, food, source, extras){
   grams = Math.round(grams * 10) / 10;
   if(!grams || grams <= 0){ showToast('蛋白质克数需大于 0', 'error'); return; }
   var entry = { id:uid(), type:'protein', ts:Date.now(), grams:grams, food:cleanText(food,80,'食物'), source:source||'manual' };
   var ex = extras || {};
-  entry.meal = MEAL_IDS.indexOf(ex.meal) >= 0 ? ex.meal : (pendingMeal || mealFromTs(entry.ts));
+  entry.meal = MEAL_IDS.indexOf(ex.meal) >= 0 ? ex.meal : mealFromTs(entry.ts);
   var c = Number(ex.carbs);   if(Number.isFinite(c)   && c > 0){ entry.carbs = Math.round(Math.min(500, c)*10)/10; }
   var f = Number(ex.fat);     if(Number.isFinite(f)   && f > 0){ entry.fat = Math.round(Math.min(500, f)*10)/10; }
   var cal = Number(ex.calories); if(Number.isFinite(cal) && cal > 0){ entry.calories = Math.round(Math.min(3000, cal)); }
-  if(!canAddLog() || !mutateState(function(){
+  var autoSoy = false;
+  if(!await mutateState(function(){
     S.logs.push(entry);
     if(entry.food.indexOf('豆腐') >= 0 || entry.food.indexOf('豆浆') >= 0){
-      ensureFiberDay(); S.settings.fiberSoy = true;
+      ensureFiberDay(); autoSoy = !S.settings.fiberSoy; S.settings.fiberSoy = true;
     }
   })){ return; }
-  pendingMeal = null;
   renderToday();
-  showToast('已记下 +' + grams + 'g · 今天有记录就成立', 'success');
+  showToast('已记下 +' + grams + 'g', 'success', undoLog(entry, function(){
+    if(autoSoy && S.settings.fiberDay === dayStart(entry.ts) && !S.logs.some(function(l){
+      return l.type === 'protein' && dayStart(l.ts) === dayStart(entry.ts) && /豆腐|豆浆/.test(l.food);
+    })){ S.settings.fiberSoy = false; }
+  }));
+  return true;
 }
-function addWalk(minutes){
+async function addWalk(minutes){
   minutes = Math.round(clampNumber(minutes, 0, 180, 0));
   if(!minutes){ return; }
-  if(!canAddLog() || !mutateState(function(){
-    S.logs.push({ id:uid(), type:'walk', ts:Date.now(), minutes:minutes });
+  var entry = { id:uid(), type:'walk', ts:Date.now(), minutes:minutes };
+  if(!await mutateState(function(){
+    S.logs.push(entry);
   })){ return; }
   renderToday();
   if(document.getElementById('page-data').classList.contains('active')){ renderData(); }
-  showToast('已记下走路 ' + minutes + ' 分钟（不算力量次数）', 'success');
+  showToast('已记下走路 ' + minutes + ' 分钟', 'success', undoLog(entry));
 }
 function ensureFiberDay(){
   var today0 = dayStart(Date.now());
@@ -666,9 +671,9 @@ function weekAvgWeight(){
   var s = 0; vals.forEach(function(v){ s += v; });
   return Math.round(s / vals.length * 10) / 10;
 }
-function addTraining(meta){
+async function addTraining(meta){
   meta = meta || {};
-  if(!canAddLog() || !mutateState(function(){
+  if(!await mutateState(function(){
     var entry = {
       id:uid(), type:'training', ts:Date.now(), status:meta.status||'partial',
       routine:meta.routine||S.settings.routine, preset:meta.preset||S.settings.preset,
@@ -696,52 +701,56 @@ function upsertLiftRec(moveId, set){
   S.lifts[moveId] = rec;
   return rec;
 }
-function addWater(ml){
+async function addWater(ml){
   ml = Math.round(clampNumber(ml, 1, WATER_ML_SINGLE, 0));
   if(!ml){ showToast('饮水量需大于 0', 'error'); return; }
-  if(!canAddLog() || !mutateState(function(){
-    S.logs.push({ id:uid(), type:'water', ts:Date.now(), ml:ml });
+  var entry = { id:uid(), type:'water', ts:Date.now(), ml:ml };
+  if(!await mutateState(function(){
+    S.logs.push(entry);
   })){ return; }
   renderToday();
   if(document.getElementById('page-data').classList.contains('active')){ renderData(); }
-  showToast('已记入 +' + ml + ' ml', 'success');
+  showToast('已记入 +' + ml + ' ml', 'success', undoLog(entry));
 }
-function addWeight(kg, waist){
+async function addWeight(kg, waist){
   kg = Math.round(clampNumber(kg, WEIGHT_KG_MIN, WEIGHT_KG_MAX, 0) * 10) / 10;
   if(!kg){ showToast('请输入有效体重', 'error'); return; }
   var wcm = (waist === '' || waist == null) ? undefined : Math.round(clampNumber(waist, WAIST_CM_MIN, WAIST_CM_MAX, 0) * 10) / 10;
   if(wcm === 0){ wcm = undefined; }
-  if(!mutateState(function(){
+  if(!await mutateState(function(){
     var rec = { ts:Date.now(), kg:kg };
     if(wcm){ rec.waist = wcm; }
     S.weights.push(rec);
-    if(S.weights.length > MAX_WEIGHTS){ S.weights = S.weights.slice(-MAX_WEIGHTS); }
     S.settings.bodyWeightKg = kg;
   })){ return; }
   renderToday();
   if(document.getElementById('page-me').classList.contains('active')){ renderSettings(); }
   if(document.getElementById('page-data').classList.contains('active')){ renderData(); }
   showToast('已记下 ' + kg + ' kg。单日会波动，趋势看 7 日均。', 'success');
+  return true;
 }
-function applyProteinFromWeight(){
+async function applyProteinFromWeight(){
   var kg = S.settings.bodyWeightKg || (latestWeight() && latestWeight().kg);
   var adj = adjustedWeightKg(kg, S.settings.heightCm);
   var sug = suggestedProteinTarget(kg, S.settings.proteinPerKg, S.settings.heightCm, S.settings.proteinWeightMode);
   if(!sug){ showToast('先记下体重，才能按体重计算', 'error'); return false; }
-  if(!mutateState(function(){ S.settings.proteinTarget = sug; S.settings.proteinWeightMode = S.settings.proteinWeightMode || 'adjusted'; })){ return false; }
+  if(!await mutateState(function(){ S.settings.proteinTarget = sug; S.settings.proteinWeightMode = S.settings.proteinWeightMode || 'adjusted'; })){ return false; }
   renderSettings(); renderToday();
   var used = (S.settings.proteinWeightMode === 'actual') ? kg : (adj || kg);
   var extra = (adj && S.settings.heightCm && adj < kg) ? '，已按调整体重，避免目标过高' : '';
   showToast('目标 ' + sug + ' g（' + used + ' kg × ' + S.settings.proteinPerKg + extra + '）。可手改小一点先执行。', 'success');
   return true;
 }
-function deleteLog(id){
-  if(!mutateState(function(){ S.logs = S.logs.filter(function(l){ return l.id !== id; }); })){ return; }
+async function deleteLog(id){
+  var entry = S.logs.find(function(l){ return l.id === id; });
+  if(!entry || !await mutateState(function(){ S.logs = S.logs.filter(function(l){ return l.id !== id; }); })){ return; }
   renderAll();
-  showToast('已删除', '');
+  showToast('记录已删除', '', function(){ return mutateState(function(){
+    if(!S.logs.some(function(l){ return l.id === id; })){ S.logs.push(entry); }
+  }); });
 }
 /*
- * isActualTraining — 判断一次训练记录是否算"有效训练"（至少完成 60 秒的工作时间）
+ * isActualTraining — 正式动作至少 20 秒或完成一个动作；单纯热身/休息不计数。
  * status 说明：
  *   'completed' / 'partial' / 'stopped' — 正常完成/部分/提前结束
  *   'legacy' — 旧版数据，用 actualSeconds 判断（兼容无 workSeconds 的旧数据）
@@ -751,8 +760,7 @@ function isActualTraining(log){
   if(!log || log.type !== 'training' || log.status === 'makeup'){ return false; }
   if(log.status === 'legacy'){ return (Number(log.actualSeconds) || 0) >= 20; }
   return (Number(log.workSeconds) || 0) >= 20
-    || (Number(log.completedMoves) || 0) > 0
-    || (Number(log.actualSeconds) || 0) >= 30;
+    || (Number(log.completedMoves) || 0) > 0;
 }
 function isStrengthTraining(log){
   return isActualTraining(log) && log.routine !== 'stretch' && log.routine !== 'core';
@@ -858,162 +866,15 @@ document.querySelectorAll('.tab').forEach(function(t){
 /* ============================================================
    动作库（沿用 v3 动作库，含大体重友好调整）
    ============================================================ */
-var bodyweightMoves = [
-  { id:'3013', name:'臀桥', area:'臀部与后侧链', sideMode:'none', equipment:'', steps:['仰卧屈膝，双脚与髋同宽','收紧腹部，脚跟推地抬髋','到肩—髋—膝接近直线后慢慢回位'], cue:'肋骨不要外翻；顶端夹臀，不要用腰向上拱。呼吸：抬髋时呼气，下放时吸气。', mistake:'常见错误：抬得越高越好，导致腰部过伸。' },
-  { id:'0276', name:'死虫', area:'核心稳定', sideMode:'alternate', equipment:'', steps:['腰背自然贴稳垫面，髋膝约 90°','一侧手臂与对侧腿缓慢远离身体','腰背不离垫，回位后换侧'], cue:'范围由腰背能否保持稳定决定；宁可短一点。呼吸：手脚伸出时呼气，回位时吸气。', mistake:'常见错误：手脚下放过低，腰背拱起。' },
-  { id:'0710', name:'侧卧髋外展', area:'臀中肌', sideMode:'half', equipment:'', steps:['侧卧，身体和下侧腿稳定','上侧腿伸直，脚尖朝正前方','小幅抬起，停一下，再控制放下'], cue:'先做右侧，过半换左侧；骨盆不要向后翻。呼吸：抬腿时呼气，放下时吸气。', mistake:'常见错误：腿抬太高、脚尖转向天花板。' },
-  { id:'0659', name:'靠墙俯卧撑', area:'胸肩与上肢推力', sideMode:'none', equipment:'', steps:['面对墙站立，双手略宽于肩','身体保持一条直线，屈肘靠近墙','手掌推墙，回到起始位'], cue:'脚离墙越远越难；先选能稳定控制的位置。呼吸：推墙时呼气，靠近时吸气。', mistake:'常见错误：只移动头部，或塌腰、耸肩。' },
-  { id:'1373', name:'扶墙提踵', area:'小腿与踝稳定', sideMode:'none', equipment:'', steps:['双脚平行，轻扶稳定物体','脚跟垂直上提，重心保持在大脚趾根部附近','停一下，再慢慢落地'], cue:'保持脚踝正直；急性足趾或踝关节红肿热痛时不要做。呼吸：上提时呼气，落地时吸气。', mistake:'常见错误：脚踝向外翻，靠弹跳完成。' },
-  { id:'3239', name:'跪姿平板（可点肩）', area:'核心与肩稳定', sideMode:'alternate', equipment:'', steps:['膝盖着地、前臂撑地，头到膝保持直线','先稳住跪姿平板，能说话、不塌腰','稳了再轻点对侧肩；一晃就停在平板'], cue:'图是跪姿平板点肩。先撑住、能说话、不塌腰，稳了再轻点对侧肩；一晃就只撑住。呼吸：不要憋气。', mistake:'常见错误：塌腰，或猛地点肩扭腰。' }
-];
-var dumbbellMoves = [
-  { id:'0291', name:'扶凳箱式深蹲', area:'大腿前侧与臀部', sideMode:'none', equipment:'哑铃', steps:['身后放一把稳固的椅子，双脚与髋同宽，哑铃垂于体侧（先徒手亦可）','臀部向后坐，像要坐进椅子里，膝盖朝脚尖方向','轻触椅面后脚跟推地站起，顶端夹臀'], cue:'椅子越高越简单；下蹲幅度以膝盖无锐痛为准，全程背部中立。先徒手练熟再加哑铃。呼吸：下坐时吸气，站起时呼气。', mistake:'常见错误：膝盖内扣、脚跟离地，或下坐时塌腰、上身过度前倾。' },
-  { id:'1459', name:'哑铃罗马尼亚硬拉', area:'臀部与大腿后侧', sideMode:'none', equipment:'哑铃', steps:['双脚与髋同宽，膝盖微屈，哑铃贴近腿前','髋部向后送，躯干随之向前倾','背部保持中立，到大腿后侧有拉伸感后夹臀站起'], cue:'动作是"髋向后"，不是深蹲；幅度由背部能否保持中立决定，不必让哑铃碰地。呼吸：站起时呼气，前倾时吸气。', mistake:'常见错误：弓背、哑铃远离身体，或为了下得更低而失去控制。' },
-  { id:'0292', name:'扶椅单臂哑铃划船', area:'背部与上肢拉力', sideMode:'half', equipment:'哑铃', steps:['将稳定椅靠墙，空手扶稳，双脚前后站立','背部保持中立，持铃手自然下垂','肘部贴近身体拉向髋侧，再缓慢放下'], cue:'示范图是膝盖跪凳的三点划船；家里请扶椅、两脚着地。先做右侧，过半换左侧。呼吸：上拉时呼气，下放时吸气。', mistake:'常见错误：耸肩、弓背，或用转动躯干把重量甩起来。' },
-  { id:'0404', name:'坐姿中立握哑铃推举', area:'肩部与上肢推力', sideMode:'none', equipment:'哑铃', steps:['坐在靠墙的稳定椅上，双脚踩稳','掌心相对，将哑铃停在肩旁','向上推至手臂接近伸直，再控制回到肩旁'], cue:'肋骨收住、不要后仰；只有一只哑铃时，每次左右交替。肩部锐痛立即停止。呼吸：上推时呼气，回落时吸气。', mistake:'常见错误：腰部大幅后弓、耸肩，或在头顶撞击哑铃。' },
-  { id:'1677', name:'坐姿哑铃弯举', area:'上臂前侧', sideMode:'none', equipment:'哑铃', steps:['坐稳，双脚着地，手臂自然垂在身体两侧','上臂保持安静，屈肘抬起哑铃','到可控位置后停一下，再缓慢下放'], cue:'两只可同时做；只有一只时左右交替。重量要允许肩膀和躯干保持安静。呼吸：抬起时呼气，下放时吸气。', mistake:'常见错误：身体前后摆动，或把肘部向前送来缩短动作。' }
-];
-/* ---- 健身房主流固定器械 · 全身均衡（3推3拉3腿）----
-   顺序遵循 ACSM/NSCA：大肌群复合动作优先 → 推/拉交替 → 上/下肢交替，避免同肌群连做：
-   腿举(腿·复合) → 推胸(推) → 下拉(拉) → 腿屈伸(腿) → 推肩(推) → 划船(拉) → 蝴蝶机(推) → 腿弯举(腿) → 辅助引体(拉)。
-   动图同源 Kaggle 健身动图集。 */
-var gymMoves = [
-  { id:'2287', name:'腿举机', area:'大腿与臀部', sideMode:'none', equipment:'腿举机或哈克深蹲', steps:['坐稳靠背（或按健身房现有的腿举/哈克深蹲），双脚与髋同宽踩踏板中部','膝盖朝脚尖方向，缓慢屈膝下放','脚跟推踏板蹬起，顶端不锁死膝盖'], cue:'示范图更接近斜蹬/哈克。用你能坐稳、腰贴靠背的那台。下放以腰背贴稳为准。呼吸：蹬起时呼气，下放时吸气。', mistake:'常见错误：下放过深导致骨盆后倾、膝盖内扣，或猛蹬锁死膝盖。' },
-  { id:'0576', name:'坐姿推胸机', area:'胸部与上肢推力', sideMode:'none', equipment:'坐姿推胸机', steps:['调好座椅高度，握把与胸同高，背部贴紧靠背','双手握把，肘部略低于肩，核心收紧','向前推至手臂接近伸直，再缓慢回放至胸侧'], cue:'重量宁轻勿重；推起时肩胛贴稳靠背、不耸肩。呼吸：推起时呼气，回放时吸气。', mistake:'常见错误：重量过大导致耸肩、弓背，或回放过快撞击配重。' },
-  { id:'0579', name:'高位下拉机', area:'背部与上肢拉力', sideMode:'none', equipment:'高位下拉机', steps:['坐下固定大腿，握把略宽于肩，躯干微后倾','肩胛先下沉，再把握把拉向上胸','控制回放至手臂伸直，感受背阔拉伸'], cue:'与推胸一推一拉、相互平衡；用背带动手臂，不靠体重猛拉、不耸肩。呼吸：下拉时呼气，回放时吸气。', mistake:'常见错误：身体大幅后仰借力、耸肩，或拉到颈后。' },
-  { id:'0588', name:'坐姿划船机', area:'上背与上肢拉力', sideMode:'none', equipment:'坐姿划船机', steps:['坐稳，胸口贴住靠垫，双脚踩实踏板','双手握把，背部保持中立不弓背','肘部贴近身体向后拉，肩胛向中间夹，再缓慢放回'], cue:'先挺胸再拉；拉到底时停顿一下。呼吸：后拉时呼气，放回时吸气。', mistake:'常见错误：弓背、耸肩，或用腰把重量甩回来。' },
-  { id:'0404', name:'坐姿哑铃推举', area:'肩部与上肢推力', sideMode:'none', equipment:'哑铃（没有推肩机时用这个）', steps:['坐在有靠背的椅子上，双脚踩稳','掌心相对，哑铃停在肩旁','向上推至手臂接近伸直，再控制回到肩旁'], cue:'没有独立推肩机就用哑铃；图也是哑铃，不是推肩机。不要后仰顶腰。呼吸：上推时呼气，回落时吸气。', mistake:'常见错误：腰部大幅后弓、耸肩，或在头顶撞击哑铃。' },
-  { id:'0599', name:'坐姿腿弯举机', area:'大腿后侧', sideMode:'none', equipment:'坐姿腿弯举机', steps:['调好靠背与踝垫，踝垫位于跟腱上方','双手扶稳把手，大腿贴紧座垫','屈膝把踝垫向下向后压，再缓慢放回'], cue:'练大腿后侧，和腿举前后平衡。动作慢而稳，骨盆不离开座垫。呼吸：下压时呼气，回放时吸气。', mistake:'常见错误：借惯性猛压、骨盆弹起，或回放过快。' }
-];
-var MOVE_META = {
-  '3013':{ primary:'臀大肌', secondary:'腘绳肌、腹壁稳定肌', benefit:'提升髋伸力量，帮助起身与步行。', level:'起步' },
-  '0276':{ primary:'腹横肌、腹直肌', secondary:'髋屈肌', benefit:'练习手脚活动时保持腰腹稳定。', level:'起步' },
-  '0710':{ primary:'臀中肌', secondary:'臀小肌、腹斜肌', benefit:'帮助站立、走路时稳定骨盆。', level:'起步' },
-  '0659':{ primary:'胸大肌、肱三头肌', secondary:'前三角肌、腹壁稳定肌', benefit:'补齐上肢推力，并练站姿躯干稳定。', level:'起步' },
-  '1373':{ primary:'腓肠肌、比目鱼肌', secondary:'足踝稳定肌', benefit:'帮助走路推进与踝部稳定。', level:'起步' },
-  '3239':{ primary:'腹横肌、腹直肌', secondary:'肩胛稳定肌、腹斜肌', benefit:'练习跪姿下抵抗塌腰；稳了再点肩。', level:'起步·先跪姿' },
-  'towel-row':{ primary:'背阔肌、菱形肌', secondary:'肱二头肌、后三角肌', benefit:'补上肢拉力，改善含胸。', level:'起步' },
-  '0292':{ primary:'背阔肌、菱形肌', secondary:'肱二头肌、后三角肌', benefit:'补齐上肢拉力，帮助提物与改善圆肩姿势。', level:'建立' },
-  '0404':{ primary:'三角肌', secondary:'肱三头肌、上背稳定肌', benefit:'提升头顶拿取物品的上肢能力。', level:'建立' },
-  '1677':{ primary:'肱二头肌', secondary:'肱肌、前臂', benefit:'提升提袋、抱物时的屈肘力量。', level:'建立' },
-  '1459':{ primary:'臀大肌、腘绳肌', secondary:'竖脊肌、腹壁稳定肌', benefit:'强化髋铰链，帮助从地面附近安全取物。', level:'建立' },
-  '0291':{ primary:'股四头肌、臀大肌', secondary:'腘绳肌、躯干稳定肌', benefit:'强化坐下、起身与上下楼所需的大肌群。', level:'建立' },
-  '0576':{ primary:'胸大肌', secondary:'肱三头肌、前三角肌', benefit:'强化上肢水平推力，帮助推门、提举等日常力量。', level:'建立' },
-  '0579':{ primary:'背阔肌', secondary:'肱二头肌、菱形肌', benefit:'强化上肢垂直拉力，帮助提拉与改善圆肩。', level:'建立' },
-  '0588':{ primary:'背阔肌、菱形肌', secondary:'肱二头肌、后三角肌', benefit:'强化上肢水平拉力，改善含胸与上背无力。', level:'建立' },
-  '2287':{ primary:'股四头肌、臀大肌', secondary:'腘绳肌、小腿', benefit:'强化下肢整体力量，帮助起身、上楼与搬物。', level:'建立' },
-  '0599':{ primary:'腘绳肌', secondary:'腓肠肌', benefit:'强化大腿后侧，平衡腿部力量、保护膝关节。', level:'建立' },
-  '0603':{ primary:'三角肌', secondary:'肱三头肌、上背稳定肌', benefit:'提升头顶取物的上肢力量与肩部稳定。', level:'建立' },
-  '0585':{ primary:'股四头肌', secondary:'髋屈肌', benefit:'强化大腿前侧，与腿弯举平衡腿部力量。', level:'建立' },
-  '0596':{ primary:'胸大肌', secondary:'前三角肌', benefit:'强化胸部与夹胸控制，改善上肢推力。', level:'建立' },
-  '0017':{ primary:'背阔肌', secondary:'肱二头肌、上背稳定肌', benefit:'以辅助重量练引体，强化垂直拉力。', level:'建立' }
-};
-bodyweightMoves.concat(dumbbellMoves).concat(gymMoves).forEach(function(m){
-  var meta = MOVE_META[m.id] || {};
-  Object.keys(meta).forEach(function(k){ m[k] = meta[k]; });
-});
-var chairStandMove = Object.assign({}, dumbbellMoves.filter(function(m){ return m.id === '0291'; })[0], {
-  id:'chair-stand', mediaId:'0291', name:'扶椅坐站（先徒手）', area:'大腿、臀部与躯干稳定',
-  sideMode:'none', equipment:'稳固椅子；图中哑铃仅为进阶',
-  primary:'股四头肌、臀大肌', secondary:'腘绳肌、腹壁稳定肌',
-  benefit:'强化起身、上下楼和日常活动所需的大肌群。',
-  steps:['把稳固椅子靠墙，双脚踩稳，先不拿哑铃','臀部向后坐，轻触椅面；可用双手扶大腿或椅侧协助','脚跟推地站起，能稳定完成后再考虑轻负重'],
-  cue:'先徒手；椅子越高越轻松。膝盖朝脚尖方向，膝或腰出现锐痛立即停止。',
-  mistake:'常见错误：一开始就加重量、膝盖内扣，或借惯性猛坐猛起。', level:'起步·先徒手'
-});
-var birdDogMove = {
-  id:'bird-dog',
-  name:'鸟狗式分步', area:'核心与腰盆协调', sideMode:'alternate', equipment:'',
-  primary:'多裂肌、竖脊肌', secondary:'腹壁、臀大肌、后三角肌',
-  benefit:'练习四肢移动时保持腰盆稳定。',
-  steps:['仅在能安全上下地面时做，四点跪姿起步','先只伸一只手或一条腿，稳定后再做对侧手脚','身体不晃、腰不塌，短暂停留后换侧'],
-  cue:'图是对侧手脚一起伸。家里先只伸一只手或一条腿；腹部较大可把手撑在稳固沙发座面。',
-  mistake:'常见错误：抬得过高、腰部旋转，或为了跟图而超出自己幅度。', level:'可选进阶'
-};
-var wallPlankMove = Object.assign({}, bodyweightMoves.filter(function(m){ return m.id === '0659'; })[0], {
-  id:'wall-plank', mediaId:'0658', name:'墙面斜板支撑', area:'站姿核心稳定', sideMode:'none',
-  primary:'腹横肌、腹直肌', secondary:'腹斜肌、肩胛稳定肌',
-  benefit:'练习抵抗塌腰，帮助站立和搬拿时保持躯干稳定。',
-  steps:['面对墙站立，双手撑墙略宽于肩','双脚向后小步移动，让身体成一直线','轻轻收紧腹部，保持呼吸，时间到后走近墙面'],
-  cue:'图是靠墙俯卧撑的轨迹；本课只撑在中间，不推起。墙越近越轻松，全程能说短句。若肩痛，走近一点。',
-  mistake:'常见错误：塌腰、耸肩或屏住呼吸。', level:'起步'
-});
-var farmerCarryMove = {
-  id:'farmer-carry', mediaId:'2133',
-  name:'轻负重行走 / 原地持重', area:'站姿核心与全身稳定', sideMode:'none',
-  equipment:'两只同重量轻哑铃或水瓶',
-  primary:'腹壁稳定肌、竖脊肌', secondary:'前臂、斜方肌、臀中肌',
-  benefit:'练习行走、提物时维持直立躯干和稳定呼吸。',
-  steps:['选两只同重量轻物，先确认握得住且地面没有障碍','站高，肋骨和骨盆保持自然叠放，双手垂在体侧','空间安全就慢走；空间不足则原地交替抬脚，始终能说短句'],
-  cue:'图是双手持铃慢走。重量宁轻勿重；空间不够就原地踏步。肩膀放松，不侧弯、不憋气。',
-  mistake:'常见错误：为了追求重量而耸肩、身体侧弯，或在狭窄空间勉强行走。',
-  level:'起步·轻负重'
-};
-var towelRowMove = {
-  id:'towel-row', mediaId:'3165',
-  name:'毛巾划船', area:'背部与上肢拉力', sideMode:'none',
-  equipment:'长毛巾，或稳固桌沿',
-  primary:'背阔肌、菱形肌', secondary:'肱二头肌、后三角肌',
-  benefit:'补上肢拉力，改善含胸。',
-  steps:['坐在稳固椅子上，毛巾从脚底绕过，两手各抓一头；或坐地拉住无法移动的桌沿','背部中立，肘贴身体把毛巾/桌沿拉向腰侧','停一下，再慢慢放回'],
-  cue:'图是站着拉毛巾；家里也可坐着把毛巾绕过脚底拉。拉的是背，不要耸肩。呼吸：拉回时呼气，放回时吸气。',
-  mistake:'常见错误：弓背、耸肩，或靠后仰借力。', level:'起步'
-};
-var coreMoves = [wallPlankMove, chairStandMove, farmerCarryMove, birdDogMove, bodyweightMoves[1]];
-var routines = {
-  bodyweight: [bodyweightMoves[0], bodyweightMoves[1], chairStandMove, bodyweightMoves[3], towelRowMove, bodyweightMoves[5]],
-  dumbbell: dumbbellMoves,
-  core: coreMoves,
-  gym: gymMoves
-};
-var routineNames = { bodyweight:'徒手基础', dumbbell:'居家哑铃', core:'腰腹稳定', gym:'健身器械' };
-var presets = {
-  recovery:{warmup:45,work:20,rest:25,roundBreak:40,cooldown:45,rounds:1},
-  starter:{warmup:60,work:40,rest:25,roundBreak:45,cooldown:60,rounds:1},
-  standard:{warmup:60,work:45,rest:20,roundBreak:45,cooldown:60,rounds:2},
-  steady:{warmup:75,work:50,rest:15,roundBreak:45,cooldown:75,rounds:3}
-};
-var presetNames = { recovery:'恢复档', starter:'入门档', standard:'标准档', steady:'进阶档' };
-
-/* ---- 热身动作库（低冲击、站姿、大体重友好；动图同源 Kaggle 健身动图集）---- */
-var warmupMoves = [
-  { id:'3221', name:'原地踏步激活', sec:30, target:'全身 / 髋', position:'站姿', cue:'站直，交替抬膝到舒适高度，手臂自然摆动。图里膝盖抬得偏高，你按自己能稳住的高度即可。' },
-  { id:'1368', name:'踝关节绕环', sec:20, target:'踝', position:'站姿', cue:'单脚站稳（可扶墙），另一脚脚尖画圈，顺逆各几次后换脚。' },
-  { id:'0257', name:'膝关节绕环', sec:20, target:'膝', position:'站姿', cue:'双脚并拢微屈，双手扶膝轻画圈；幅度以舒适为准，不顺滑就缩小范围。' },
-  { id:'1428', name:'腕关节绕环', sec:20, target:'腕 / 前臂', position:'站姿', cue:'双手十指交叉转动，或单腕画圈，活动手腕与前臂。' },
-  { id:'1167', name:'动态扩胸', sec:25, target:'肩 / 胸', position:'站姿', cue:'双臂前后摆动、画圈，打开肩胸；动作连贯、不憋气。' }
-];
-
-/* ---- 拉伸字典（按编号；练后针对部位 + 独立拉伸组共用）---- */
-var STRETCH = {
-  '1377':{ name:'扶墙小腿拉伸', sec:28, target:'小腿', position:'站姿·扶墙', cue:'双手扶墙，一腿在前一腿在后，后脚跟贴地、膝伸直，身体前倾直到小腿后侧有拉伸感，换腿。' },
-  '1576':{ name:'仰卧抬腿拉伸', sec:28, target:'大腿后侧', position:'仰卧', cue:'平躺，一腿伸直放地，另一腿抬起、双手抱大腿后侧往胸口靠，膝可微屈，换腿。' },
-  'quad-stand':{ name:'扶墙股四头拉伸', sec:28, target:'大腿前侧', position:'站姿·扶墙', mediaId:'1512', cue:'图是跪姿拉脚背；跪不稳就扶墙站着，一手抓同侧脚背拉向臀部，双膝并拢。抓不到就用毛巾套住脚背，换边。' },
-  '1271':{ name:'胸前侧拉伸', sec:28, target:'胸 / 肩前侧', position:'站姿', cue:'图里用短杠举到脑后；家里双手在身后交握或握毛巾即可，挺胸、肩向后向下沉。' },
-  '0643':{ name:'过头三头拉伸', sec:28, target:'上臂后侧', position:'站姿', cue:'一臂上举屈肘、手摸背，另一手轻压肘尖；肋骨别外翻，换边。' },
-  '0794':{ name:'站姿侧拉伸', sec:28, target:'侧腰 / 背阔', position:'站姿', cue:'一臂上举，身体向对侧轻弯，感受侧腰到背的拉伸，换边。' },
-  '1365':{ name:'上背拉伸', sec:28, target:'上背', position:'站姿', cue:'双手在胸前交握向前推、含胸，把上背撑开；或一臂横抱胸前轻压。' },
-  '0669':{ name:'肩后拉伸', sec:28, target:'肩后侧', position:'站姿', cue:'一臂横过胸前，另一手轻压肘部靠近身体，肩别耸起，换边。' },
-  '1424':{ name:'坐姿臀部拉伸', sec:28, target:'臀部', position:'坐姿', cue:'坐稳，一脚踝放到另一膝上成“4”字，挺胸轻轻前倾，感受臀部拉伸，换边。' },
-  '1403':{ name:'颈侧拉伸', sec:28, target:'颈侧', position:'站姿', cue:'头轻偏向一侧，对侧手可轻扶头，肩放松下沉，不要用力掰，换边。' }
-};
-function sm(id){ return Object.assign({ id:id }, STRETCH[id]); }
-var stretchSets = {
-  bodyweight:[ '1377','1576','quad-stand','1271','0643','0794' ].map(sm),
-  dumbbell:[ '0794','1365','0643','0669','1576','quad-stand' ].map(sm),
-  core:[ '0794','0669','1271','0643','1424','quad-stand' ].map(sm),
-  gym:[ '1271','0794','1365','0643','1576','quad-stand' ].map(sm),
-  stretch:[ '1377','1576','quad-stand','1424','1271','0669','0643','0794','1403' ].map(sm)
-};
-routines.stretch = stretchSets.stretch;
-routineNames.stretch = '拉伸';
+var C = window.QDK_CONTENT;
+var bodyweightMoves = C.bodyweightMoves, dumbbellMoves = C.dumbbellMoves, gymMoves = C.gymMoves, coreMoves = C.coreMoves, routines = C.routines, routineNames = C.routineNames, presets = C.presets, presetNames = C.presetNames, warmupMoves = C.warmupMoves, STRETCH = C.STRETCH, stretchSets = C.stretchSets;
 
 var moves = routines[S.settings.routine] || bodyweightMoves;
 
 function imagePath(move, animated, frameIndex){
   if(move.frames && move.frames.length){ return assetBase + move.frames[Math.min(frameIndex||0, move.frames.length-1)]; }
   var mediaId = move.mediaId || move.id;
-  return assetBase + mediaId + (animated ? '.gif' : '-poster.png');
+  return assetBase + mediaId + (animated && !move.hold ? '.gif' : '-poster.png');
 }
 function motionOn(){ return S.settings.motion && !window.matchMedia('(prefers-reduced-motion: reduce)').matches; }
 
@@ -1031,7 +892,7 @@ function preloadUrl(url){
   im.src = url;
 }
 function preloadMove(move, animated){
-  if(!move){ return; }
+  if(!move || move.noMedia){ return; }
   if(move.frames && move.frames.length){ move.frames.forEach(function(_,i){ preloadUrl(imagePath(move,false,i)); }); }
   else { preloadUrl(imagePath(move,false)); if(animated && motionOn()){ preloadUrl(imagePath(move,true)); } }
 }
@@ -1467,34 +1328,39 @@ var sessionElapsed = 0, workElapsed = 0, stretchElapsed = 0, stepElapsedCounted 
 var completedMoveIds = {}, completedStretchIds = {}, sessionStarted = false, sessionLogged = false;
 var cdSpoken = false, lastLeft = -1;
 var playerOpen = false;
-var sessionLifts = {};
+var sessionLifts = {}, sessionFinishing = false, finishRetryEarly = null;
 var plLogMove = null;
 var plLogRound = 0;
 var plLogLevel = '';
 
-function buildSteps(){
+function createPlan(){
   var cfg = presets[S.settings.preset] || presets.starter;
   var restSec = (S.settings.routine === 'gym' || S.settings.routine === 'dumbbell') ? Math.max(60, cfg.rest) : cfg.rest;
-  steps = [];
+  var plan = [];
   if(S.settings.routine === 'stretch'){
-    stretchSets.stretch.forEach(function(s){ steps.push({ type:'stretch', round:0, sec:s.sec, move:s }); });
+    stretchSets.stretch.forEach(function(s){ plan.push({ type:'stretch', round:0, sec:s.sec, move:s }); });
   } else {
-    warmupMoves.forEach(function(m){ steps.push({ type:'warmup', round:0, sec:m.sec, move:m }); });
+    warmupMoves.forEach(function(m){ plan.push({ type:'warmup', round:0, sec:m.sec, move:m }); });
     for(var r=1; r<=cfg.rounds; r++){
       moves.forEach(function(m, i){
-        steps.push({ type:'work', round:r, sec:cfg.work, move:m });
-        if(i < moves.length-1){ steps.push({ type:'rest', round:r, sec:restSec, next:moves[i+1] }); }
+        plan.push({ type:'work', round:r, sec:cfg.work, move:m });
+        if(i < moves.length-1){ plan.push({ type:'rest', round:r, sec:restSec, next:moves[i+1] }); }
       });
-      if(r < cfg.rounds){ steps.push({ type:'break', round:r, sec:cfg.roundBreak, next:moves[0] }); }
+      if(r < cfg.rounds){ plan.push({ type:'break', round:r, sec:cfg.roundBreak, next:moves[0] }); }
     }
-    (stretchSets[S.settings.routine] || []).forEach(function(s){ steps.push({ type:'stretch', round:0, sec:s.sec, move:s }); });
+    (stretchSets[S.settings.routine] || []).forEach(function(s){ plan.push({ type:'stretch', round:0, sec:s.sec, move:s }); });
   }
-  totalDuration = steps.reduce(function(s,x){ return s + x.sec; }, 0);
+  return plan;
+}
+function buildSteps(){
+  steps = createPlan();
+  totalDuration = steps.reduce(function(sum, step){ return sum + step.sec; }, 0);
 }
 function resetSessionStats(){
   sessionElapsed = 0; workElapsed = 0; stretchElapsed = 0; stepElapsedCounted = 0; skippedWork = 0;
   completedMoveIds = {}; completedStretchIds = {}; sessionStarted = false; sessionLogged = false;
   sessionLifts = {};
+  finishRetryEarly = null;
   plLogMove = null; plLogRound = 0; plLogLevel = '';
 }
 function captureStepProgress(reason){
@@ -1602,6 +1468,7 @@ function setDemoVisible(visible){
   if(!visible){ stopFrameAnimation(); currentDemoUrl = ''; }
 }
 function renderDemo(move, badge, animate){
+  if(!move || move.noMedia){ setDemoVisible(false); $('plDemo').removeAttribute('src'); return; }
   setDemoVisible(true);
   stopFrameAnimation();
   preloadMove(move, !!animate);
@@ -1669,7 +1536,7 @@ function renderStep(){
     $('plRound').textContent = '第 ' + step.round + ' / ' + rounds + ' 轮';
     $('plClock').className = 'pl-clock num';
     $('plMv').textContent = step.move.name;
-    renderDemo(step.move, step.move.staticOnly ? '静态姿势参考' : (motionOn() ? (step.move.frames ? '起止姿势参考' : '跟随节奏') : '静态参考'), true);
+    renderDemo(step.move, step.move.hold || step.move.staticOnly ? '静态姿势参考' : (motionOn() ? (step.move.frames ? '起止姿势参考' : '跟随节奏') : '静态参考'), true);
     var cue = '<b>' + escapeHtml(step.move.name) + ' · 主练 ' + escapeHtml(step.move.primary || step.move.area) + '</b>' + escapeHtml(step.move.cue);
     if(step.move.sideMode === 'half'){ cue += ' 过半会提示换侧。'; }
     else if(step.move.sideMode === 'alternate'){ cue += ' 左右交替。'; }
@@ -1807,7 +1674,8 @@ function closePlayer(){
   playerReturnFocus = null;
 }
 function startWorkout(){
-  if(running){ return; }
+  if(running || sessionFinishing){ return; }
+  if(finishRetryEarly !== null){ openPlayer(); return; }
   if(getReadiness() === 'red' && S.settings.routine !== 'stretch'){
     showToast('今天先不训练：优先补液并处理症状；严重或持续请联系医疗人员', 'error');
     return;
@@ -1847,8 +1715,9 @@ function resetWorkout(){
   $('plPause').textContent = '⏸';
   updateProgress();
 }
-function finishWorkout(early){
-  if(sessionLogged){ return; }
+async function finishWorkout(early){
+  if(sessionLogged || sessionFinishing){ return; }
+  sessionFinishing = true;
   captureStepProgress(early ? 'stop' : 'natural');
   running = false; inCountdown = false;
   if(timer){ window.clearInterval(timer); timer = null; } stopTick();
@@ -1861,7 +1730,7 @@ function finishWorkout(early){
   var shouldLog = effectiveWork >= 20 || sessionElapsed >= 30 || mvCount > 0;
   var didLog = false;
   if(shouldLog){
-    didLog = addTraining({
+    didLog = await addTraining({
       status: early ? 'stopped' : (skippedWork > 0 ? 'partial' : 'completed'),
       routine:S.settings.routine, preset:S.settings.preset, readiness:getReadiness(),
       actualSeconds:sessionElapsed, plannedSeconds:totalDuration, workSeconds:effectiveWork,
@@ -1869,9 +1738,12 @@ function finishWorkout(early){
     });
     if(didLog){ sessionLogged = true; }
   }
+  sessionFinishing = false;
+  finishRetryEarly = shouldLog && !didLog ? !!early : null;
+  $('plDoneBtn').textContent = finishRetryEarly !== null ? '重试保存' : '好的';
   var mins = (Math.round(sessionElapsed/6)/10);
   var unit = isStretch ? ' 个拉伸' : ' 个动作';
-  $('plDoneTitle').textContent = early ? '已按实际记录' : (isStretch ? '拉伸完成' : '训练完成');
+  $('plDoneTitle').textContent = finishRetryEarly !== null ? '本次尚未保存' : (early && didLog ? '已按实际记录' : (isStretch ? '拉伸结束' : '训练结束'));
   $('plDoneSub').textContent = '实际 ' + mins + ' 分钟 · 完成 ' + mvCount + unit +
     (didLog ? ' · 已写入' : (shouldLog ? ' · 保存失败' : ' · 太短未写入，下次做 1 个动作即可'));
   var liftBox = $('plDoneLifts');
@@ -1898,9 +1770,9 @@ function finishWorkout(early){
   $('plDone').setAttribute('aria-hidden','false');
   // 用预生成 m4a；加载失败时带同一句 Web Speech 兜底。
   var doneKey = didLog ? (early ? 'finish-early' : (isStretch ? 'finish-stretch' : 'finish-done')) : null;
-  var doneText = early ? '本次已按实际完成量记录。' : (isStretch ? '拉伸完成，放松一下。' : '先补 25 克蛋白，粉或酸奶即可。');
+  var doneText = early ? '本次已按实际完成量记录。' : (isStretch ? '拉伸完成，放松一下。' : '训练完成，放松一下。今天的饮食按实际记录即可。');
   if(doneKey){ speak(doneText, { mp3Key: doneKey }); }
-  else { speak(didLog ? '已记录。' : '下次做完一个动作再结束即可。'); }
+  else { speak(shouldLog ? '保存失败，请重试保存。' : '本次时间较短，未写入训练记录。'); }
 }
 $('plPause').addEventListener('click', function(){ pauseWorkout(); });
 $('plSkip').addEventListener('click', function(){ if(running && !inCountdown){ advance(1,'skip'); } });
@@ -1911,9 +1783,12 @@ $('plEnd').addEventListener('click', function(){
 $('plExit').addEventListener('click', function(){
   if(running){ pauseWorkout(); }
   closePlayer();
+  renderAll();
   if(sessionStarted && !sessionLogged){ showToast('已暂停，不会在后台计时；可继续或结束并记录', ''); }
 });
 $('plDoneBtn').addEventListener('click', function(){
+  if(sessionFinishing){ return; }
+  if(finishRetryEarly !== null){ finishWorkout(finishRetryEarly); return; }
   $('plDone').classList.remove('show');
   $('plDone').setAttribute('aria-hidden','true');
   closePlayer();
@@ -1925,7 +1800,7 @@ document.addEventListener('visibilitychange', function(){
 });
 /* ---- 防止训练中误关页面导致进度丢失 ---- */
 window.addEventListener('beforeunload', function(e){
-  if(running && sessionStarted && !sessionLogged){
+  if((running || finishRetryEarly !== null) && sessionStarted && !sessionLogged){
     e.preventDefault();
     e.returnValue = '';
     return '';
@@ -1933,17 +1808,34 @@ window.addEventListener('beforeunload', function(e){
 });
 
 function openManualProtein(){
-  showPrompt('输入这餐的蛋白质克数（g）：', '', function(g){
-    if(g === '' || g == null){ return; }
-    var n = Number(g);
-    if(!Number.isFinite(n) || n <= 0 || n > 500){ showToast('请输入 0–500 之间的数字', 'error'); return; }
-    showPrompt('这餐吃了什么？', '手动记录', function(food){
-      addProtein(n, food || '手动记录', 'manual');
-    }, { title:'食物名称', okText:'记入' });
-  }, { title:'手动记录蛋白', okText:'下一步', type:'number', placeholder:'例如 25' });
+  $('dlgTitle').textContent = '记一笔蛋白';
+  $('dlgMsg').textContent = '填克数即可，也可以选常用食物。';
+  $('proteinExtras').open = false; $('foodPicker').open = false;
+  $('dlgInput').hidden = true;
+  $('dlgFields').hidden = false;
+  $('recordGrams').value = '';
+  $('recordFood').value = '';
+  $('recordMeal').value = mealFromTs(Date.now());
+  $('dlgOk').textContent = '记入';
+  $('dlgOk').className = 'dlg-btn ok';
+  $('dlgCancel').textContent = '取消';
+  dlgOnOk = async function(){
+    var grams = Number($('recordGrams').value), food = $('recordFood').value, meal = $('recordMeal').value;
+    if(!Number.isFinite(grams) || grams < 0.1 || grams > PROTEIN_MAX_SINGLE){
+      showToast('请输入 0.1–500 g 之间的数字', 'error'); $('recordGrams').focus(); return;
+    }
+    $('dlgOk').disabled = true;
+    if(await addProtein(grams, food || '手动记录', 'manual', {meal:meal})){ closeDialog(); }
+    $('dlgOk').disabled = false;
+  };
+  openDialog();
+  window.setTimeout(function(){ $('recordGrams').focus(); }, 60);
 }
-$('btnManualProtein').addEventListener('click', openManualProtein);
-$('btnWater350').addEventListener('click', function(){ addWater(350); });
+$('dlgFields').addEventListener('keydown', function(e){
+  if(e.key === 'Enter' && e.target.tagName === 'INPUT' && !$('dlgOk').disabled){ e.preventDefault(); if(dlgOnOk){ dlgOnOk(); } }
+});
+$('quickProtein').addEventListener('click', openManualProtein);
+$('quickWater').addEventListener('click', function(){ addWater(350); });
 if($('btnWater500')){ $('btnWater500').addEventListener('click', function(){ addWater(500); }); }
 $('btnLogWeight').addEventListener('click', function(){
   var last = latestWeight();
@@ -1962,16 +1854,16 @@ document.querySelectorAll('[data-walk]').forEach(function(b){
   b.addEventListener('click', function(){ addWalk(Number(b.getAttribute('data-walk'))); });
 });
 if($('fiberRow')){
-  $('fiberRow').addEventListener('click', function(e){
+  $('fiberRow').addEventListener('click', async function(e){
     var btn = e.target.closest('[data-fiber]');
     if(!btn){ return; }
     var which = btn.getAttribute('data-fiber');
-    mutateState(function(){
+    if(!await mutateState(function(){
       ensureFiberDay();
       if(which === 'veg'){ S.settings.fiberVeg = !S.settings.fiberVeg; }
       if(which === 'soy'){ S.settings.fiberSoy = !S.settings.fiberSoy; }
       if(which === 'grain'){ S.settings.fiberGrain = !S.settings.fiberGrain; }
-    });
+    })){ return; }
     renderFiberRow();
   });
 }
@@ -1997,133 +1889,34 @@ function fmtTime(ts){ var d = new Date(ts); return pad2(d.getHours()) + ':' + pa
 var WEEK_CN = ['日','一','二','三','四','五','六'];
 
 function renderToday(){
-  var now = new Date();
+  var now = new Date(), logs = todayProteinLogs(), idx = getLogIndex();
   $('todayDate').textContent = (now.getMonth()+1) + '月' + now.getDate() + '日 · 星期' + WEEK_CN[now.getDay()];
-  var jan1 = new Date(now.getFullYear(),0,1);
-  $('weekNo').textContent = Math.ceil((((now - jan1) / 86400000) + jan1.getDay() + 1) / 7);
-
-  var logs = todayProteinLogs(); // 只计算一次，下面复用
-  var total = Math.round(logs.reduce(function(s,l){ return s + (Number(l.grams)||0); }, 0)*10)/10;
-  var target = S.settings.proteinTarget;
-  var pct = Math.min(100, Math.round(total/target*100));
-  $('pToday').textContent = total;
-  $('pTarget').textContent = target;
-  $('pCapTarget').textContent = target + 'g';
-  $('pBar').style.width = pct + '%';
-  $('pBarWrap').classList.toggle('done', total >= target);
-  $('pPct').textContent = pct + '%';
-  var remain = Math.max(0, Math.round((target - total)*10)/10);
-  if(logs.length === 0){
-    $('pLeft').innerHTML = '点下面食物或手记一笔，<em>记了就算今天的监测</em>';
-  } else if(total >= target){
-    $('pLeft').innerHTML = '已记 <em>' + total + 'g · ' + logs.length + ' 笔</em>，目标碰到了';
-  } else {
-    $('pLeft').innerHTML = '已记 <em>' + total + 'g · ' + logs.length + ' 笔</em>' + (remain ? ' · 还可补 ' + remain + 'g' : '');
-  }
-  var hour = now.getHours();
-  $('todaySub').textContent = hour < 11 ? '先记一笔就行' : (hour < 20 ? '下一笔从当前这餐记' : '晚上补一笔也算数');
-  $('pAside').textContent = '今日 ' + logs.length + ' 笔';
-
-  var idxToday = getLogIndex();
-  $('streakChip').hidden = false;
-  $('streakNum').textContent = countRecentTrainingDays(idxToday.trainingDays);
-  var weekN = countWeekStrengthDays(idxToday.trainingSessions, now.getTime());
-  $('weekStrengthNum').textContent = weekN;
-  $('weekChip').classList.toggle('hit', weekN >= WEEK_STRENGTH_GOAL);
-  if($('pNext')){ $('pNext').textContent = nextProteinAction(logs, target); }
-  renderStartHint(idxToday);
-
-  renderMealGrid(logs, target);
-  renderQuickFoods();
-  renderBodyCard(now.getTime());
-
+  var total = Math.round(logs.reduce(function(sum,l){ return sum + (Number(l.grams)||0); },0)*10)/10;
+  var target = S.settings.proteinTarget, remain = Math.max(0, Math.round((target-total)*10)/10);
+  $('pToday').textContent = total; $('pTarget').textContent = target;
+  $('pBar').style.width = Math.min(100, Math.round(total/target*100)) + '%';
+  $('pBarWrap').classList.toggle('done',total >= target);
+  $('pLeft').textContent = !logs.length ? '按实际吃的记录，慢慢接近目标。' : (remain ? '距目标还差 ' + remain + ' g' : '今天的蛋白目标已完成');
+  $('pAside').textContent = logs.length ? '已记 ' + logs.length + ' 笔' : '今天还没记';
+  $('todayLogCount').textContent = logs.length + ' 笔';
+  $('todayLogDetails').hidden = !logs.length;
+  $('weekStrengthNum').textContent = countWeekStrengthDays(idx.trainingSessions,now.getTime());
+  $('streakNum').textContent = countRecentTrainingDays(idx.trainingDays);
+  renderQuickFoods(); renderBodyCard(now.getTime()); renderFiberRow();
   var box = $('todayLogs'); box.innerHTML = '';
-  if(!logs.length){
-    box.innerHTML = '<div class="empty-hint">点鸡蛋或手记一笔。记了就算今天的监测。</div>';
-  } else {
-    logs.forEach(function(l){
-      var div = document.createElement('div');
-      div.className = 'log-item';
-      var srcLabel = l.source === 'photo' ? '拍照' : (l.source === 'quick' ? '快捷' : '手动');
-      var mealLabel = MEAL_NAMES[l.meal] || MEAL_NAMES[mealFromTs(l.ts)] || '';
-      var kcalHtml = l.calories ? '<span class="kcal num">' + l.calories + 'kcal</span>' : '';
-      div.innerHTML = '<span class="t num">' + fmtTime(l.ts) + '</span>' +
-        '<span class="f">' + escapeHtml(l.food) + '</span>' +
-        '<span class="src">' + escapeHtml(mealLabel) + '</span>' +
-        '<span class="src">' + srcLabel + '</span>' +
-        kcalHtml +
-        '<span class="g num">' + l.grams + '<small>g</small></span>' +
-        '<button class="del" aria-label="删除">✕</button>';
-      div.querySelector('.del').addEventListener('click', function(){ deleteLog(l.id); });
-      box.appendChild(div);
-    });
-  }
-
-  var rn = routineNames[S.settings.routine] || '徒手基础';
-  var isStretch = S.settings.routine === 'stretch';
-  var mvCount = isStretch ? stretchSets.stretch.length : moves.length;
-  var estMin = Math.round(totalDurationEstimate()/6)/10;
-  $('tIco').textContent = isStretch ? '🧘' : ((S.settings.routine === 'dumbbell' || S.settings.routine === 'gym') ? '🏋️' : (S.settings.routine === 'core' ? '🧘' : '💪'));
-  $('tName').textContent = rn + ' · ' + mvCount + (isStretch ? ' 个拉伸' : ' 个动作');
-  var isCore = S.settings.routine === 'core';
-  $('tDesc').textContent = (isStretch ? '放松拉伸，不计力量次数' : (isCore ? '稳定练习，不计本周 3 次力量' : (presetNames[S.settings.preset] + ' · 约 ' + estMin + ' 分钟 · 做完复合动作记下重量')));
-  var done = trainedToday();
-  $('tGo').hidden = false;
-  $('tGo').textContent = done ? '再练一次' : '开始';
-  $('tDone').hidden = !done;
-  $('tAside').textContent = weekN >= WEEK_STRENGTH_GOAL ? '本周三力已满，今天走路或拉伸即可' : (done ? '今天已记 · 不必再上一节力' : '本周还差 ' + (WEEK_STRENGTH_GOAL - weekN) + ' 次力量');
-  var walkMin = (idxToday.walkByDay && idxToday.walkByDay[dayStart(now.getTime())]) || 0;
-  if($('walkToday')){ $('walkToday').textContent = '今日 ' + walkMin + ' 分钟'; }
-  renderFiberRow();
-}
-function renderMealGrid(logs, target){
-  var grid = $('mealGrid');
-  if(!grid){ return; }
-  var tg = mealTargets(target);
-  var got = { breakfast:0, lunch:0, dinner:0, snack:0 };
-  (logs || []).forEach(function(l){
-    var m = MEAL_IDS.indexOf(l.meal) >= 0 ? l.meal : mealFromTs(l.ts);
-    got[m] += Number(l.grams) || 0;
+  logs.forEach(function(l){
+    var div = document.createElement('div'); div.className = 'log-item';
+    var meal = MEAL_NAMES[l.meal] || MEAL_NAMES[mealFromTs(l.ts)];
+    div.innerHTML = '<div class="log-info"><span class="f">' + escapeHtml(l.food) + '</span><span class="t">' + escapeHtml(meal) + ' · ' + fmtTime(l.ts) + '</span></div>' +
+      '<span class="g num">' + l.grams + '<small> g</small></span><button class="del" aria-label="删除' + escapeHtml(l.food) + '">删除</button>';
+    div.querySelector('.del').addEventListener('click',function(){ deleteLog(l.id); }); box.appendChild(div);
   });
-  grid.innerHTML = '';
-  MEAL_IDS.forEach(function(id){
-    var have = Math.round(got[id] * 10) / 10;
-    var need = tg[id];
-    var logged = have > 0;
-    var hit = need > 0 ? have >= need : logged;
-    var pct = need > 0 ? Math.min(100, Math.round(have / need * 100)) : (logged ? 100 : 0);
-    var cell = document.createElement('button');
-    cell.type = 'button';
-    cell.className = 'meal-cell' + (hit ? ' hit' : '') + (logged ? ' logged' : '') + (pendingMeal === id ? ' pick' : '');
-    cell.innerHTML = '<span class="ml">' + MEAL_NAMES[id] + '</span>' +
-      '<span class="mv num">' + have + '</span>' +
-      '<span class="mt">' + (id === 'snack' ? (need ? ('还可补 ' + Math.max(0, need - have) + 'g') : (logged ? '已记' : '补洞')) : ('门槛 ' + need + 'g')) + '</span>' +
-      '<div class="mb2"><i style="width:' + pct + '%"></i></div>';
-    cell.addEventListener('click', function(){
-      pendingMeal = id;
-      showToast('下一笔记入' + MEAL_NAMES[id], '');
-      renderMealGrid(todayProteinLogs(), S.settings.proteinTarget);
-    });
-    grid.appendChild(cell);
-  });
-}
-function nextProteinAction(logs, target){
-  var tg = mealTargets(target);
-  var got = { breakfast:0, lunch:0, dinner:0, snack:0 };
-  (logs || []).forEach(function(l){
-    var m = MEAL_IDS.indexOf(l.meal) >= 0 ? l.meal : mealFromTs(l.ts);
-    got[m] += Number(l.grams) || 0;
-  });
-  var h = new Date().getHours();
-  var order = h < 11 ? ['breakfast','lunch','dinner'] : (h < 16 ? ['lunch','breakfast','dinner'] : ['dinner','lunch','breakfast']);
-  for(var i = 0; i < order.length; i++){
-    var id = order[i];
-    if(got[id] < (tg[id] || MEAL_FLOOR)){
-      var miss = Math.max(0, Math.round(((tg[id] || MEAL_FLOOR) - got[id]) * 10) / 10);
-      return MEAL_NAMES[id] + '还差 ' + miss + 'g · 点格子后选下面食物';
-    }
-  }
-  return logs && logs.length ? '正餐门槛到了。还想补就记加餐，不算失败。' : '先点一格，再点一个食物。';
+  var stretch = S.settings.routine === 'stretch', active = sessionStarted && !sessionLogged;
+  $('tName').textContent = routineNames[S.settings.routine] || '徒手基础';
+  $('tDesc').textContent = active ? '本次已暂停，可以接着练' : ((stretch ? '放松拉伸' : presetNames[S.settings.preset]) + ' · ' + (Math.round(totalDurationEstimate()/6)/10) + ' 分钟');
+  $('tGo').textContent = active ? '继续' : '去跟练';
+  $('tDone').hidden = !trainedToday();
+  $('walkToday').textContent = '今日 ' + ((idx.walkByDay && idx.walkByDay[dayStart(now.getTime())]) || 0) + ' 分钟';
 }
 function renderQuickFoods(){
   var box = $('quickFoods');
@@ -2136,8 +1929,13 @@ function renderQuickFoods(){
       var b = document.createElement('button');
       b.type = 'button';
       b.className = 'chip';
-      b.innerHTML = escapeHtml(f.name) + '<small>+' + f.grams + '</small>';
-      b.addEventListener('click', function(){ addProtein(f.grams, f.food, 'quick'); });
+      b.innerHTML = escapeHtml(f.food) + '<small>≈' + f.grams + 'g</small>';
+      b.addEventListener('click', async function(){
+        if($('dlgOk').disabled){ return; }
+        $('dlgOk').disabled = true;
+        if(await addProtein(f.grams, f.food, 'quick', {meal:$('recordMeal').value})){ closeDialog(); }
+        $('dlgOk').disabled = false;
+      });
       (f.liquid && liq ? liq : box).appendChild(b);
     });
     box.dataset.ready = '1';
@@ -2153,45 +1951,18 @@ function renderBodyCard(nowTs){
   var wpct = Math.min(100, Math.round(wml / wTarget * 100));
   $('wBar').style.width = wpct + '%';
   $('wBarWrap').classList.toggle('done', wml >= wTarget);
-  $('bodyAside').textContent = wml >= wTarget ? '水够了' : '渴了再点一杯';
   var last = latestWeight();
   if(last){
     var when = last.ts ? ((new Date(last.ts).getMonth()+1) + '/' + new Date(last.ts).getDate() + ' · ') : '';
     var waist = last.waist ? (' · 腰围 ' + last.waist + 'cm') : '';
     $('weightVal').innerHTML = when + '<span class="num">' + last.kg + '</span><small>kg</small>' + waist;
   } else {
-    $('weightVal').textContent = '未记录 · 不想称可跳过';
+    $('weightVal').textContent = '未记录';
   }
   var avg = weekAvgWeight();
   if($('weightHintLine')){
-    $('weightHintLine').textContent = avg ? ('近7日均 ' + avg + ' kg。单日涨跌主要是水和胃肠内容物。') : '体重可记可不记。有记录才看趋势，不看今天数字。';
+    $('weightHintLine').textContent = avg ? ('近7天平均 ' + avg + ' kg') : '记下几次后，就能在回顾里看趋势。';
   }
-}
-function renderStartHint(idx){
-  var el = $('startHint');
-  if(!el){ return; }
-  idx = idx || getLogIndex();
-  var today0 = dayStart(Date.now());
-  var pDays = 0;
-  for(var i = 0; i < 14; i++){
-    if((idx.proteinByDay[today0 - i * 86400000] || 0) > 0){ pDays++; }
-  }
-  var bw = S.settings.bodyWeightKg || (latestWeight() && latestWeight().kg);
-  var weekN = countWeekStrengthDays(idx.trainingSessions, Date.now());
-  var walkToday = (idx.walkByDay && idx.walkByDay[today0]) || 0;
-  var msg = '';
-  if(!bw){
-    msg = '先去「我的」记下体重和身高。蛋白目标会按调整体重算，不会一下子定得太高。';
-  } else if(pDays === 0){
-    msg = '今天只做一件事：点一格餐次，再点一个食物。记了就算成功。';
-  } else if(pDays < 7){
-    msg = '起步期：正餐尽量各记一笔蛋白。吃不满目标也算数，不补罚。';
-  } else if(weekN === 0 && walkToday === 0){
-    msg = '蛋白已经在走。本周再加 1 次徒手跟练，或先走 20 分钟。';
-  }
-  if(!msg){ el.hidden = true; el.textContent = ''; return; }
-  el.hidden = false;
-  el.textContent = msg;
 }
 function renderFiberRow(){
   ensureFiberDay();
@@ -2201,51 +1972,41 @@ function renderFiberRow(){
     if(b.getAttribute('data-fiber') === 'soy') key = 'fiberSoy';
     if(b.getAttribute('data-fiber') === 'grain') key = 'fiberGrain';
     b.classList.toggle('on', S.settings[key] === true);
+    b.setAttribute('aria-pressed', String(S.settings[key] === true));
   });
 }
 function totalDurationEstimate(){
-  if(S.settings.routine === 'stretch'){
-    return stretchSets.stretch.reduce(function(s,m){ return s + m.sec; }, 0);
-  }
-  var cfg = presets[S.settings.preset] || presets.starter;
-  var warm = warmupMoves.reduce(function(s,m){ return s + m.sec; }, 0);
-  var perRound = moves.length * cfg.work + (moves.length-1) * cfg.rest;
-  var str = (stretchSets[S.settings.routine] || []).reduce(function(s,m){ return s + m.sec; }, 0);
-  return warm + cfg.rounds * perRound + (cfg.rounds-1) * cfg.roundBreak + str;
+  return createPlan().reduce(function(sum, step){ return sum + step.sec; }, 0);
 }
 $('tGo').addEventListener('click', function(){ goPage('training'); });
 
 /* ---- 训练页 ---- */
 function renderTraining(){
-  var isStretch = S.settings.routine === 'stretch';
-  document.querySelectorAll('#routineSeg button').forEach(function(b){ b.classList.toggle('on', b.dataset.routine === S.settings.routine); });
-  document.querySelectorAll('#presetSeg button').forEach(function(b){ b.classList.toggle('on', b.dataset.preset === S.settings.preset); });
-  document.querySelectorAll('#readyRow .ready-btn').forEach(function(b){ b.classList.toggle('on', b.dataset.ready === getReadiness()); });
-  $('presetSection').style.display = isStretch ? 'none' : '';
-  $('readySection').style.display = isStretch ? 'none' : '';
-  var estMin = Math.round(totalDurationEstimate()/6)/10;
-  $('durHint').textContent = estMin + ' 分钟';
-  if(isStretch){
-    $('roundHint').textContent = '全身拉伸 · ' + stretchSets.stretch.length + ' 个动作';
-    $('wrapNote').textContent = '每个拉伸保持约 28 秒，配合呼吸、不弹震；做不到的姿势可跳过。';
-  } else {
-    var cfg = presets[S.settings.preset]||presets.starter;
-    $('roundHint').textContent = cfg.rounds + ' 轮 · ' + moves.length + ' 个动作';
-    $('wrapNote').textContent = '含热身 ' + warmupMoves.length + ' 项 + 练后针对拉伸 ' + (stretchSets[S.settings.routine]||[]).length + ' 项';
-  }
-  $('readyHint').textContent = getReadiness() === 'green' ? '状态不错，按当前档位来。' :
-    (getReadiness() === 'yellow' ? '今天自动切到恢复档，轻松一点就好；症状加重就停。' :
-    '今天不建议力量训练：优先补液、处理症状；严重或持续请联系医疗人员。（仍可做“拉伸”组）');
+  var isStretch = S.settings.routine === 'stretch', active = sessionStarted && !sessionLogged;
+  document.querySelectorAll('#routineSeg button').forEach(function(b){ var on=b.dataset.routine === S.settings.routine; b.classList.toggle('on',on); b.setAttribute('aria-pressed',String(on)); });
+  document.querySelectorAll('#presetSeg button').forEach(function(b){ var on=b.dataset.preset === S.settings.preset; b.classList.toggle('on',on); b.setAttribute('aria-pressed',String(on)); });
+  document.querySelectorAll('#readyRow button').forEach(function(b){ var on=b.dataset.ready === getReadiness(); b.classList.toggle('on',on); b.setAttribute('aria-pressed',String(on)); });
+  $('presetSection').hidden = isStretch; $('readySection').hidden = isStretch;
+  $('trainingName').textContent = routineNames[S.settings.routine];
+  $('trainingLevel').textContent = isStretch ? '放松' : presetNames[S.settings.preset];
+  $('durHint').textContent = Math.round(totalDurationEstimate()/6)/10 + ' 分钟';
+  var count = isStretch ? stretchSets.stretch.length : moves.length;
+  $('roundHint').textContent = isStretch ? count + ' 个拉伸动作' : count + ' 个动作 · 含热身与放松';
+  $('moveCount').textContent = count + ' 个动作';
+  $('readyHint').hidden = getReadiness() === 'green';
+  $('readyHint').textContent = getReadiness() === 'yellow' ? '已切到恢复档。轻松一点，不适就停。' : '今天先休息。严重或持续不适，请联系医疗人员。';
+  $('readyHint').classList.toggle('danger-text',getReadiness() === 'red');
+  $('btnStart').disabled = getReadiness() === 'red' && !isStretch;
+  $('btnStart').textContent = active ? '继续跟练' : (isStretch ? '开始拉伸' : '开始跟练');
   makeMoveCards();
-  $('btnStart').disabled = (getReadiness() === 'red' && !isStretch);
-  $('btnStart').innerHTML = isStretch ? '▶ &nbsp;开始拉伸' : '▶ &nbsp;开始跟练';
 }
 function makeMoveCards(){
   var box = $('moveList'); box.innerHTML = '';
   var isStretch = S.settings.routine === 'stretch';
   var list = isStretch ? stretchSets.stretch : moves;
   list.forEach(function(m, i){
-    var card = document.createElement('div');
+    var card = document.createElement('button');
+    card.type = 'button';
     card.className = 'card press move-card';
     card.style.marginTop = i === 0 ? '0' : '10px';
     var thumb = m.noMedia
@@ -2262,31 +2023,35 @@ function makeMoveCards(){
     box.appendChild(card);
   });
 }
-$('routineSeg').addEventListener('click', function(e){
+function canChangePlan(){
+  if(sessionFinishing || (sessionStarted && !sessionLogged)){ showToast('先继续或结束本次跟练，再调整课程。'); return false; }
+  return true;
+}
+$('routineSeg').addEventListener('click', async function(e){
   var btn = e.target.closest('[data-routine]');
-  if(!btn){ return; }
-  if(!mutateState(function(){ S.settings.routine = btn.dataset.routine; })){ return; }
+  if(!btn || !canChangePlan()){ return; }
+  if(!await mutateState(function(){ S.settings.routine = btn.dataset.routine; })){ return; }
   moves = routines[btn.dataset.routine];
   resetWorkout(); renderTraining(); renderToday();
 });
-$('presetSeg').addEventListener('click', function(e){
+$('presetSeg').addEventListener('click', async function(e){
   var btn = e.target.closest('[data-preset]');
-  if(!btn){ return; }
+  if(!btn || !canChangePlan()){ return; }
   if(getReadiness() === 'yellow' && btn.dataset.preset !== 'recovery'){
     var preset = btn.dataset.preset;
-    showConfirm('你今天状态一般，恢复档更安全。确定要切换到 ' + preset + ' 档吗？', function(){
-      if(!mutateState(function(){ S.settings.preset = preset; })){ return; }
+    showConfirm('你今天状态一般，恢复档更安全。确定要切换到 ' + preset + ' 档吗？', async function(){
+      if(!await mutateState(function(){ S.settings.preset = preset; })){ return; }
       resetWorkout(); renderTraining(); renderToday();
     }, { title:'切换档位', okText:'仍要切换' });
     return;
   }
-  if(!mutateState(function(){ S.settings.preset = btn.dataset.preset; })){ return; }
+  if(!await mutateState(function(){ S.settings.preset = btn.dataset.preset; })){ return; }
   resetWorkout(); renderTraining(); renderToday();
 });
-$('readyRow').addEventListener('click', function(e){
+$('readyRow').addEventListener('click', async function(e){
   var btn = e.target.closest('[data-ready]');
-  if(!btn){ return; }
-  if(!mutateState(function(){
+  if(!btn || !canChangePlan()){ return; }
+  if(!await mutateState(function(){
     S.settings.readiness = btn.dataset.ready;
     S.settings.readinessDay = dayStart(Date.now());
     if(S.settings.readiness === 'yellow' && S.settings.preset !== 'recovery'){
@@ -2298,28 +2063,35 @@ $('readyRow').addEventListener('click', function(e){
   }
   resetWorkout(); renderTraining();
 });
-$('btnStart').addEventListener('click', function(){
+async function openWorkoutPlan(preview){
+  await storageInit; await mutationQueue;
+  if(sessionFinishing){ return; }
+  if(sessionStarted && !sessionLogged){ if(preview === true){ openPlanPreview(); } else { startWorkout(); } return; }
+  if(getReadiness() === 'red' && S.settings.routine !== 'stretch'){ showToast('今天身体不适，请先休息', 'error'); return; }
   resetWorkout();
-  openPlanPreview();
-});
+  if(preview === true){ openPlanPreview(); } else { startWorkout(); }
+}
+$('btnStart').addEventListener('click', function(){ openWorkoutPlan(false); });
+$('btnPlan').addEventListener('click', function(){ openWorkoutPlan(true); });
 
 /* ---- 练前计划预览 ---- */
 var planModal = $('planModal');
 function planSummary(){
-  var warm = 0, work = 0, stretch = 0, rounds = 0;
+  var warm = 0, work = 0, stretch = 0, rest = 0, rounds = 0;
   var warmNames = [], workNames = [], stretchNames = [], seenWork = {};
   steps.forEach(function(s){
     if(s.type === 'warmup'){ warm += s.sec; warmNames.push(s.move.name); }
     else if(s.type === 'work'){ work += s.sec; rounds = Math.max(rounds, s.round); if(!seenWork[s.move.id]){ seenWork[s.move.id] = true; workNames.push(s.move.name); } }
     else if(s.type === 'stretch'){ stretch += s.sec; stretchNames.push(s.move.name); }
+    else { rest += s.sec; }
   });
-  return { warm:warm, work:work, stretch:stretch, rounds:rounds, warmNames:warmNames, workNames:workNames, stretchNames:stretchNames };
+  return { warm:warm, work:work, stretch:stretch, rest:rest, rounds:rounds, warmNames:warmNames, workNames:workNames, stretchNames:stretchNames };
 }
 function sec2m(s){ return (Math.round(s/6)/10) + ' 分钟'; }
 function openPlanPreview(){
   var sm = planSummary();
   var isStretch = S.settings.routine === 'stretch';
-  $('planTotal').textContent = (Math.round((sm.warm + sm.work + sm.stretch)/6)/10);
+  $('planTotal').textContent = (Math.round((sm.warm + sm.work + sm.stretch + sm.rest)/6)/10);
   $('planTitle').textContent = isStretch ? '本次拉伸安排' : '本次训练安排';
   var body = $('planBody'); body.innerHTML = '';
   if(!isStretch && sm.warmNames.length){
@@ -2332,6 +2104,7 @@ function openPlanPreview(){
     }).join(' → ');
     body.insertAdjacentHTML('beforeend', '<div class="plan-sec"><span class="tag work">正式</span><div class="body"><div class="h"><span class="num">' + sm.workNames.length + '</span> 个动作 × ' + sm.rounds + ' 轮 · 约 ' + sec2m(sm.work) + '</div><div class="list">' + workList + '</div></div></div>');
   }
+  if(sm.rest){ body.insertAdjacentHTML('beforeend', '<div class="plan-sec"><span class="tag">休息</span><div class="body"><div class="h">动作间与轮间 · 约 ' + sec2m(sm.rest) + '</div></div></div>'); }
   if(sm.stretchNames.length){
     body.insertAdjacentHTML('beforeend', '<div class="plan-sec"><span class="tag stretch">拉伸</span><div class="body"><div class="h">' + sm.stretchNames.length + ' 项 · 约 ' + sec2m(sm.stretch) + (isStretch ? '' : ' · 针对今天练的部位') + '</div><div class="list">' + sm.stretchNames.map(escapeHtml).join(' → ') + '</div></div></div>');
   }
@@ -2423,14 +2196,14 @@ function openStretchDetail(m){
 $('moveClose').addEventListener('click', closeMoveDetail);
 $('moveBackdrop').addEventListener('click', closeMoveDetail);
 if($('mdLiftSave')){
-  $('mdLiftSave').addEventListener('click', function(){
+  $('mdLiftSave').addEventListener('click', async function(){
     if(!mdLiftMove){ return; }
     var kind = liftKind(mdLiftMove);
     var set = kind === 'load'
       ? normalizeLiftSet({ kg: $('mdKg').value, reps: $('mdReps').value })
       : normalizeLiftSet({ level: mdLiftMove._lv });
     if(!set){ showToast('先填重量或次数', 'error'); return; }
-    if(!mutateState(function(){ upsertLiftRec(mdLiftMove.id, set); })){ return; }
+    if(!await mutateState(function(){ upsertLiftRec(mdLiftMove.id, set); })){ return; }
     renderTraining();
     showToast('已记下 ' + formatLiftLine(mdLiftMove).replace('上次：',''), 'success');
   });
@@ -2468,6 +2241,8 @@ function renderData(){
     sum7 += idx.proteinByDay[today0 - i * 86400000] || 0;
   }
   if($('stAvg')){ $('stAvg').textContent = Math.round(sum7 / 7); }
+  var recordedDays = countProteinDays(7, idx);
+  $('proteinCoverage').textContent = '记录了 ' + recordedDays + ' / 7 天。未记录不代表没有摄入。';
   if($('stProteinDays')){ $('stProteinDays').textContent = countProteinDays(7, idx); }
   var avgW = weekAvgWeight();
   if($('stWeight')){ $('stWeight').textContent = avgW != null ? avgW : '—'; }
@@ -2493,9 +2268,10 @@ function renderData(){
       '<span class="d' + (idx === 6 ? ' today' : '') + '">' + (dt.getMonth()+1) + '/' + dt.getDate() + '</span>';
     chart.appendChild(col);
   });
-  if($('chartTarget')){ $('chartTarget').textContent = '— 参考 ' + target + 'g · 深绿是碰到目标的日子，浅色也算有记录'; }
+  if($('chartTarget')){ $('chartTarget').textContent = '目标 ' + target + ' g · 绿色表示达到目标'; }
   if($('chartAside')){ $('chartAside').textContent = '日均 ' + ( $('stAvg') ? $('stAvg').textContent : Math.round(sum7 / 7) ) + 'g'; }
 
+  renderArchive();
   renderWeightChart();
   renderLiftHist();
 
@@ -2596,6 +2372,7 @@ function renderLiftHist(){
 
 /* ---- 我的页 ---- */
 function renderSettings(){
+  $('backupStatus').textContent = S.lastBackupAt ? '上次导出：' + new Date(S.lastBackupAt).toLocaleDateString() + '。请确认文件已保存。' : '还未导出备份，建议定期保存一份。';
   $('targetVal').textContent = S.settings.proteinTarget;
   var bw = S.settings.bodyWeightKg || (latestWeight() && latestWeight().kg) || 0;
   $('weightSetVal').textContent = bw ? bw : '—';
@@ -2619,29 +2396,13 @@ function renderSettings(){
 
 /* ---- 语音音色选择 ---- */
 function renderVoiceOptions(){
-  var sel = $('setVoiceName');
-  sel.innerHTML = '';
-  var zh = zhVoices();
-  var cur = S.settings.voiceName || '';
-  var auto = document.createElement('option');
-  auto.value = ''; auto.textContent = '自动（推荐女声）';
-  sel.appendChild(auto);
-  zh.forEach(function(v){
-    var op = document.createElement('option');
-    op.value = v.name; op.textContent = v.name + '（' + v.lang + '）';
-    if(v.name === cur){ op.selected = true; }
-    sel.appendChild(op);
-  });
-  sel.disabled = !zh.length;
-  $('voiceHint').textContent = zh.length
-    ? (cur ? '当前：' + cur : '默认优先晓梦/晓晓/晓涵等年轻女声')
-    : '未检测到中文语音（推荐 Windows 11 或 Edge 以获得神经女声）';
+  var missing = {};
+  Object.keys(routines).forEach(function(id){ (routines[id] || []).forEach(function(m){
+    if(!resolveVoiceKey(id === 'stretch' ? 'stretch-' : 'work-', m)){ missing[m.id] = true; }
+  }); });
+  var count = Object.keys(missing).length;
+  $('voiceHint').textContent = count ? '御姐预录女声；' + count + ' 个动作暂用系统语音。' : '跟练使用预录御姐女声；音频不可用时尝试系统语音。';
 }
-$('setVoiceName').addEventListener('change', function(){
-  mutateState(function(){ S.settings.voiceName = $('setVoiceName').value; });
-  renderVoiceOptions();
-  showToast($('setVoiceName').value ? '已切换为 ' + $('setVoiceName').value : '已恢复自动选择', 'success');
-});
 $('btnVoicePreview').addEventListener('click', function(){
   // 试听优先预生成 m4a；不可用时由 speak 自动回退系统语音。
   if(!voiceEnabled()){ showToast('语音指导未开启', 'error'); return; }
@@ -2652,11 +2413,11 @@ if('speechSynthesis' in window){
   flushVoiceSpeakQueue();
 }
 $('btnSetTarget').addEventListener('click', function(){
-  showPrompt('设置每日蛋白目标（20–300 g）：', String(S.settings.proteinTarget), function(t){
+  showPrompt('设置每日蛋白目标（20–300 g）：', String(S.settings.proteinTarget), async function(t){
     if(t === '' || t == null){ return; }
     var n = Number(t);
     if(!Number.isFinite(n) || n < 20 || n > 300){ showToast('请输入 20–300 之间的数字', 'error'); return; }
-    mutateState(function(){ S.settings.proteinTarget = Math.round(n); });
+    if(!await mutateState(function(){ S.settings.proteinTarget = Math.round(n); })){ renderSettings(); return; }
     renderSettings(); renderToday();
     showToast('目标已更新为 ' + Math.round(n) + 'g', 'success');
   }, { title:'蛋白目标', okText:'保存', type:'number', placeholder:'100' });
@@ -2664,13 +2425,13 @@ $('btnSetTarget').addEventListener('click', function(){
 if($('btnSetHeight')){
   $('btnSetHeight').addEventListener('click', function(){
     var cur = S.settings.heightCm || '';
-    showPrompt('身高厘米（用来按调整体重估算蛋白，可不填）：', cur ? String(cur) : '', function(v){
+    showPrompt('身高厘米（用来按调整体重估算蛋白，可不填）：', cur ? String(cur) : '', async function(v){
       if(v === '' || v == null){ return; }
       var n = Number(v);
       if(!Number.isFinite(n) || n < HEIGHT_CM_MIN || n > HEIGHT_CM_MAX){
         showToast('请输入 ' + HEIGHT_CM_MIN + '–' + HEIGHT_CM_MAX + ' 之间的数字', 'error'); return;
       }
-      mutateState(function(){ S.settings.heightCm = Math.round(n); });
+      if(!await mutateState(function(){ S.settings.heightCm = Math.round(n); })){ renderSettings(); return; }
       renderSettings();
       var kg = S.settings.bodyWeightKg || (latestWeight() && latestWeight().kg);
       var sug = suggestedProteinTarget(kg, S.settings.proteinPerKg, S.settings.heightCm, S.settings.proteinWeightMode);
@@ -2686,13 +2447,13 @@ if($('btnSetHeight')){
 }
 $('btnSetWeight').addEventListener('click', function(){
   var cur = S.settings.bodyWeightKg || (latestWeight() && latestWeight().kg) || '';
-  showPrompt('当前体重（kg）：', cur ? String(cur) : '', function(v){
+  showPrompt('当前体重（kg）：', cur ? String(cur) : '', async function(v){
     if(v === '' || v == null){ return; }
     var n = Number(v);
     if(!Number.isFinite(n) || n < WEIGHT_KG_MIN || n > WEIGHT_KG_MAX){
       showToast('请输入 ' + WEIGHT_KG_MIN + '–' + WEIGHT_KG_MAX + ' 之间的数字', 'error'); return;
     }
-    addWeight(n);
+    if(!await addWeight(n)){ return; }
     var sug = suggestedProteinTarget(n, S.settings.proteinPerKg, S.settings.heightCm, S.settings.proteinWeightMode);
     if(sug && sug !== S.settings.proteinTarget){
       var adj = adjustedWeightKg(n, S.settings.heightCm);
@@ -2704,93 +2465,118 @@ $('btnSetWeight').addEventListener('click', function(){
   }, { title:'当前体重', okText:'保存', type:'number', placeholder:'例如 80' });
 });
 $('btnSetPerKg').addEventListener('click', function(){
-  showPrompt('每公斤体重记多少克蛋白（0.8–2.5）：', String(S.settings.proteinPerKg), function(v){
+  showPrompt('每公斤体重记多少克蛋白（0.8–2.5）：', String(S.settings.proteinPerKg), async function(v){
     if(v === '' || v == null){ return; }
     var n = Number(v);
     if(!Number.isFinite(n) || n < PROTEIN_PER_KG_MIN || n > PROTEIN_PER_KG_MAX){
       showToast('请输入 ' + PROTEIN_PER_KG_MIN + '–' + PROTEIN_PER_KG_MAX, 'error'); return;
     }
     n = Math.round(n * 10) / 10;
-    mutateState(function(){ S.settings.proteinPerKg = n; });
+    if(!await mutateState(function(){ S.settings.proteinPerKg = n; })){ renderSettings(); return; }
     renderSettings();
     showToast('已设为 ' + n + ' g/kg', 'success');
   }, { title:'每公斤蛋白', okText:'保存', type:'number', placeholder:'1.4' });
 });
 $('btnUseWeightTarget').addEventListener('click', function(){ applyProteinFromWeight(); });
 $('btnSetWater').addEventListener('click', function(){
-  showPrompt('每日饮水目标（500–6000 ml）：', String(S.settings.waterTarget), function(v){
+  showPrompt('每日饮水目标（500–6000 ml）：', String(S.settings.waterTarget), async function(v){
     if(v === '' || v == null){ return; }
     var n = Number(v);
     if(!Number.isFinite(n) || n < WATER_ML_MIN || n > WATER_ML_MAX){
       showToast('请输入 ' + WATER_ML_MIN + '–' + WATER_ML_MAX, 'error'); return;
     }
-    mutateState(function(){ S.settings.waterTarget = Math.round(n); });
+    if(!await mutateState(function(){ S.settings.waterTarget = Math.round(n); })){ renderSettings(); return; }
     renderSettings(); renderToday();
     showToast('饮水目标 ' + Math.round(n) + ' ml', 'success');
   }, { title:'饮水目标', okText:'保存', type:'number', placeholder:'2000' });
 });
 ['setSound','setVoice','setMotion'].forEach(function(id){
-  $(id).addEventListener('change', function(){
+  $(id).addEventListener('change', async function(){
     var key = id === 'setSound' ? 'sound' : (id === 'setVoice' ? 'voice' : 'motion');
     var val = $(id).checked;
-    mutateState(function(){ S.settings[key] = val; });
+    if(!await mutateState(function(){ S.settings[key] = val; })){ renderSettings(); }
   });
 });
 
-$('btnExport').addEventListener('click', function(){
-  var payload = JSON.stringify(S, null, 2), prefix = '轻打卡备份_';
-  if(storageReadOnly){
-    var quarantined = null;
-    try{ quarantined = window.localStorage.getItem(CORRUPT_KEY); }catch(e){}
-    if(quarantined){ payload = quarantined; prefix = '轻打卡原始数据_'; }
-  }
-  var blob = new Blob([payload], { type:'application/json' });
-  var a = document.createElement('a');
-  var d = new Date();
-  a.href = URL.createObjectURL(blob);
-  a.download = prefix + d.getFullYear() + pad2(d.getMonth()+1) + pad2(d.getDate()) + '.json';
+function downloadJson(payload, filename, rawText){
+  var a = document.createElement('a'), url = URL.createObjectURL(new Blob([rawText ? payload : JSON.stringify(payload, null, 2)], {type:'application/json'}));
+  a.href = url; a.download = filename;
   document.body.appendChild(a); a.click(); a.remove();
-  showToast('备份已导出', 'success');
+  window.setTimeout(function(){ URL.revokeObjectURL(url); }, 30000);
+}
+function monthKey(ts){ var d = new Date(ts); return d.getFullYear() + '-' + pad2(d.getMonth() + 1); }
+var archiveLimit = 30;
+function monthEntries(month){
+  return S.logs.filter(function(l){ return monthKey(l.ts) === month; }).concat(
+    S.weights.filter(function(w){ return monthKey(w.ts) === month; }).map(function(w){ return {type:'weight', ts:w.ts, kg:w.kg}; })
+  ).sort(function(a,b){ return b.ts - a.ts; });
+}
+function renderArchive(){
+  var field = $('archiveMonth');
+  if(!field.value){ field.value = monthKey(Date.now()); }
+  var entries = monthEntries(field.value);
+  $('archiveSummary').textContent = entries.length + ' 条记录 · 当前显示 ' + Math.min(entries.length, archiveLimit) + ' 条';
+  $('archiveList').innerHTML = entries.slice(0, archiveLimit).map(function(l){
+    var label = l.type === 'protein' ? l.food : ({water:'饮水', walk:'走路', weight:'体重', training:routineNames[l.routine] || '训练'}[l.type]);
+    var amount = l.type === 'protein' ? l.grams + 'g' : (l.type === 'water' ? l.ml + 'ml' : (l.type === 'weight' ? l.kg + 'kg' : Math.round((l.minutes || (l.actualSeconds || 0)/60) * 10)/10 + '分'));
+    return '<div class="log-item"><span class="t">' + new Date(l.ts).getDate() + '日 ' + fmtTime(l.ts) + '</span><span class="f">' + escapeHtml(label || '记录') + '</span><span class="g">' + escapeHtml(amount) + '</span></div>';
+  }).join('') || '<div class="empty-hint">这个月还没有记录</div>';
+  $('archiveMore').hidden = entries.length <= archiveLimit;
+  $('btnArchiveExport').disabled = !entries.length;
+}
+$('archiveMonth').addEventListener('change', function(){ archiveLimit = 30; renderArchive(); });
+$('archiveMore').addEventListener('click', function(){ archiveLimit += 30; renderArchive(); });
+$('btnArchiveExport').addEventListener('click', function(){
+  var month = $('archiveMonth').value;
+  downloadJson({kind:'qingdaka-monthly-archive', month:month, logs:S.logs.filter(function(l){ return monthKey(l.ts) === month; }), weights:S.weights.filter(function(w){ return monthKey(w.ts) === month; })}, '轻打卡月度记录_' + month + '.json');
+  showToast('本月记录已生成；完整迁移请使用「我的 → 导出备份」');
+});
+$('btnExport').addEventListener('click', async function(){
+  await storageInit; await mutationQueue;
+  var payload = S, prefix = '轻打卡备份_', rawText = false;
+  if(storageReadOnly){
+    try{
+      var original = __boot.rawText || window.localStorage.getItem(V5KEY) || window.localStorage.getItem(CORRUPT_KEY);
+      if(original != null){ payload = original; rawText = true; prefix = '轻打卡原始数据_'; }
+    }catch(e){}
+    if(!rawText){ showToast('未能读取原始数据，当前没有生成备份。', 'error'); return; }
+  }
+  downloadJson(payload, prefix + monthKey(Date.now()) + '-' + pad2(new Date().getDate()) + '.json', rawText);
+  if(!storageReadOnly){ await mutateState(function(){ S.lastBackupAt = Date.now(); }); }
+  renderSettings();
+  showToast('备份文件已生成，请确认下载已保存', 'success');
 });
 $('btnImport').addEventListener('click', function(){ $('importFile').click(); });
-$('importFile').addEventListener('change', function(e){
+$('importFile').addEventListener('change', async function(e){
   var f = e.target.files && e.target.files[0];
-  if(!f){ return; }
-  if(f.size > IMPORT_MAX_BYTES){ showToast('备份文件过大（>5MB）', 'error'); e.target.value = ''; return; }
-  var reader = new FileReader();
-  reader.onload = function(){
-    try{
-      var raw = JSON.parse(reader.result);
-      raw = migrateState(raw);
-      if(!isPlainObject(raw) || raw.v !== 5){ throw new Error('bad'); }
-      var next = { v:5, settings:normalizeSettings(raw.settings), logs:normalizeLogs(raw.logs), weights:normalizeWeights(raw.weights), lifts:normalizeLifts(raw.lifts) };
-      showConfirm('将用备份覆盖当前数据（' + next.logs.length + ' 条记录）。继续？', function(){
-        storageReadOnly = false;  // 导入是只读模式的恢复出口
-        S = next; writeState(S); bumpLogIndex();
-        moves = routines[S.settings.routine] || bodyweightMoves;
-        renderAll();
-        showToast('导入成功', 'success');
-      }, { title:'导入备份', okText:'覆盖导入', danger:true });
-    }catch(err){ showToast('备份文件格式不正确', 'error'); }
-  };
-  reader.readAsText(f);
   e.target.value = '';
+  if(!f){ return; }
+  if(f.size > IMPORT_MAX_BYTES){ showToast('备份文件超过 20MB，请先分开检查', 'error'); return; }
+  try{
+    var raw = migrateState(JSON.parse(await f.text()));
+    if(!raw || !Array.isArray(raw.logs) || !Array.isArray(raw.weights)){ throw new Error('bad-backup'); }
+    var next = hydrateState(raw);
+    var invalid = raw.logs.length + raw.weights.length - next.logs.length - next.weights.length;
+    if(invalid){ showToast('备份有 ' + invalid + ' 条无效记录，未导入。请先检查文件。', 'error'); return; }
+    var dates = next.logs.concat(next.weights).map(function(l){ return l.ts; }).sort(function(a,b){ return a-b; });
+    var span = dates.length ? '，时间 ' + new Date(dates[0]).toLocaleDateString() + ' 至 ' + new Date(dates[dates.length-1]).toLocaleDateString() : '';
+    showConfirm('将覆盖本机 ' + S.logs.length + ' 条记录，导入 ' + next.logs.length + ' 条记录、' + next.weights.length + ' 条体重' + span + '。请先保留当前备份。', async function(){
+      if(!await mutateState(function(){ S = next; }, true)){ return; }
+      moves = routines[S.settings.routine] || bodyweightMoves;
+      resetWorkout(); renderAll();
+      showToast('备份已导入并保存', 'success');
+    }, {title:'核对备份内容', okText:'覆盖导入', danger:true});
+  }catch(err){ showToast('不是有效的完整备份文件，当前记录未改变', 'error'); }
 });
 $('btnClear').addEventListener('click', function(){
-  showConfirm('确定清空本机全部数据？此操作不可恢复，建议先导出备份。', function(){
-    showConfirm('真的清空吗？包括所有蛋白、训练记录。', function(){
-      try{
-        window.localStorage.removeItem(V5KEY);
-        window.localStorage.removeItem(CORRUPT_KEY);
-      }catch(e){}
-      idbClear(idbHandle);
-      storageReadOnly = false;
-      S = defaultState(); writeState(S); bumpLogIndex();
-      moves = routines[S.settings.routine] || bodyweightMoves;
-      renderAll();
-      showToast('已清空本机数据', '');
-    }, { title:'再次确认', okText:'确认清空', danger:true });
-  }, { title:'清空数据', okText:'继续', danger:true });
+  showConfirm('清空全部本机记录？请先导出完整备份。', function(){
+    showConfirm('确定清空？此操作不可恢复。', async function(){
+      if(!await mutateState(function(){ S = defaultState(); }, true)){ return; }
+      try{ window.localStorage.removeItem(CORRUPT_KEY); }catch(e){}
+      moves = routines[S.settings.routine];
+      resetWorkout(); renderAll(); showToast('本机数据已清空');
+    }, {title:'再次确认', okText:'确认清空', danger:true});
+  }, {title:'清空数据', okText:'继续', danger:true});
 });
 
 /* ---- 总渲染 ---- */
@@ -2801,33 +2587,78 @@ function renderAll(){
   if(document.getElementById('page-me').classList.contains('active')){ renderSettings(); }
 }
 
-/* ---- Service Worker ---- */
-if('serviceWorker' in navigator){
-  window.addEventListener('load', function(){
-    navigator.serviceWorker.register('./sw.js').then(function(reg){
-      try { reg.update(); } catch(e){}
-    }).catch(function(){});
-  });
+/* ---- 离线准备与用户确认更新 ---- */
+var appRegistration = null, updateRequested = false, offlineProbe = 0;
+function updateOfflineStatus(){
+  var probe = ++offlineProbe;
+  var active = appRegistration && appRegistration.active;
+  if(!active){ $('offlineStatus').textContent = '离线资源准备中，完成前请保持联网。'; return; }
+  var channel = new MessageChannel();
+  var timeout = window.setTimeout(function(){
+    channel.port1.close();
+    if(probe === offlineProbe){ $('offlineStatus').textContent = '暂未确认离线准备状态，请联网检查更新。'; }
+  }, 4000);
+  channel.port1.onmessage = function(e){
+    window.clearTimeout(timeout);
+    channel.port1.close();
+    if(probe !== offlineProbe){ return; }
+    $('offlineStatus').textContent = e.data.ready
+      ? '可离线打开。示范图在联网浏览后保存。'
+      : '离线资源尚不完整，请联网重新打开后检查。';
+  };
+  active.postMessage({type:'OFFLINE_STATUS'}, [channel.port2]);
 }
+function showWaitingUpdate(){
+  $('btnUpdateApp').hidden = !(appRegistration && appRegistration.waiting);
+}
+$('btnUpdateApp').addEventListener('click', async function(){
+  if(sessionStarted && !sessionLogged){ showToast('请先结束并记录本次训练，再更新应用'); return; }
+  await mutationQueue;
+  if(appRegistration && appRegistration.waiting){
+    updateRequested = true;
+    appRegistration.waiting.postMessage({type:'ACTIVATE_UPDATE'});
+  }
+});
+if('serviceWorker' in navigator){
+  window.addEventListener('load', async function(){
+    try{
+      appRegistration = await navigator.serviceWorker.register('./sw.js');
+      showWaitingUpdate();
+      appRegistration.addEventListener('updatefound', function(){
+        var installing = appRegistration.installing;
+        if(installing){ installing.addEventListener('statechange', function(){
+          if(installing.state === 'installed'){ showWaitingUpdate(); updateOfflineStatus(); }
+          if(installing.state === 'redundant'){ $('offlineStatus').textContent = '本次离线更新未完成，现有版本仍可继续使用。'; }
+        }); }
+      });
+      await navigator.serviceWorker.ready;
+      updateOfflineStatus();
+      appRegistration.update().catch(function(){});
+    }catch(e){ $('offlineStatus').textContent = '本次未能启用离线功能，请保持联网使用。'; }
+  });
+  navigator.serviceWorker.addEventListener('controllerchange', function(){
+    if(updateRequested){ window.location.reload(); }
+    else { updateOfflineStatus(); }
+  });
+} else { $('offlineStatus').textContent = '当前浏览器不支持离线安装，请保持联网使用。'; }
 
 /* ---- 初始化 ---- */
 buildSteps();
 renderToday();
 renderSettings();
-recoverFromIdb();
+storageInit = recoverFromIdb();
 
 /* ---- 跨标签页同步 ---- */
 window.addEventListener('storage', function(e){
-  if(e.key === V5KEY){
+  if(e.key !== V5KEY){ return; }
+  mutationQueue = mutationQueue.then(function(){
     var fresh = readState().state;
-    if(fresh){
-      S = fresh;
-      try{ lastPersistedStateJson = JSON.stringify(S); }catch(_){ lastPersistedStateJson = null; }
-      moves = routines[S.settings.routine] || bodyweightMoves;
-      bumpLogIndex();
+    if(fresh && fresh.updatedAt > (S.updatedAt || 0)){
+      S = fresh; bumpLogIndex();
+      if(!sessionStarted || sessionLogged){ moves = routines[S.settings.routine]; buildSteps(); }
       renderAll();
     }
-  }
+  });
 });
 
 /* ---- 测试钩子：仅在 test.html 设置 window.__EXPOSE_FOR_TEST__ 时暴露纯函数 ---- */
