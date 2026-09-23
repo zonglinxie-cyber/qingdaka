@@ -8,7 +8,8 @@ const distDir = resolve(projectRoot, 'dist');
 
 function run(cmd, args, opts = {}) {
   const result = spawnSync(cmd, args, { stdio: 'inherit', cwd: projectRoot, ...opts });
-  if (result.status) process.exit(result.status ?? 1);
+  // 抛错而不是 process.exit：调用方 run() 在 try 里，抛错才会走到 finally 清理临时目录。
+  if (result.status) throw Error(`${cmd} ${args[0] || ''} 失败，退出码 ${result.status}`);
 }
 
 function capture(cmd, args) {
