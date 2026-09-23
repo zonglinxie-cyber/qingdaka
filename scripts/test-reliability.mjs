@@ -5,23 +5,8 @@ const source = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
 const part = (from, to) => source.slice(source.indexOf(from), source.indexOf(to, source.indexOf(from)));
 let checks = 0;
 function check(name, fn){ return Promise.resolve().then(fn).then(() => { checks++; console.log('✓ ' + name); }); }
-function database(initial, {fail=false, manual=false}={}){
-  let stored = initial;
-  const pending = [];
-  return {pending, read:() => stored, transaction(){
-    const tx = {objectStore:() => ({
-      get(){ const req = {}; queueMicrotask(() => { req.result = stored; req.onsuccess?.(); }); return req; },
-      put(value){
-        const next = structuredClone(value);
-        const complete = () => { if(fail){ tx.onabort?.(); } else { stored = next; tx.oncomplete?.(); } };
-        if(manual){ pending.push(complete); } else { queueMicrotask(complete); }
-      }
-    })};
-    return tx;
-  }};
-}
 function state(n=0){ return {v:5, updatedAt:n, settings:{}, logs:[], weights:[], lifts:{}}; }
-function app({ls=state(), lsFail=false, db=null}={}){
+function app({ls=state(), lsFail=false}={}){
   const items = new Map([['workbuddy-v5', typeof ls === 'string' ? ls : JSON.stringify(ls)]]);
   const context = vm.createContext({console, setTimeout, Date, Promise, Number, JSON,
     document:{getElementById:() => null},
@@ -30,19 +15,17 @@ function app({ls=state(), lsFail=false, db=null}={}){
     routines:{bodyweight:[]}, bodyweightMoves:[]
   });
   vm.runInContext(part('function $(id)', '/* ---- Toast ---- */') + part('var storageReadOnly = false;', '/* ---- 记录操作 ---- */'), context);
-  context.idbHandle = db;
   context.storageInit = Promise.resolve();
-  context.openIdb = async () => db;
   return context;
 }
-await check('两份存储均失败，不提交状态或报告保存成功', async () => {
-  const ctx = app({lsFail:true, db:database(null,{fail:true})});
+await check('localStorage 失败，不提交状态或报告保存成功', async () => {
+  const ctx = app({lsFail:true});
   const previous = JSON.stringify(ctx.S);
   assert.equal(await ctx.mutateState(() => ctx.S.logs.push({id:'new'})), false);
   assert.equal(JSON.stringify(ctx.S), previous);
 });
-await check('IndexedDB 失败时仍可确认 localStorage 成功写入',async()=>{
-  const ctx=app({db:database(null,{fail:true})});
+await check('localStorage 写入成功后才提交界面状态',async()=>{
+  const ctx=app();
   assert.equal(await ctx.mutateState(()=>ctx.S.logs.push({id:'new'})),true);
   assert.equal(JSON.parse(ctx.window.localStorage.getItem('workbuddy-v5')).logs.length,1);
 });
@@ -51,37 +34,18 @@ await check('空间不足不能隔离损坏数据时仍保留原文用于导出'
   assert.equal(ctx.__boot.rawText,'{unparseable original');
   assert.equal(ctx.storageReadOnly,true);
 });
-await check('等待 IndexedDB 事务提交后才更新界面状态', async () => {
-  const db = database(null,{manual:true}), ctx = app({lsFail:true,db});
-  let done = false;
-  const write = ctx.mutateState(() => ctx.S.logs.push({id:'new'})).then(ok => {done=true; return ok;});
-  await new Promise(resolve => setImmediate(resolve));
-  assert.equal(done,false); assert.equal(ctx.S.logs.length,0);
-  db.pending.shift()();
-  assert.equal(await write,true); assert.equal(ctx.S.logs.length,1);
-});
 await check('连点记录串行提交，每笔均保留', async () => {
-  const ctx = app({db:database(null)});
+  const ctx = app();
   await Promise.all(Array.from({length:12},(_,i) => ctx.mutateState(() => ctx.S.logs.push({id:String(i)}))));
   assert.equal(ctx.S.logs.length,12);
   assert.equal(new Set(ctx.S.logs.map(l=>l.id)).size,12);
 });
 await check('导入保存失败保留原数据和只读状态', async () => {
-  const ctx = app({lsFail:true,db:database(null,{fail:true})});
+  const ctx = app({lsFail:true});
   ctx.storageReadOnly = true;
-  const previous = ctx.S;
+  const prevLogs = ctx.S.logs.length;
   assert.equal(await ctx.mutateState(() => {ctx.S=state(99);ctx.S.logs=[{id:'imported'}];},true),false);
-  assert.equal(ctx.S,previous); assert.equal(ctx.storageReadOnly,true);
-});
-await check('启动恢复采用更新的数据库副本', async () => {
-  const newer=state(30); newer.logs=[{id:'id-new',type:'water',ts:Date.now(),ml:350}];
-  const ctx=app({ls:state(10),db:database(newer)});
-  await ctx.recoverFromIdb();
-  assert.equal(ctx.S.updatedAt,30); assert.equal(ctx.S.logs[0].ml,350);
-});
-await check('损坏的主副本有正常数据库备份时可恢复', async () => {
-  const newer=state(30), ctx=app({ls:'{broken',db:database(newer)});
-  await ctx.recoverFromIdb(); assert.equal(ctx.storageReadOnly,false); assert.equal(ctx.S.updatedAt,30);
+  assert.equal(ctx.S.logs.length, prevLogs); assert.equal(ctx.storageReadOnly,true);
 });
 await check('超过 3000 条日志和 5000 条体重不再静默丢失', () => {
   const ctx=app(), logs=Array.from({length:4001},(_,i)=>({id:'log-'+i,type:'water',ts:Date.now(),ml:350}));
@@ -90,37 +54,69 @@ await check('超过 3000 条日志和 5000 条体重不再静默丢失', () => {
 });
 await check('所有课程与档位的列表、预览、播放器时长一致且包含休息', () => {
   const ctx=app();
+  ctx.session = { steps:[], totalDuration:0 };
   vm.runInContext(fs.readFileSync(new URL('../content.js',import.meta.url),'utf8'),ctx);
-  vm.runInContext(part('var C = window.QDK_CONTENT;', 'function imagePath(') + part('function createPlan(', 'function resetSessionStats(') + part('function totalDurationEstimate(', "$('tGo')") + part('function planSummary(', 'function sec2m('),ctx);
+  ctx.C = ctx.window.QDK_CONTENT;
+  vm.runInContext(part('var bodyweightMoves = C.bodyweightMoves', 'function imagePath(') + part('function createPlan(', 'function resetSessionStats(') + part('function totalDurationEstimate(', "$('tGo')") + part('function planSummary(', 'function sec2m('),ctx);
   for(const routine of Object.keys(ctx.routines)) for(const preset of Object.keys(ctx.presets)){
     ctx.S.settings={routine,preset}; ctx.moves=ctx.routines[routine]; ctx.buildSteps();
     const summary=ctx.planSummary();
-    assert.equal(ctx.totalDurationEstimate(),ctx.totalDuration);
-    assert.equal(summary.warm+summary.work+summary.stretch+summary.rest,ctx.totalDuration);
+    assert.equal(ctx.totalDurationEstimate(),ctx.session.totalDuration);
+    assert.equal(summary.warm+summary.work+summary.stretch+summary.rest,ctx.session.totalDuration);
   }
   ctx.S.settings={routine:'dumbbell',preset:'starter'};ctx.moves=ctx.routines.dumbbell;ctx.buildSteps();
-  assert.equal(ctx.totalDuration,723);
+  assert.equal(ctx.session.totalDuration,723);
+});
+await check('徒手课只加展示层文案；坐站分步示意替换持铃示范且不波及其他动作',()=>{
+  const ctx = vm.createContext({window:{}});
+  vm.runInContext(fs.readFileSync(new URL('../content.js',import.meta.url),'utf8'),ctx);
+  const content = ctx.window.QDK_CONTENT, moves = content.routines.bodyweight;
+  assert.deepEqual(Array.from(moves,m=>m.id),['3013','0276','chair-stand','0659','towel-row','3239']);
+  assert.ok(moves.every(m=>m.shortCue && m.shortCue.length < 40));
+  assert.equal(moves[2].frames[0],'chair-stand-steps.svg');
+  assert.equal(content.routines.core.find(m=>m.id==='chair-stand').frames.join('|'),'chair-stand-steps.svg');
+  assert.equal(content.ASSET_ALIAS['chair-stand'].media,undefined);
+  assert.equal(content.routines.dumbbell.find(m=>m.id==='0291').frames,undefined);
+  assert.equal(content.routines.dumbbell[0].shortCue,undefined);
+  assert.equal(content.presets.starter.work,40);
 });
 await check('训练保存失败保留重试入口，重复结束不会重复写入',async()=>{
   const nodes=new Map(), ui=id=>{
-    if(!nodes.has(id)){nodes.set(id,{classList:{add(){}},setAttribute(){}});}return nodes.get(id);
+    if(!nodes.has(id)){nodes.set(id,{classList:{add(){}},setAttribute(){},textContent:''});}return nodes.get(id);
   };
   let complete, writes=0;
-  const ctx=vm.createContext({$,Object,Math,window:{clearInterval(){}},
-    S:{settings:{routine:'dumbbell',preset:'starter'}},sessionLogged:false,sessionFinishing:false,
-    running:false,inCountdown:false,timer:null,left:0,steps:[],stepIndex:0,
-    sessionElapsed:90,workElapsed:40,stretchElapsed:0,completedMoveIds:{move:true},completedStretchIds:{},
-    skippedWork:0,totalDuration:723,sessionLifts:{},
-    captureStepProgress(){},stopTick(){},releaseWakeLock(){},updateProgress(){},cueFinish(){},getReadiness:()=> 'green',speak(){},
+  const PHASE = { idle:'idle', countdown:'countdown', running:'running', paused:'paused', finishing:'finishing', done:'done' };
+  const TRANSITIONS = {
+    idle:{ countdown:1 }, countdown:{ running:1, paused:1, finishing:1 },
+    running:{ paused:1, finishing:1 }, paused:{ running:1, countdown:1, finishing:1, idle:1 },
+    finishing:{ done:1 }, done:{ idle:1, finishing:1 }
+  };
+  const session = {
+    phase:'running', logged:false, finishRetryEarly:null, steps:[], stepIndex:0, left:0,
+    elapsed:90, workElapsed:40, stretchElapsed:0, completedMoveIds:{move:true}, completedStretchIds:{},
+    skippedWork:0, totalDuration:723, lifts:{}, timer:null
+  };
+  function enterPhase(next){
+    if(session.phase === next) return true;
+    if(!(TRANSITIONS[session.phase] && TRANSITIONS[session.phase][next])) return false;
+    session.phase = next; return true;
+  }
+  const ctx=vm.createContext({
+    PHASE, TRANSITIONS, session, enterPhase, Object, Math, window:{clearInterval(){}},
+    S:{settings:{routine:'dumbbell',preset:'starter'}},
+    captureStepProgress(){}, stopSessionTimer(){}, stopTick(){}, releaseWakeLock(){},
+    updateProgress(){}, cueFinish(){}, getReadiness:()=> 'green', speak(){},
+    moveById(){ return null; }, liftKind(){ return null; }, escapeHtml(s){ return s; },
     addTraining:()=>{writes++;return new Promise(resolve=>{complete=resolve;});}
   });
   function $(id){return ui(id);}
+  ctx.$ = $;
   vm.runInContext(part('async function finishWorkout(', "$('plPause').addEventListener"),ctx);
   const first=ctx.finishWorkout(true);await ctx.finishWorkout(true);assert.equal(writes,1);
   complete(false);await first;
-  assert.equal(ctx.sessionLogged,false);assert.equal(ctx.finishRetryEarly,true);assert.equal(ui('plDoneBtn').textContent,'重试保存');
-  const retry=ctx.finishWorkout(ctx.finishRetryEarly);complete(true);await retry;
-  assert.equal(ctx.sessionLogged,true);assert.equal(ctx.finishRetryEarly,null);assert.equal(ui('plDoneBtn').textContent,'好的');
+  assert.equal(session.logged,false);assert.equal(session.finishRetryEarly,true);assert.equal(ui('plDoneBtn').textContent,'重试保存');
+  const retry=ctx.finishWorkout(session.finishRetryEarly);complete(true);await retry;
+  assert.equal(session.logged,true);assert.equal(session.finishRetryEarly,null);assert.equal(ui('plDoneBtn').textContent,'好的');
 });
 await check('撤下的示范在跟练和预载中都不会再显示或下载',()=>{
   let visible=true,removed=false;

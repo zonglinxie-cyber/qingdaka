@@ -82,6 +82,7 @@
           <h2 id="trainingName">徒手基础</h2>
           <p class="workout-time"><b id="durHint">—</b><span id="trainingLevel">入门档</span></p>
           <p class="card-note" id="roundHint"></p>
+          <p class="card-note" id="bodyweightEquipment">备好稳固椅子、长毛巾和垫子；上下地面困难时不要勉强。</p>
           <div class="readiness" id="readySection">
             <h3>今天感觉怎么样？</h3>
             <div class="ready-row" id="readyRow"><button class="ready-btn green on" data-ready="green" aria-pressed="true">不错</button><button class="ready-btn yellow" data-ready="yellow" aria-pressed="false">一般</button><button class="ready-btn red" data-ready="red" aria-pressed="false">不适</button></div>
@@ -90,6 +91,11 @@
           <button class="btn-start" id="btnStart">开始跟练</button>
         </article>
 
+        <section class="workout-sequence" id="bodyweightPlan" aria-labelledby="bodyweightPlanTitle">
+          <div class="sequence-heading"><h2 id="bodyweightPlanTitle">按这个顺序练</h2><span id="bodyweightDose"></span></div>
+          <div id="bodyweightMoveList"></div>
+          <p class="sequence-note">点动作看做法；开始后会先热身，最后带你放松。</p>
+        </section>
         <details class="disclosure" id="trainingOptions">
           <summary>换课程或强度</summary>
           <div class="disclosure-body"><h3>课程</h3>
@@ -237,6 +243,7 @@
       <img id="plDemo" alt="">
       <span class="pl-badge" id="plBadge">示范</span>
     </div>
+    <div class="pl-instructions" id="plInstructions" hidden></div>
     <div class="pl-cue" id="plCue"></div>
     <div class="pl-log" id="plLog" hidden>
       <div class="pl-log-last" id="plLogLast"></div>
@@ -334,7 +341,7 @@
 </div>
 
 <audio id="voicePlayer" playsinline webkit-playsinline preload="auto" hidden></audio>
-<script src="./content.js"></script>
-<script src="./app.js"></script>
+<script src="./content.js?v=44"></script>
+<script src="./app.js?v=44"></script>
 </body>
 </html>

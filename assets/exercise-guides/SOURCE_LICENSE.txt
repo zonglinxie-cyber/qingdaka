@@ -1,14 +1,19 @@
 Exercise media provenance and release notes
-Updated: 2026-07-24
+Updated: 2026-09-23
 
-1) Project-generated static illustrations used by this application
+1) Project-generated media used by this application
 
 Files:
-  generated/bird-dog-anatomy.png
-  generated/farmer-carry-anatomy.png
+  chair-stand-steps.svg
   generated/wall-plank-anatomy.png
   bird-dog.gif
   bird-dog-poster.png
+
+chair-stand-steps.svg is an original, hand-authored vector schematic of
+unweighted sit-to-stand positions. It is a static teaching aid, not a filmed
+or professionally validated demonstration. No third-party media was used. It
+is the demonstration for 扶椅坐站 in every routine; the dataset GIF 0291 shows
+a person holding dumbbells and is kept only for 扶凳箱式深蹲 (居家哑铃).
 
 The bird-dog.gif / bird-dog-poster.png pair is a project-original looping
 demonstration generated for this app (four-point kneel to contralateral
@@ -16,20 +21,17 @@ reach). It was not derived from a RepDB or Kaggle GIF, and no third-party
 exercise GIF was used as an image input or style reference.
 
 Status:
-  PROJECT-ORIGINAL GENERATED ASSETS. These three 512 x 512 PNG stills were
-  generated specifically for Workbuddy to match its anatomical illustration
-  language. wall-plank-anatomy.png was generated from text-only project art
-  direction. That newly generated project-original wall-plank image was then
-  used only as the style reference for farmer-carry-anatomy.png and
-  bird-dog-anatomy.png. No RepDB image or legacy GIF/poster was supplied as an
-  image input, style reference, conditioning image, or training material at
-  any stage of the final generation.
+  PROJECT-ORIGINAL GENERATED ASSETS. wall-plank-anatomy.png is a 512 x 512 PNG
+  still generated specifically for Workbuddy to match its anatomical
+  illustration language, from text-only project art direction. The
+  farmer-carry and bird-dog anatomy stills that were generated from it as a
+  style reference have been removed from the shipped set; bird dog now uses the
+  project-original looping GIF above, and 轻负重行走 uses dataset GIF 2133.
 
 Usage:
-  These files are the deployed static references for bird dog, light farmer
-  carry / in-place hold, and wall plank. They are not complete motion
-  demonstrations. Keep the written regressions, safety cues, and
-  "static posture reference" labels with them.
+  wall-plank-anatomy.png is the deployed static reference for wall plank. It is
+  not a complete motion demonstration. Keep the written regressions, safety
+  cues, and "static posture reference" labels with it.
 
 2) RepDB Free Tier assets retained only as historical source records
 
@@ -68,11 +70,11 @@ Historical set:
   0276, 0291, 0292, 0404, 0659, 0710, 1373, 1459, 1677, 3013, 3239
   (.gif and -poster.png)
 
-Deployment scope:
-  0710.gif and 0710-poster.png are no longer referenced by the active routine
-  and are explicitly excluded from deploy/ and the PWA cache.
-  0659-plank-poster.png is deprecated and also excluded.
-  The other ten legacy GIF/poster pairs remain in the current personal
+Deployment scope (2026-09-23):
+  0710 and 1373 (gif + poster) and the duplicate 0659-plank-poster.png were
+  deleted from the source tree once no active move referenced them, so they are
+  absent from deploy/ and from the PWA cache.
+  The other nine legacy GIF/poster pairs remain in the current personal
   prototype and therefore retain the release restriction below.
 
 Current host:
@@ -85,13 +87,13 @@ original creators and dataset owner. Therefore the host's MIT file is not a
 complete or reliable chain of title for the media.
 
 Release status:
-  LEGACY / PROTOTYPE-ONLY. Do not describe the remaining ten deployed pairs as
-  copyright-cleared or commercially safe. Replace them with commissioned,
+  LEGACY / PROTOTYPE-ONLY. Do not describe the remaining nine deployed pairs of
+  this section as copyright-cleared or commercially safe. Replace them with commissioned,
   self-recorded, or otherwise clearly licensed continuous demonstrations
   before treating the application as a public commercial release.
 
-No legacy GIF or poster was used as an input or reference for the three
-project-generated static illustrations.
+No legacy GIF or poster was used as an input or reference for the
+project-generated media listed in section 1.
 
 4) Warm-up and post-workout stretch media (added 2026-07-25)
 
@@ -123,15 +125,18 @@ Release status:
 
 5) Gym machine (fixed-equipment) media (added 2026-08-04)
 
-Files (GIF + first-frame -poster.png, 360x360, white background):
+Files still shipped (GIF + first-frame -poster.png, 360x360, white background):
   Gym routine:    0576 (seated chest press), 0579 (front pulldown),
-                  0588 (seated row), 2287 (leg press), 0599 (seated leg curl),
-                  0603 (shoulder press), 0585 (leg extension),
-                  0596 (seated fly / pec deck), 0017 (assisted pull-up)
-  Added to match updated routines (same dataset):
-                  3165 (standing towel row), 2133 (farmers walk),
-                  0658 (wall push-up v.2, used as wall-plank hold reference),
-                  1512 (all-fours quad stretch; standing wall version is the home regression)
+                  0588 (seated row), 2287 (leg press), 0599 (seated leg curl)
+  Other moves:    2133 (farmers walk) demonstrates 轻负重行走 / 原地持重
+
+Added for earlier routine drafts and since deleted from the source tree,
+because no active move references them any more:
+  0603 (shoulder press), 0585 (leg extension), 0596 (seated fly / pec deck),
+  0017 (assisted pull-up), 3165 (standing towel row — 坐姿毛巾划船 is
+  deliberately text-only / noMedia), 0658 (wall push-up v.2 — replaced by the
+  project-generated wall-plank still), 1512 (all-fours quad stretch —
+  扶墙股四头拉伸 is deliberately text-only / noMedia)
 
 Source repository and dataset:
   https://github.com/omercotkd/exercises-gifs  (assets/<id>.gif)

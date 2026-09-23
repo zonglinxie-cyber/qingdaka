@@ -1,6 +1,6 @@
 // 轻打卡 · Service Worker（离线可用 / 安装到主屏幕）
 // 仅在被通过 https:// 或 http://localhost 访问时生效；file:// 打开时浏览器不会注册 SW。
-var VERSION = 'v42-reliable-checkin';
+var VERSION = 'v44-shell-sync';
 var CACHE_PREFIX = 'workbuddy:' + encodeURIComponent(self.registration.scope) + ':';
 var SHELL = CACHE_PREFIX + 'shell-' + VERSION;
 var RUNTIME = CACHE_PREFIX + 'runtime-media';
@@ -43,7 +43,8 @@ self.addEventListener('install', function(e){
     var cache = await caches.open(SHELL);
     await cacheFiles(cache, APP_FILES);
     await cacheFiles(cache, await voiceUrls(cache));
-    // 更新先等待用户确认，整套核心文件及语音完整后才能成为活动版本。
+    // 壳文件已换成可热更新；本版必须立即接管，避免旧缓存继续拼错 app.js / content.js。
+    await self.skipWaiting();
   })());
 });
 self.addEventListener('activate', function(e){
@@ -139,7 +140,13 @@ self.addEventListener('fetch', function(e){
   // 页面与代码来自同一版本；其他页面（如测试页）绝不覆盖首页缓存。
   if(entryPage || shellFile){
     e.respondWith(caches.open(SHELL).then(async function(cache){
-      return await cache.match(entryPage ? './index.html' : url.origin + url.pathname) || fetch(req);
+      var key = entryPage ? './index.html' : url.origin + url.pathname;
+      var hit = await cache.match(key) || await cache.match(url.href);
+      try{
+        var res = await fetch(req);
+        if(res && res.ok){ cache.put(key, res.clone()).catch(function(){}); return res; }
+      }catch(err){}
+      return hit || new Response('', { status:504 });
     }));
     return;
   }

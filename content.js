@@ -1,25 +1,45 @@
 (function(){
 'use strict';
 // 动作内容的唯一入口：课程、姿势、示范与提示在此维护。
-var bodyweightMoves = [
-  { id:'3013', name:'臀桥', area:'臀部与后侧链', sideMode:'none', equipment:'', steps:['仰卧屈膝，双脚与髋同宽','收紧腹部，脚跟推地抬髋','到肩—髋—膝接近直线后慢慢回位'], cue:'肋骨不要外翻；顶端夹臀，不要用腰向上拱。呼吸：抬髋时呼气，下放时吸气。', mistake:'常见错误：抬得越高越好，导致腰部过伸。' },
-  { id:'0276', name:'死虫', area:'核心稳定', sideMode:'alternate', equipment:'', steps:['腰背自然贴稳垫面，髋膝约 90°','一侧手臂与对侧腿缓慢远离身体','腰背不离垫，回位后换侧'], cue:'范围由腰背能否保持稳定决定；宁可短一点。呼吸：手脚伸出时呼气，回位时吸气。', mistake:'常见错误：手脚下放过低，腰背拱起。' },
-  { id:'0710', name:'侧卧髋外展', area:'臀中肌', sideMode:'half', equipment:'', steps:['侧卧，身体和下侧腿稳定','上侧腿伸直，脚尖朝正前方','小幅抬起，停一下，再控制放下'], cue:'先做右侧，过半换左侧；骨盆不要向后翻。呼吸：抬腿时呼气，放下时吸气。', mistake:'常见错误：腿抬太高、脚尖转向天花板。' },
-  { id:'0659', name:'靠墙俯卧撑', area:'胸肩与上肢推力', sideMode:'none', equipment:'', steps:['面对墙站立，双手略宽于肩','身体保持一条直线，屈肘靠近墙','手掌推墙，回到起始位'], cue:'脚离墙越远越难；先选能稳定控制的位置。呼吸：推墙时呼气，靠近时吸气。', mistake:'常见错误：只移动头部，或塌腰、耸肩。' },
-  { id:'1373', name:'扶墙提踵', area:'小腿与踝稳定', sideMode:'none', equipment:'', steps:['双脚平行，轻扶稳定物体','脚跟垂直上提，重心保持在大脚趾根部附近','停一下，再慢慢落地'], cue:'保持脚踝正直；急性足趾或踝关节红肿热痛时不要做。呼吸：上提时呼气，落地时吸气。', mistake:'常见错误：脚踝向外翻，靠弹跳完成。' },
-  { id:'3239', name:'跪姿平板（可点肩）', area:'核心与肩稳定', sideMode:'alternate', equipment:'', steps:['膝盖着地、前臂撑地，头到膝保持直线','先稳住跪姿平板，能说话、不塌腰','稳了再轻点对侧肩；一晃就停在平板'], cue:'图是跪姿平板点肩。先撑住、能说话、不塌腰，稳了再轻点对侧肩；一晃就只撑住。呼吸：不要憋气。', mistake:'常见错误：塌腰，或猛地点肩扭腰。' }
-];
-var dumbbellMoves = [
-  { id:'0291', name:'扶凳箱式深蹲', area:'大腿前侧与臀部', sideMode:'none', equipment:'哑铃', steps:['身后放一把稳固的椅子，双脚与髋同宽，哑铃垂于体侧（先徒手亦可）','臀部向后坐，像要坐进椅子里，膝盖朝脚尖方向','轻触椅面后脚跟推地站起，顶端夹臀'], cue:'椅子越高越简单；下蹲幅度以膝盖无锐痛为准，全程背部中立。先徒手练熟再加哑铃。呼吸：下坐时吸气，站起时呼气。', mistake:'常见错误：膝盖内扣、脚跟离地，或下坐时塌腰、上身过度前倾。' },
-  { id:'1459', name:'哑铃罗马尼亚硬拉', area:'臀部与大腿后侧', sideMode:'none', equipment:'哑铃', steps:['双脚与髋同宽，膝盖微屈，哑铃贴近腿前','髋部向后送，躯干随之向前倾','背部保持中立，到大腿后侧有拉伸感后夹臀站起'], cue:'动作是"髋向后"，不是深蹲；幅度由背部能否保持中立决定，不必让哑铃碰地。呼吸：站起时呼气，前倾时吸气。', mistake:'常见错误：弓背、哑铃远离身体，或为了下得更低而失去控制。' },
-  { id:'0292', name:'扶椅单臂哑铃划船', area:'背部与上肢拉力', sideMode:'half', equipment:'哑铃', steps:['将稳定椅靠墙，空手扶稳，双脚前后站立','背部保持中立，持铃手自然下垂','肘部贴近身体拉向髋侧，再缓慢放下'], cue:'示范图是膝盖跪凳的三点划船；家里请扶椅、两脚着地。先做右侧，过半换左侧。呼吸：上拉时呼气，下放时吸气。', mistake:'常见错误：耸肩、弓背，或用转动躯干把重量甩起来。' },
-  { id:'0404', name:'坐姿中立握哑铃推举', area:'肩部与上肢推力', sideMode:'none', equipment:'哑铃', steps:['坐在靠墙的稳定椅上，双脚踩稳','掌心相对，将哑铃停在肩旁','向上推至手臂接近伸直，再控制回到肩旁'], cue:'肋骨收住、不要后仰；只有一只哑铃时，每次左右交替。肩部锐痛立即停止。呼吸：上推时呼气，回落时吸气。', mistake:'常见错误：腰部大幅后弓、耸肩，或在头顶撞击哑铃。' },
-  { id:'1677', name:'坐姿哑铃弯举', area:'上臂前侧', sideMode:'none', equipment:'哑铃', steps:['坐稳，双脚着地，手臂自然垂在身体两侧','上臂保持安静，屈肘抬起哑铃','到可控位置后停一下，再缓慢下放'], cue:'两只可同时做；只有一只时左右交替。重量要允许肩膀和躯干保持安静。呼吸：抬起时呼气，下放时吸气。', mistake:'常见错误：身体前后摆动，或把肘部向前送来缩短动作。' }
-];
-/* ---- 健身房主流固定器械 · 全身均衡（3推3拉3腿）----
-   顺序遵循 ACSM/NSCA：大肌群复合动作优先 → 推/拉交替 → 上/下肢交替，避免同肌群连做：
-   腿举(腿·复合) → 推胸(推) → 下拉(拉) → 腿屈伸(腿) → 推肩(推) → 划船(拉) → 蝴蝶机(推) → 腿弯举(腿) → 辅助引体(拉)。
-   动图同源 Kaggle 健身动图集。 */
+// 磁盘文件名与动作 id 不同时，只写 ASSET_ALIAS；无预录的动作写入 SILENT_VOICE。
+
+var ASSET_ALIAS = {
+  'chair-stand': { voice:'0291' },
+  'farmer-carry': { media:'2133' }
+};
+var SILENT_VOICE = {
+  'towel-row':true,
+  'wall-plank':true,
+  'farmer-carry':true,
+  'bird-dog':true
+};
+
+function mediaStem(move){
+  if(!move){ return ''; }
+  var alias = ASSET_ALIAS[move.id];
+  if(alias && alias.media){ return alias.media; }
+  return move.id;
+}
+function voiceKey(prefix, move){
+  if(!move || SILENT_VOICE[move.id]){ return null; }
+  var alias = ASSET_ALIAS[move.id];
+  var id = (alias && alias.voice) ? alias.voice : move.id;
+  return prefix + id;
+}
+
+var hipBridge = { id:'3013', name:'臀桥', area:'臀部与后侧链', sideMode:'none', equipment:'', steps:['仰卧屈膝，双脚与髋同宽','收紧腹部，脚跟推地抬髋','到肩—髋—膝接近直线后慢慢回位'], cue:'肋骨不要外翻；顶端夹臀，不要用腰向上拱。呼吸：抬髋时呼气，下放时吸气。', mistake:'常见错误：抬得越高越好，导致腰部过伸。' };
+var deadBug = { id:'0276', name:'死虫', area:'核心稳定', sideMode:'alternate', equipment:'', steps:['腰背自然贴稳垫面，髋膝约 90°','一侧手臂与对侧腿缓慢远离身体','腰背不离垫，回位后换侧'], cue:'范围由腰背能否保持稳定决定；宁可短一点。呼吸：手脚伸出时呼气，回位时吸气。', mistake:'常见错误：手脚下放过低，腰背拱起。' };
+var wallPush = { id:'0659', name:'靠墙俯卧撑', area:'胸肩与上肢推力', sideMode:'none', equipment:'', steps:['面对墙站立，双手略宽于肩','身体保持一条直线，屈肘靠近墙','手掌推墙，回到起始位'], cue:'脚离墙越远越难；先选能稳定控制的位置。呼吸：推墙时呼气，靠近时吸气。', mistake:'常见错误：只移动头部，或塌腰、耸肩。' };
+var kneelingPlank = { id:'3239', name:'跪姿平板（可点肩）', area:'核心与肩稳定', sideMode:'alternate', equipment:'', steps:['膝盖着地、前臂撑地，头到膝保持直线','先稳住跪姿平板，能说话、不塌腰','稳了再轻点对侧肩；一晃就停在平板'], cue:'图是跪姿平板点肩。先撑住、能说话、不塌腰，稳了再轻点对侧肩；一晃就只撑住。呼吸：不要憋气。', mistake:'常见错误：塌腰，或猛地点肩扭腰。' };
+var bodyweightMoves = [hipBridge, deadBug, wallPush, kneelingPlank];
+
+var boxSquat = { id:'0291', name:'扶凳箱式深蹲', area:'大腿前侧与臀部', sideMode:'none', equipment:'哑铃', steps:['身后放一把稳固的椅子，双脚与髋同宽，哑铃垂于体侧（先徒手亦可）','臀部向后坐，像要坐进椅子里，膝盖朝脚尖方向','轻触椅面后脚跟推地站起，顶端夹臀'], cue:'椅子越高越简单；下蹲幅度以膝盖无锐痛为准，全程背部中立。先徒手练熟再加哑铃。呼吸：下坐时吸气，站起时呼气。', mistake:'常见错误：膝盖内扣、脚跟离地，或下坐时塌腰、上身过度前倾。' };
+var rdl = { id:'1459', name:'哑铃罗马尼亚硬拉', area:'臀部与大腿后侧', sideMode:'none', equipment:'哑铃', steps:['双脚与髋同宽，膝盖微屈，哑铃贴近腿前','髋部向后送，躯干随之向前倾','背部保持中立，到大腿后侧有拉伸感后夹臀站起'], cue:'动作是"髋向后"，不是深蹲；幅度由背部能否保持中立决定，不必让哑铃碰地。呼吸：站起时呼气，前倾时吸气。', mistake:'常见错误：弓背、哑铃远离身体，或为了下得更低而失去控制。' };
+var dbRow = { id:'0292', name:'扶椅单臂哑铃划船', area:'背部与上肢拉力', sideMode:'half', equipment:'哑铃', steps:['将稳定椅靠墙，空手扶稳，双脚前后站立','背部保持中立，持铃手自然下垂','肘部贴近身体拉向髋侧，再缓慢放下'], cue:'示范图是膝盖跪凳的三点划船；家里请扶椅、两脚着地。先做右侧，过半换左侧。呼吸：上拉时呼气，下放时吸气。', mistake:'常见错误：耸肩、弓背，或用转动躯干把重量甩起来。' };
+var dbPress = { id:'0404', name:'坐姿中立握哑铃推举', area:'肩部与上肢推力', sideMode:'none', equipment:'哑铃', steps:['坐在靠墙的稳定椅上，双脚踩稳','掌心相对，将哑铃停在肩旁','向上推至手臂接近伸直，再控制回到肩旁'], cue:'肋骨收住、不要后仰；只有一只哑铃时，每次左右交替。肩部锐痛立即停止。呼吸：上推时呼气，回落时吸气。', mistake:'常见错误：腰部大幅后弓、耸肩，或在头顶撞击哑铃。' };
+var dbCurl = { id:'1677', name:'坐姿哑铃弯举', area:'上臂前侧', sideMode:'none', equipment:'哑铃', steps:['坐稳，双脚着地，手臂自然垂在身体两侧','上臂保持安静，屈肘抬起哑铃','到可控位置后停一下，再缓慢下放'], cue:'两只可同时做；只有一只时左右交替。重量要允许肩膀和躯干保持安静。呼吸：抬起时呼气，下放时吸气。', mistake:'常见错误：身体前后摆动，或把肘部向前送来缩短动作。' };
+var dumbbellMoves = [boxSquat, rdl, dbRow, dbPress, dbCurl];
+
 var gymMoves = [
   { id:'2287', name:'腿举机', area:'大腿与臀部', sideMode:'none', equipment:'腿举机或哈克深蹲', steps:['坐稳靠背（或按健身房现有的腿举/哈克深蹲），双脚与髋同宽踩踏板中部','膝盖朝脚尖方向，缓慢屈膝下放','脚跟推踏板蹬起，顶端不锁死膝盖'], cue:'示范图更接近斜蹬/哈克。用你能坐稳、腰贴靠背的那台。下放以腰背贴稳为准。呼吸：蹬起时呼气，下放时吸气。', mistake:'常见错误：下放过深导致骨盆后倾、膝盖内扣，或猛蹬锁死膝盖。' },
   { id:'0576', name:'坐姿推胸机', area:'胸部与上肢推力', sideMode:'none', equipment:'坐姿推胸机', steps:['调好座椅高度，握把与胸同高，背部贴紧靠背','双手握把，肘部略低于肩，核心收紧','向前推至手臂接近伸直，再缓慢回放至胸侧'], cue:'重量宁轻勿重；推起时肩胛贴稳靠背、不耸肩。呼吸：推起时呼气，回放时吸气。', mistake:'常见错误：重量过大导致耸肩、弓背，或回放过快撞击配重。' },
@@ -31,9 +51,7 @@ var gymMoves = [
 var MOVE_META = {
   '3013':{ primary:'臀大肌', secondary:'腘绳肌、腹壁稳定肌', benefit:'提升髋伸力量，帮助起身与步行。', level:'起步' },
   '0276':{ primary:'腹横肌、腹直肌', secondary:'髋屈肌', benefit:'练习手脚活动时保持腰腹稳定。', level:'起步' },
-  '0710':{ primary:'臀中肌', secondary:'臀小肌、腹斜肌', benefit:'帮助站立、走路时稳定骨盆。', level:'起步' },
   '0659':{ primary:'胸大肌、肱三头肌', secondary:'前三角肌、腹壁稳定肌', benefit:'补齐上肢推力，并练站姿躯干稳定。', level:'起步' },
-  '1373':{ primary:'腓肠肌、比目鱼肌', secondary:'足踝稳定肌', benefit:'帮助走路推进与踝部稳定。', level:'起步' },
   '3239':{ primary:'腹横肌、腹直肌', secondary:'肩胛稳定肌、腹斜肌', benefit:'练习跪姿下抵抗塌腰；稳了再点肩。', level:'起步·先跪姿' },
   'towel-row':{ primary:'背阔肌、菱形肌', secondary:'肱二头肌、后三角肌', benefit:'补上肢拉力，改善含胸。', level:'起步' },
   '0292':{ primary:'背阔肌、菱形肌', secondary:'肱二头肌、后三角肌', benefit:'补齐上肢拉力，帮助提物与改善圆肩姿势。', level:'建立' },
@@ -45,19 +63,16 @@ var MOVE_META = {
   '0579':{ primary:'背阔肌', secondary:'肱二头肌、菱形肌', benefit:'强化上肢垂直拉力，帮助提拉与改善圆肩。', level:'建立' },
   '0588':{ primary:'背阔肌、菱形肌', secondary:'肱二头肌、后三角肌', benefit:'强化上肢水平拉力，改善含胸与上背无力。', level:'建立' },
   '2287':{ primary:'股四头肌、臀大肌', secondary:'腘绳肌、小腿', benefit:'强化下肢整体力量，帮助起身、上楼与搬物。', level:'建立' },
-  '0599':{ primary:'腘绳肌', secondary:'腓肠肌', benefit:'强化大腿后侧，平衡腿部力量、保护膝关节。', level:'建立' },
-  '0603':{ primary:'三角肌', secondary:'肱三头肌、上背稳定肌', benefit:'提升头顶取物的上肢力量与肩部稳定。', level:'建立' },
-  '0585':{ primary:'股四头肌', secondary:'髋屈肌', benefit:'强化大腿前侧，与腿弯举平衡腿部力量。', level:'建立' },
-  '0596':{ primary:'胸大肌', secondary:'前三角肌', benefit:'强化胸部与夹胸控制，改善上肢推力。', level:'建立' },
-  '0017':{ primary:'背阔肌', secondary:'肱二头肌、上背稳定肌', benefit:'以辅助重量练引体，强化垂直拉力。', level:'建立' }
+  '0599':{ primary:'腘绳肌', secondary:'腓肠肌', benefit:'强化大腿后侧，平衡腿部力量、保护膝关节。', level:'建立' }
 };
 bodyweightMoves.concat(dumbbellMoves).concat(gymMoves).forEach(function(m){
   var meta = MOVE_META[m.id] || {};
   Object.keys(meta).forEach(function(k){ m[k] = meta[k]; });
 });
-var chairStandMove = Object.assign({}, dumbbellMoves.filter(function(m){ return m.id === '0291'; })[0], {
-  id:'chair-stand', mediaId:'0291', voiceId:'0291', name:'扶椅坐站（先徒手）', area:'大腿、臀部与躯干稳定',
-  sideMode:'none', equipment:'稳固椅子；图中哑铃仅为进阶',
+var chairStandMove = Object.assign({}, boxSquat, {
+  id:'chair-stand', name:'扶椅坐站（先徒手）', area:'大腿、臀部与躯干稳定',
+  sideMode:'none', equipment:'稳固椅子（靠墙），无需负重',
+  frames:['chair-stand-steps.svg'], mediaLabel:'分步示意',
   primary:'股四头肌、臀大肌', secondary:'腘绳肌、腹壁稳定肌',
   benefit:'强化起身、上下楼和日常活动所需的大肌群。',
   steps:['把稳固椅子靠墙，双脚踩稳，先不拿哑铃','臀部向后坐，轻触椅面；可用双手扶大腿或椅侧协助','脚跟推地站起，能稳定完成后再考虑轻负重'],
@@ -73,7 +88,7 @@ var birdDogMove = {
   cue:'图是对侧手脚一起伸。家里先只伸一只手或一条腿；腹部较大可把手撑在稳固沙发座面。',
   mistake:'常见错误：抬得过高、腰部旋转，或为了跟图而超出自己幅度。', level:'可选进阶'
 };
-var wallPlankMove = Object.assign({}, bodyweightMoves.filter(function(m){ return m.id === '0659'; })[0], {
+var wallPlankMove = Object.assign({}, wallPush, {
   id:'wall-plank', frames:['generated/wall-plank-anatomy.png'], hold:true, name:'墙面斜板支撑', area:'站姿核心稳定', sideMode:'none',
   primary:'腹横肌、腹直肌', secondary:'腹斜肌、肩胛稳定肌',
   benefit:'练习抵抗塌腰，帮助站立和搬拿时保持躯干稳定。',
@@ -82,7 +97,7 @@ var wallPlankMove = Object.assign({}, bodyweightMoves.filter(function(m){ return
   mistake:'常见错误：塌腰、耸肩或屏住呼吸。', level:'起步'
 });
 var farmerCarryMove = {
-  id:'farmer-carry', mediaId:'2133',
+  id:'farmer-carry',
   name:'轻负重行走 / 原地持重', area:'站姿核心与全身稳定', sideMode:'none',
   equipment:'两只同重量轻哑铃或水瓶',
   primary:'腹壁稳定肌、竖脊肌', secondary:'前臂、斜方肌、臀中肌',
@@ -93,7 +108,7 @@ var farmerCarryMove = {
   level:'起步·轻负重'
 };
 var towelRowMove = {
-  id:'towel-row', mediaId:'3165',
+  id:'towel-row',
   name:'坐姿毛巾划船', area:'背部与上肢拉力', sideMode:'none',
   equipment:'长毛巾、稳固椅子', noMedia:true,
   primary:'背阔肌、菱形肌', secondary:'肱二头肌、后三角肌',
@@ -102,9 +117,16 @@ var towelRowMove = {
   cue:'保持坐稳，毛巾绕过脚底。拉的是背，不要耸肩。呼吸：拉回时呼气，放回时吸气。',
   mistake:'常见错误：弓背、耸肩，或靠后仰借力。', level:'起步'
 };
-var coreMoves = [wallPlankMove, chairStandMove, farmerCarryMove, birdDogMove, bodyweightMoves[1]];
+var coreMoves = [wallPlankMove, chairStandMove, farmerCarryMove, birdDogMove, deadBug];
 var routines = {
-  bodyweight: [bodyweightMoves[0], bodyweightMoves[1], chairStandMove, bodyweightMoves[3], towelRowMove, bodyweightMoves[5]],
+  bodyweight: [
+    Object.assign({}, hipBridge, { shortCue:'脚跟推地抬髋，顶端夹臀，不要拱腰。' }),
+    Object.assign({}, deadBug, { shortCue:'对侧手脚慢慢伸出，腰背贴稳垫面，左右交替。' }),
+    Object.assign({}, chairStandMove, { shortCue:'先空手，轻触椅面后踩稳站起；膝盖朝脚尖方向。' }),
+    Object.assign({}, wallPush, { shortCue:'身体保持直线，屈肘靠近墙，再慢慢推回。' }),
+    Object.assign({}, towelRowMove, { shortCue:'坐稳再拉，肩膀放松，不要后仰借力。' }),
+    Object.assign({}, kneelingPlank, { shortCue:'先稳住跪姿平板；能稳住再轻点肩，一晃就只撑住。' })
+  ],
   dumbbell: dumbbellMoves,
   core: coreMoves,
   gym: gymMoves
@@ -118,7 +140,6 @@ var presets = {
 };
 var presetNames = { recovery:'恢复档', starter:'入门档', standard:'标准档', steady:'进阶档' };
 
-/* ---- 热身动作库（低冲击、站姿、大体重友好；动图同源 Kaggle 健身动图集）---- */
 var warmupMoves = [
   { id:'3221', name:'原地踏步激活', sec:30, target:'全身 / 髋', position:'站姿', cue:'站直，交替抬膝到舒适高度，手臂自然摆动。图里膝盖抬得偏高，你按自己能稳住的高度即可。' },
   { id:'1368', name:'踝关节绕环', sec:20, target:'踝', position:'站姿', cue:'单脚站稳（可扶墙），另一脚脚尖画圈，顺逆各几次后换脚。' },
@@ -127,7 +148,6 @@ var warmupMoves = [
   { id:'1167', name:'动态扩胸', sec:25, target:'肩 / 胸', position:'站姿', cue:'双臂前后摆动、画圈，打开肩胸；动作连贯、不憋气。' }
 ];
 
-/* ---- 拉伸字典（按编号；练后针对部位 + 独立拉伸组共用）---- */
 var STRETCH = {
   '1377':{ name:'扶墙小腿拉伸', sec:28, target:'小腿', position:'站姿·扶墙', cue:'双手扶墙，一腿在前一腿在后，后脚跟贴地、膝伸直，身体前倾直到小腿后侧有拉伸感，换腿。' },
   '1576':{ name:'仰卧抬腿拉伸', sec:28, target:'大腿后侧', position:'仰卧', cue:'平躺，一腿伸直放地，另一腿抬起、双手抱大腿后侧往胸口靠，膝可微屈，换腿。' },
@@ -151,5 +171,10 @@ var stretchSets = {
 routines.stretch = stretchSets.stretch;
 routineNames.stretch = '拉伸';
 
-window.QDK_CONTENT = {bodyweightMoves:bodyweightMoves, dumbbellMoves:dumbbellMoves, gymMoves:gymMoves, coreMoves:coreMoves, routines:routines, routineNames:routineNames, presets:presets, presetNames:presetNames, warmupMoves:warmupMoves, STRETCH:STRETCH, stretchSets:stretchSets};
+window.QDK_CONTENT = {
+  bodyweightMoves:bodyweightMoves, dumbbellMoves:dumbbellMoves, gymMoves:gymMoves, coreMoves:coreMoves,
+  routines:routines, routineNames:routineNames, presets:presets, presetNames:presetNames,
+  warmupMoves:warmupMoves, STRETCH:STRETCH, stretchSets:stretchSets,
+  ASSET_ALIAS:ASSET_ALIAS, SILENT_VOICE:SILENT_VOICE, mediaStem:mediaStem, voiceKey:voiceKey
+};
 })();

@@ -1,6 +1,6 @@
 import { access, readdir, readFile } from 'node:fs/promises';
 import { constants } from 'node:fs';
-import { resolve } from 'node:path';
+import { resolve, relative, sep } from 'node:path';
 import vm from 'node:vm';
 import assert from 'node:assert/strict';
 
@@ -24,7 +24,13 @@ const forbiddenFiles = [
   'test.html',
   'serve.py',
   'package.json',
-  'package-lock.json'
+  'package-lock.json',
+  'docs/archive/HANDOVER.md'
+];
+const CUE_KEYS = [
+  'encourage-1','encourage-2','encourage-3','encourage-4','encourage-5',
+  'switch-side','countdown-3','countdown-start',
+  'finish-done','finish-stretch','finish-early'
 ];
 
 async function exists(relativeName) {
@@ -49,34 +55,78 @@ const m4aNames = new Set(voiceEntries.filter((name) => name.endsWith('.m4a')));
 const mp3Names = voiceEntries.filter((name) => name.endsWith('.mp3'));
 if (mp3Names.length) throw new Error(`Deprecated mp3 files leaked into dist: ${mp3Names.join(', ')}`);
 
-for (const entry of voiceManifest) {
-  const key = entry && typeof entry.key === 'string' ? entry.key : '';
+const manifestKeys = voiceManifest.map((entry) => entry && entry.key).filter(Boolean);
+assert.deepEqual([...new Set(manifestKeys)].sort(), manifestKeys.slice().sort(), '语音清单有重复 key');
+for (const key of manifestKeys) {
   if (!/^[a-z0-9-]+$/i.test(key) || !m4aNames.has(`${key}.m4a`)) {
     throw new Error(`Voice manifest entry has no m4a asset: ${JSON.stringify(key)}`);
   }
 }
+assert.equal(m4aNames.size, manifestKeys.length, '发布包包含未登记的语音');
 
-// 校验实际课程、运行时语音映射和素材；未录制动作必须出现在待办清单里。
 const app = await readFile(resolve(outputDir, 'app.js'), 'utf8');
-const mapping = app.match(/var VOICE_FILES = (\{[\s\S]*?\n\});/);
-assert.ok(mapping, '缺少运行时语音映射');
-const voices = vm.runInNewContext('(' + mapping[1] + ')');
-assert.deepEqual(Object.keys(voices).sort(), voiceManifest.map(entry => entry.key).sort(), '语音清单与运行时映射不同步');
-assert.equal(m4aNames.size, voiceManifest.length, '发布包包含未登记的语音');
-for (const [key, filename] of Object.entries(voices)) assert.equal(filename, key + '.m4a');
-const context = {window:{}};
+assert.equal(app.includes('var VOICE_FILES'), false, 'app.js 不应再抄一份语音表');
+assert.equal(app.includes('playVoiceViaWebAudio'), false, '语音地质层应已删除');
+assert.equal(app.includes('indexedDB'), false, '不应再双写 IndexedDB');
+assert.equal(app.includes('function mealTargets'), false, '四餐门槛应已删除');
+
+const context = { window: {} };
 vm.runInNewContext(await readFile(resolve(outputDir, 'content.js'), 'utf8'), context);
-const content = context.window.QDK_CONTENT, missing = new Set();
-const groups = Object.entries(content.routines).map(([name, moves]) => [name === 'stretch' ? 'stretch-' : 'work-', moves]);
-groups.push(['warmup-', content.warmupMoves], ...Object.values(content.stretchSets).map(moves => ['stretch-', moves]));
-for (const [prefix, moves] of groups) for (const move of moves) {
-  if (![move.voiceId, move.id, move.mediaId].some(id => id && voices[prefix + id])) missing.add(prefix + move.id);
-  if (move.noMedia) continue;
-  const media = move.frames || [(move.mediaId || move.id) + '-poster.png', ...(move.hold ? [] : [(move.mediaId || move.id) + '.gif'])];
-  for (const file of media) assert.ok(await exists('assets/exercise-guides/' + file), '动作缺少素材：' + move.name + ' / ' + file);
+const content = context.window.QDK_CONTENT;
+const liveVoice = new Set(CUE_KEYS);
+const missing = [];
+const mediaFiles = new Set();
+
+function addMedia(move) {
+  if (!move || move.noMedia) return;
+  if (move.frames && move.frames.length) {
+    move.frames.forEach((file) => mediaFiles.add(file));
+    return;
+  }
+  const stem = content.mediaStem(move);
+  mediaFiles.add(stem + '-poster.png');
+  if (!move.hold) mediaFiles.add(stem + '.gif');
 }
+
+const groups = Object.entries(content.routines).map(([name, moves]) => [name === 'stretch' ? 'stretch-' : 'work-', moves]);
+groups.push(['warmup-', content.warmupMoves], ...Object.values(content.stretchSets).map((moves) => ['stretch-', moves]));
+for (const [prefix, moves] of groups) {
+  for (const move of moves) {
+    addMedia(move);
+    const key = content.voiceKey(prefix, move);
+    if (!key) continue;
+    liveVoice.add(key);
+    if (!manifestKeys.includes(key)) missing.push(key);
+  }
+}
+
+assert.deepEqual(missing.sort(), [], '活课程缺预录语音，且未标 SILENT_VOICE：' + missing.join(', '));
+for (const key of liveVoice) {
+  assert.ok(manifestKeys.includes(key), '预录清单缺少活课程语音：' + key);
+}
+
+for (const file of mediaFiles) {
+  assert.ok(await exists('assets/exercise-guides/' + file), '动作缺少素材：' + file);
+}
+
+async function listFiles(dir, acc = []) {
+  for (const entry of await readdir(dir, { withFileTypes: true })) {
+    const path = resolve(dir, entry.name);
+    if (entry.isDirectory()) await listFiles(path, acc);
+    else if (!entry.name.startsWith('.') && entry.name !== 'SOURCE_LICENSE.txt') acc.push(path);
+  }
+  return acc;
+}
+const guideRoot = resolve(outputDir, 'assets/exercise-guides');
+const extras = [];
+for (const path of await listFiles(guideRoot)) {
+  const rel = relative(guideRoot, path).split(sep).join('/');
+  if (!mediaFiles.has(rel)) extras.push(rel);
+}
+assert.deepEqual(extras.sort(), [], '发布包含未引用示范：' + extras.join(', '));
+
 const pending = JSON.parse(await readFile(resolve('voice-pending.json'), 'utf8'));
-assert.deepEqual([...missing].sort(), pending.map(entry => entry.key).sort(), '新增语音缺口未登记，运行 voice:prepare 检查');
+assert.deepEqual(pending, [], 'voice-pending.json 应为空；缺预录的动作写 content.js 的 SILENT_VOICE');
 
 console.log(`Deploy artifact verified: ${voiceManifest.length} m4a voice files; sensitive source files excluded`);
-console.log(`Content verified: 课程素材齐全；${missing.size} 段语音待生成，当前使用系统语音回退`);
+console.log(`Content verified: 活课程语音与素材已求交；${Object.keys(content.SILENT_VOICE).length} 个动作明确无预录`);

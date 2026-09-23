@@ -1,69 +1,41 @@
 (function(){
 'use strict';
 /* ---- 全局错误兜底：避免未捕获异常导致白屏 ---- */
+function reportAppError(err){
+  console.error('[轻打卡]', err);
+  var msg = (err && err.message) ? String(err.message) : (typeof err === 'string' ? err : '');
+  if(!msg){ msg = '请强制刷新'; }
+  if(msg.length > 48){ msg = msg.slice(0, 48); }
+  try{ showToast('出错：' + msg, 'error'); }catch(_){}
+}
 window.addEventListener('error', function(ev){
-  console.error('[轻打卡]', ev.error || ev.message || ev);
-  try{ showToast('应用遇到错误，请刷新页面', 'error'); }catch(_){}
+  if(ev.target && ev.target !== window){ return; }
+  var file = ev.filename || '';
+  if(file && !/\/(app|content)\.js(\?|$)/.test(file)){ return; }
+  reportAppError(ev.error || ev.message || ev);
 });
 window.addEventListener('unhandledrejection', function(ev){
-  console.error('[轻打卡]', ev.reason || ev);
-  try{ showToast('应用遇到错误，请刷新页面', 'error'); }catch(_){}
+  var r = ev.reason, name = r && r.name;
+  if(name === 'AbortError' || name === 'NotAllowedError' || name === 'NotSupportedError'){ return; }
+  var stack = (r && r.stack) || '';
+  if(stack && !/\/(app|content)\.js/.test(stack)){ return; }
+  reportAppError(r || ev);
 });
 
 /* ============================================================
-   轻打卡 v6 —— 聚焦蛋白 + 跟练
-   数据层沿用 workbuddy-v5 模型（与旧版共享，数据无缝延续）
+   轻打卡 v6 —— 本机记蛋白 / 喝水 / 跟练
+   一份 localStorage JSON（键名 workbuddy-v5，兼容旧备份）。
+   跟练状态在 session，不写入 S。语音只播预录 m4a，没有文件就静音。
 
-   数据模型
-   ========
-   S (AppState) = {
-     v: 5,                     // 数据版本号
-     settings: Settings,        // 用户设置
-     logs: [LogEntry, ...],     // 日志列表（蛋白/饮水/训练）
-     weights: [WeightEntry, ...] // 体重记录
-     lifts: { [moveId]: LiftRec } // 动作上次重量 / 难度
-   }
-
-   LiftRec = { kg, reps, level, ts, history:[{ts,kg,reps,level}] }
-
-   Settings = {
-     proteinTarget: number,  // 每日蛋白目标 (g), 20-300
-     waterTarget: number,    // 每日饮水目标 (ml), 500-6000
-     bodyWeightKg: number,   // 当前体重，0 表示未设
-     heightCm: number,       // 身高，0 表示未设；BMI≥27.5 时按调整体重算蛋白
-     proteinPerKg: number,   // 每公斤蛋白系数，默认 1.4
-     proteinWeightMode: 'adjusted' | 'actual' | 'manual',
-     sound: boolean,         // 提示音
-     voice: boolean,         // 语音指导
-     motion: boolean,        // 动作动画
-     routine: 'bodyweight' | 'dumbbell' | 'core' | 'stretch',
-     preset: 'recovery' | 'starter' | 'standard' | 'steady',
-     profileLevel: 'adapt' | 'build' | 'target',
-     reminderTime: 'HH:MM',  // 遗留字段，兼容旧备份
-     readiness: 'green' | 'yellow' | 'red',
-     readinessDay: number
-   }
-
-   LogEntry = {
-     id: string,            // 唯一 ID
-     type: 'protein' | 'water' | 'training' | 'walk',
-     ts: number             // Unix 毫秒时间戳
-   }
-     protein 额外字段:  { grams, food, source:'photo'|'quick'|'manual'|'legacy', meal:'breakfast'|'lunch'|'dinner'|'snack' }
-     water 额外字段:    { ml }
-     walk 额外字段:     { minutes }
-     training 额外字段:  {
-       status: 'completed' | 'partial' | 'stopped' | 'legacy' | 'makeup',
-         // completed = 全部完成; partial = 部分完成; stopped = 提前结束
-         // legacy = 旧版数据; makeup = 补打卡（不计入训练连击）
-       routine, preset, readiness: 'green'|'yellow'|'red',
-       actualSeconds, plannedSeconds, workSeconds,
-       completedMoves, skippedMoves
-     }
-
-   WeightEntry = { ts, kg, waist?: number }
+   S = { v:5, settings, logs, weights, lifts }
+   Settings = { proteinTarget, waterTarget, bodyWeightKg, heightCm, proteinPerKg,
+     fiberDay, fiberVeg, fiberSoy, fiberGrain, sound, voice, motion,
+     routine, preset, readiness, readinessDay }
+   protein 条目: { grams, food, source:'photo'|'quick'|'manual'|'legacy', meal }
+     source:'photo' 只为旧备份显示，没有拍照入口。
    ============================================================ */
 function $(id){ return document.getElementById(id); }
+function setText(id, v){ var el = $(id); if(el){ el.textContent = v; } }
 function escapeHtml(s){ return String(s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
 function pad2(n){ return String(n).padStart(2,'0'); }
 function dayStart(ts){ var d = new Date(ts); d.setHours(0,0,0,0); return d.getTime(); }
@@ -110,7 +82,6 @@ var QUICK_FOODS = [
   { id:'chicken', name:'即食鸡胸', grams:25, food:'即食鸡胸 100g 熟', liquid:false },
   { id:'powder', name:'蛋白粉', grams:24, food:'蛋白粉 1 平勺', liquid:true }
 ];
-var MEAL_FLOOR = 30;
 var HEIGHT_CM_MIN = 120;
 var HEIGHT_CM_MAX = 220;
 // 课程 ID 的唯一事实来源。设置、日志与 UI 都必须引用它，避免新增课程时只改一处。
@@ -122,16 +93,6 @@ function mealFromTs(ts){
   if(h < 16){ return 'lunch'; }
   if(h < 20){ return 'dinner'; }
   return 'snack';
-}
-function mealTargets(total){
-  var t = Math.round(clampNumber(total, PROTEIN_TARGET_MIN, PROTEIN_TARGET_MAX, DEFAULT_PROTEIN));
-  if(t < 75){
-    var each = Math.floor(t / 3);
-    return { breakfast:each, lunch:each, dinner:t - 2 * each, snack:0 };
-  }
-  var floor = Math.min(40, Math.max(25, MEAL_FLOOR));
-  if(floor * 3 > t){ floor = Math.floor(t / 3); }
-  return { breakfast:floor, lunch:floor, dinner:floor, snack:Math.max(0, t - floor * 3) };
 }
 function idealWeightKg(heightCm){
   var h = Number(heightCm);
@@ -363,10 +324,10 @@ function defaultState(){
   var today = dayStart(Date.now());
   return { v:5, settings:{
     proteinTarget:DEFAULT_PROTEIN, waterTarget:DEFAULT_WATER, bodyWeightKg:0, proteinPerKg:PROTEIN_PER_KG_DEFAULT,
-    heightCm:0, proteinWeightMode:'adjusted',
+    heightCm:0,
     fiberDay:0, fiberVeg:false, fiberSoy:false, fiberGrain:false,
     sound:true, voice:true, motion:true,
-    voiceName:'', routine:'bodyweight', preset:'starter', profileLevel:'adapt', reminderTime:'19:30',
+    routine:'bodyweight', preset:'starter',
     readiness:'green', readinessDay:today
   }, logs:[], weights:[], lifts:{} };
 }
@@ -381,7 +342,6 @@ function normalizeSettings(s){
   out.proteinPerKg = Math.round(clampNumber(st.proteinPerKg, PROTEIN_PER_KG_MIN, PROTEIN_PER_KG_MAX, PROTEIN_PER_KG_DEFAULT) * 10) / 10;
   var hc = Number(st.heightCm);
   out.heightCm = (Number.isFinite(hc) && hc >= HEIGHT_CM_MIN && hc <= HEIGHT_CM_MAX) ? Math.round(hc) : 0;
-  out.proteinWeightMode = ['adjusted','actual','manual'].indexOf(st.proteinWeightMode) >= 0 ? st.proteinWeightMode : 'adjusted';
   var fd = Number(st.fiberDay);
   var today0 = dayStart(Date.now());
   if(Number.isFinite(fd) && fd === today0){
@@ -396,11 +356,8 @@ function normalizeSettings(s){
   out.sound = st.sound !== false;
   out.voice = st.voice !== false;
   out.motion = st.motion !== false;
-  out.voiceName = (typeof st.voiceName === 'string') ? st.voiceName.slice(0, 60) : '';
   out.routine = ROUTINE_IDS.indexOf(st.routine) >= 0 ? st.routine : 'bodyweight';
   out.preset = ['recovery','starter','standard','steady'].indexOf(st.preset) >= 0 ? st.preset : 'starter';
-  out.profileLevel = ['adapt','build','target'].indexOf(st.profileLevel) >= 0 ? st.profileLevel : 'adapt';
-  out.reminderTime = (typeof st.reminderTime === 'string' && /^\d{1,2}:\d{2}$/.test(st.reminderTime)) ? st.reminderTime : '19:30';
   var rd = Number(st.readinessDay);
   if(Number.isFinite(rd) && rd === today && ['green','yellow','red'].indexOf(st.readiness) >= 0){
     out.readiness = st.readiness;
@@ -426,9 +383,6 @@ function normalizeLogs(arr){
       if(g <= 0){ return; }
       var pEntry = { id:id, type:'protein', ts:ts, grams:g, food:cleanText(item.food,80,'食物'), source:['photo','quick','manual','legacy'].indexOf(item.source)>=0?item.source:'manual' };
       pEntry.meal = MEAL_IDS.indexOf(item.meal) >= 0 ? item.meal : mealFromTs(ts);
-      var pc = Number(item.carbs);   if(Number.isFinite(pc)  && pc > 0){ pEntry.carbs = Math.round(Math.min(500, pc)*10)/10; }
-      var pf = Number(item.fat);     if(Number.isFinite(pf)  && pf > 0){ pEntry.fat = Math.round(Math.min(500, pf)*10)/10; }
-      var pcal = Number(item.calories); if(Number.isFinite(pcal) && pcal > 0){ pEntry.calories = Math.round(Math.min(3000, pcal)); }
       out.push(pEntry);
     } else if(item.type === 'water'){
       var ml = Math.round(clampNumber(item.ml, 0, WATER_ML_SINGLE, 0));
@@ -528,92 +482,40 @@ function hydrateState(raw){
   };
 }
 var storageReady = false, storageInit = null, mutationQueue = Promise.resolve();
-var idbHandle = null;
-var IDB_NAME = 'qingdaka-v6', IDB_STORE = 'kv', IDB_KEY = 'state';
-function openIdb(){
-  return new Promise(function(resolve){
-    if(!window.indexedDB){ resolve(null); return; }
-    try{
-      var req = window.indexedDB.open(IDB_NAME, 1);
-      req.onupgradeneeded = function(){
-        if(!req.result.objectStoreNames.contains(IDB_STORE)){ req.result.createObjectStore(IDB_STORE); }
-      };
-      req.onsuccess = function(){
-        req.result.onversionchange = function(){ req.result.close(); idbHandle = null; };
-        resolve(req.result);
-      };
-      req.onerror = req.onblocked = function(){ resolve(null); };
-    }catch(e){ resolve(null); }
-  });
-}
-function idbGet(db){
-  return new Promise(function(resolve){
-    if(!db){ resolve(null); return; }
-    try{
-      var req = db.transaction(IDB_STORE, 'readonly').objectStore(IDB_STORE).get(IDB_KEY);
-      req.onsuccess = function(){ resolve(req.result || null); };
-      req.onerror = function(){ resolve(null); };
-    }catch(e){ resolve(null); }
-  });
-}
-function idbSet(db, value){
-  return new Promise(function(resolve){
-    if(!db){ resolve(false); return; }
-    try{
-      var tx = db.transaction(IDB_STORE, 'readwrite');
-      tx.oncomplete = function(){ resolve(true); };
-      tx.onerror = tx.onabort = function(){ resolve(false); };
-      tx.objectStore(IDB_STORE).put(value, IDB_KEY);
-    }catch(e){ resolve(false); }
-  });
-}
-async function writeState(s){
+function writeState(s){
   var json;
-  try{ json = JSON.stringify(s); }catch(e){ return false; }
-  // IndexedDB 必须等事务完成。localStorage 只在写入成功时算可用副本。
-  var idbOk = await idbSet(idbHandle, s), lsOk = false;
-  try{ window.localStorage.setItem(V5KEY, json); lsOk = true; }catch(e){}
-  if(!idbOk && !lsOk){
+  try{ json = JSON.stringify(s); JSON.parse(json); }catch(e){ return false; }
+  try{ window.localStorage.setItem(V5KEY, json); return true; }
+  catch(e){
     showToast('保存失败，原数据已保留。请释放空间或先导出备份。', 'error');
     return false;
   }
-  return true;
 }
 var __boot = readState();
 var S = __boot.state || defaultState();
 storageReadOnly = !__boot.state && __boot.hadData;
-async function recoverFromIdb(){
-  idbHandle = await openIdb();
-  var raw = await idbGet(idbHandle), migrated = migrateState(raw);
-  var backup = migrated ? hydrateState(migrated) : null;
-  if(backup && (!__boot.state || backup.updatedAt > (S.updatedAt || 0))){
-    S = backup;
-    storageReadOnly = false;
-  }
-  if(storageReadOnly){ showToast('数据读取异常，原文已保留。请到「我的」导出或导入备份。', 'error'); }
-  else { await writeState(S); }
-  storageReady = true;
-  bumpLogIndex();
-  moves = routines[S.settings.routine] || bodyweightMoves;
-  resetWorkout(); renderAll();
-}
 function mutateState(apply, allowRecovery){
-  var task = mutationQueue.then(async function(){
-    await storageInit;
-    if(storageReadOnly && !allowRecovery){ showToast('当前为只读模式，请先导出或导入备份', 'error'); return false; }
-    var previous = S, next;
-    try{
-      S = JSON.parse(JSON.stringify(previous));
-      apply();
-      next = S;
-      next.updatedAt = Math.max(Date.now(), (previous.updatedAt || 0) + 1);
-    }catch(e){ showToast('操作失败，原数据未改变', 'error'); return false; }
-    finally { S = previous; }
-    if(!await writeState(next)){ return false; }
-    S = next;
-    storageReadOnly = false;
-    bumpLogIndex();
-    return true;
+  var task = mutationQueue.then(function(){
+    return Promise.resolve(storageInit).then(function(){
+      if(storageReadOnly && !allowRecovery){ showToast('当前为只读模式，请先导出或导入备份', 'error'); return false; }
+      var snap;
+      try{ snap = JSON.stringify(S); }catch(e){ showToast('操作失败，原数据未改变', 'error'); return false; }
+      try{
+        apply();
+        S.updatedAt = Math.max(Date.now(), (JSON.parse(snap).updatedAt || 0) + 1);
+      }catch(e){
+        try{ S = hydrateState(JSON.parse(snap)); }catch(_){}
+        showToast('操作失败，原数据未改变', 'error');
+        return false;
+      }
+      if(!writeState(S)){
+        try{ S = hydrateState(JSON.parse(snap)); }catch(_){}
+        return false;
+      }
+      storageReadOnly = false;
+      bumpLogIndex();
+      return true;
+    });
   });
   mutationQueue = task.catch(function(){ return false; });
   return mutationQueue;
@@ -626,22 +528,11 @@ async function addProtein(grams, food, source, extras){
   var entry = { id:uid(), type:'protein', ts:Date.now(), grams:grams, food:cleanText(food,80,'食物'), source:source||'manual' };
   var ex = extras || {};
   entry.meal = MEAL_IDS.indexOf(ex.meal) >= 0 ? ex.meal : mealFromTs(entry.ts);
-  var c = Number(ex.carbs);   if(Number.isFinite(c)   && c > 0){ entry.carbs = Math.round(Math.min(500, c)*10)/10; }
-  var f = Number(ex.fat);     if(Number.isFinite(f)   && f > 0){ entry.fat = Math.round(Math.min(500, f)*10)/10; }
-  var cal = Number(ex.calories); if(Number.isFinite(cal) && cal > 0){ entry.calories = Math.round(Math.min(3000, cal)); }
-  var autoSoy = false;
   if(!await mutateState(function(){
     S.logs.push(entry);
-    if(entry.food.indexOf('豆腐') >= 0 || entry.food.indexOf('豆浆') >= 0){
-      ensureFiberDay(); autoSoy = !S.settings.fiberSoy; S.settings.fiberSoy = true;
-    }
   })){ return; }
   renderToday();
-  showToast('已记下 +' + grams + 'g', 'success', undoLog(entry, function(){
-    if(autoSoy && S.settings.fiberDay === dayStart(entry.ts) && !S.logs.some(function(l){
-      return l.type === 'protein' && dayStart(l.ts) === dayStart(entry.ts) && /豆腐|豆浆/.test(l.food);
-    })){ S.settings.fiberSoy = false; }
-  }));
+  showToast('已记下 +' + grams + 'g', 'success', undoLog(entry));
   return true;
 }
 async function addWalk(minutes){
@@ -681,7 +572,7 @@ async function addTraining(meta){
       plannedSeconds:Math.max(0,Math.round(meta.plannedSeconds||0)), workSeconds:Math.max(0,Math.round(meta.workSeconds||0)),
       completedMoves:Math.max(0,Math.round(meta.completedMoves||0)), skippedMoves:Math.max(0,Math.round(meta.skippedMoves||0))
     };
-    var lifts = normalizeSessionLifts(meta.lifts || sessionLifts);
+    var lifts = normalizeSessionLifts(meta.lifts || session.lifts);
     if(lifts){ entry.lifts = lifts; }
     S.logs.push(entry);
   })){ return false; }
@@ -732,11 +623,11 @@ async function addWeight(kg, waist){
 async function applyProteinFromWeight(){
   var kg = S.settings.bodyWeightKg || (latestWeight() && latestWeight().kg);
   var adj = adjustedWeightKg(kg, S.settings.heightCm);
-  var sug = suggestedProteinTarget(kg, S.settings.proteinPerKg, S.settings.heightCm, S.settings.proteinWeightMode);
+  var sug = suggestedProteinTarget(kg, S.settings.proteinPerKg, S.settings.heightCm, 'adjusted');
   if(!sug){ showToast('先记下体重，才能按体重计算', 'error'); return false; }
-  if(!await mutateState(function(){ S.settings.proteinTarget = sug; S.settings.proteinWeightMode = S.settings.proteinWeightMode || 'adjusted'; })){ return false; }
+  if(!await mutateState(function(){ S.settings.proteinTarget = sug; })){ return false; }
   renderSettings(); renderToday();
-  var used = (S.settings.proteinWeightMode === 'actual') ? kg : (adj || kg);
+  var used = adj || kg;
   var extra = (adj && S.settings.heightCm && adj < kg) ? '，已按调整体重，避免目标过高' : '';
   showToast('目标 ' + sug + ' g（' + used + ' kg × ' + S.settings.proteinPerKg + extra + '）。可手改小一点先执行。', 'success');
   return true;
@@ -867,13 +758,17 @@ document.querySelectorAll('.tab').forEach(function(t){
    动作库（沿用 v3 动作库，含大体重友好调整）
    ============================================================ */
 var C = window.QDK_CONTENT;
+if(!C || !C.routines){
+  reportAppError(new Error('content.js 未加载，请 Command+Shift+R'));
+  return;
+}
 var bodyweightMoves = C.bodyweightMoves, dumbbellMoves = C.dumbbellMoves, gymMoves = C.gymMoves, coreMoves = C.coreMoves, routines = C.routines, routineNames = C.routineNames, presets = C.presets, presetNames = C.presetNames, warmupMoves = C.warmupMoves, STRETCH = C.STRETCH, stretchSets = C.stretchSets;
 
 var moves = routines[S.settings.routine] || bodyweightMoves;
 
 function imagePath(move, animated, frameIndex){
   if(move.frames && move.frames.length){ return assetBase + move.frames[Math.min(frameIndex||0, move.frames.length-1)]; }
-  var mediaId = move.mediaId || move.id;
+  var mediaId = C.mediaStem ? C.mediaStem(move) : ((move && move.id) || '');
   return assetBase + mediaId + (animated && !move.hold ? '.gif' : '-poster.png');
 }
 function motionOn(){ return S.settings.motion && !window.matchMedia('(prefers-reduced-motion: reduce)').matches; }
@@ -896,12 +791,13 @@ function preloadMove(move, animated){
   if(move.frames && move.frames.length){ move.frames.forEach(function(_,i){ preloadUrl(imagePath(move,false,i)); }); }
   else { preloadUrl(imagePath(move,false)); if(animated && motionOn()){ preloadUrl(imagePath(move,true)); } }
 }
-function swapImage(img, url, alt){
+function swapImage(img, url, alt, onError){
   if(!img || !url){ return; }
   try{ url = new URL(url, document.baseURI).href; }catch(e){}
-  if(img.dataset.src === url){ if(alt){ img.alt = alt; } return; }
   var token = String(Date.now()) + Math.random();
   img.dataset.swapToken = token;
+  if(img.dataset.src === url){ img.classList.remove('demo-swap'); if(alt){ img.alt = alt; } return; }
+  if(onError){ img.classList.add('demo-swap'); }
   preloadUrl(url);
   var loader = new Image();
   loader.onload = function(){
@@ -913,7 +809,11 @@ function swapImage(img, url, alt){
       window.requestAnimationFrame(function(){ img.classList.remove('demo-swap'); });
     }, 90);
   };
-  loader.onerror = function(){ if(img.dataset.swapToken === token){ img.classList.remove('demo-swap'); } };
+  loader.onerror = function(){
+    if(img.dataset.swapToken !== token){ return; }
+    img.classList.remove('demo-swap');
+    if(onError){ img.removeAttribute('src'); delete img.dataset.src; onError(); }
+  };
   loader.src = url;
 }
 function stopFrameAnimation(){ if(demoFrameTimer){ window.clearInterval(demoFrameTimer); demoFrameTimer = null; } }
@@ -944,44 +844,12 @@ function cueShort(){ ensureAudio(); beep(740,0.09,0); }
 function cueFinish(){ ensureAudio(); beep(660,0.12,0); beep(830,0.12,0.14); beep(990,0.2,0.28); }
 function voiceEnabled(){ return S.settings.voice !== false; }
 
-/* ---- 预生成的女声音频（御姐音色，云端神经 TTS 合成） ----
-   优先播这些 m4a（AAC），跨设备音质一致；找不到对应 key 时再回退到系统 Web Speech。
-   用 m4a 而非 mp3：微信 iOS WebView 对 mp3 + SW 缓存/Range 易报 NotSupportedError。
-   修改音色：改 voice-scripts.json 后重新跑 synthesize，再转 m4a。 */
 var VOICE_BASE = 'assets/voice/';
-var VOICE_MIME = 'audio/mp4';
-var VOICE_FILES = {
-  'encourage-1':'encourage-1.m4a','encourage-2':'encourage-2.m4a','encourage-3':'encourage-3.m4a','encourage-4':'encourage-4.m4a','encourage-5':'encourage-5.m4a',
-  'switch-side':'switch-side.m4a',
-  'countdown-3':'countdown-3.m4a','countdown-start':'countdown-start.m4a',
-  'finish-done':'finish-done.m4a','finish-stretch':'finish-stretch.m4a','finish-early':'finish-early.m4a',
-  'warmup-3221':'warmup-3221.m4a','warmup-1368':'warmup-1368.m4a','warmup-0257':'warmup-0257.m4a','warmup-1428':'warmup-1428.m4a','warmup-1167':'warmup-1167.m4a',
-  'work-3013':'work-3013.m4a','work-0276':'work-0276.m4a','work-0710':'work-0710.m4a','work-0659':'work-0659.m4a','work-1373':'work-1373.m4a',
-  'work-3239':'work-3239.m4a','work-0292':'work-0292.m4a','work-0404':'work-0404.m4a','work-1677':'work-1677.m4a','work-1459':'work-1459.m4a',
-  'work-0291':'work-0291.m4a','work-2287':'work-2287.m4a','work-0576':'work-0576.m4a','work-0579':'work-0579.m4a','work-0585':'work-0585.m4a',
-  'work-0603':'work-0603.m4a','work-0588':'work-0588.m4a','work-0596':'work-0596.m4a','work-0599':'work-0599.m4a','work-0017':'work-0017.m4a',
-  'stretch-1271':'stretch-1271.m4a','stretch-1365':'stretch-1365.m4a','stretch-1377':'stretch-1377.m4a','stretch-1403':'stretch-1403.m4a',
-  'stretch-1424':'stretch-1424.m4a','stretch-1576':'stretch-1576.m4a','stretch-quad-stand':'stretch-quad-stand.m4a',
-  'stretch-0643':'stretch-0643.m4a','stretch-0794':'stretch-0794.m4a','stretch-0669':'stretch-0669.m4a'
-};
 var voiceAudio = null;
-var voiceCtx = null;
-// AudioBuffer 是解码后的 PCM，远大于压缩 m4a；严格限制数量以免微信 WebView
-// 因一次课预载几十段语音而回收页面。
-var VOICE_BUFFER_CACHE_MAX = 12;
-var voiceBufCache = Object.create(null);
-var voiceBufCacheOrder = [];
-var voiceLoadPromises = {};
-var voicePlayingNodes = [];
 var voiceGen = 0;
-
-function voiceAbsUrl(fn){
-  try { return new URL(VOICE_BASE + fn, location.href).href; }
-  catch(e){ return VOICE_BASE + fn; }
-}
 function ensureVoiceAudio(){
   if(voiceAudio){ return voiceAudio; }
-  try {
+  try{
     voiceAudio = document.getElementById('voicePlayer');
     if(!voiceAudio){
       voiceAudio = new Audio();
@@ -989,327 +857,71 @@ function ensureVoiceAudio(){
       voiceAudio.setAttribute('webkit-playsinline','');
     }
     voiceAudio.preload = 'auto';
-  } catch(e){ voiceAudio = null; }
+  }catch(e){ voiceAudio = null; }
   return voiceAudio;
 }
-function ensureVoiceCtx(){
-  var AC = window.AudioContext || window.webkitAudioContext;
-  if(!AC){ return null; }
-  if(!voiceCtx){
-    try { voiceCtx = new AC(); } catch(e){ return null; }
-  }
-  if(voiceCtx.state === 'suspended'){
-    try { voiceCtx.resume(); } catch(e){}
-  }
-  return voiceCtx;
-}
-function unlockVoiceAudio(){
-  var ctx = ensureVoiceCtx();
-  if(!ctx){ return; }
-  try {
-    var buf = ctx.createBuffer(1, 1, 22050);
-    var src = ctx.createBufferSource();
-    src.buffer = buf;
-    src.connect(ctx.destination);
-    src.start(0);
-  } catch(e){}
-}
-function stopCurrentVoice(){
-  voiceGen++;
-  voicePlayingNodes.forEach(function(n){
-    try { n.stop(); } catch(e){}
-    try { n.disconnect(); } catch(e){}
-  });
-  voicePlayingNodes = [];
-  var a = voiceAudio || document.getElementById('voicePlayer');
-  if(a){
-    try { a.pause(); } catch(e){}
-  }
-  if('speechSynthesis' in window){ try{ window.speechSynthesis.cancel(); }catch(e){} }
-}
-function resolveVoiceKey(prefix, move){
-  if(!move){ return null; }
-  var ids = [move.voiceId, move.id, move.mediaId];
-  for(var i=0;i<ids.length;i++){
-    if(!ids[i]){ continue; }
-    var k = prefix + ids[i];
-    if(VOICE_FILES[k]){ return k; }
-  }
-  return null;
-}
-function touchVoiceBuffer(key){
-  var i = voiceBufCacheOrder.indexOf(key);
-  if(i >= 0){ voiceBufCacheOrder.splice(i, 1); }
-  voiceBufCacheOrder.push(key);
-}
-function cacheVoiceBuffer(key, decoded){
-  voiceBufCache[key] = decoded;
-  touchVoiceBuffer(key);
-  while(voiceBufCacheOrder.length > VOICE_BUFFER_CACHE_MAX){
-    var evicted = voiceBufCacheOrder.shift();
-    delete voiceBufCache[evicted];
-  }
-  return decoded;
-}
-function loadVoiceBuffer(key){
-  if(voiceBufCache[key]){
-    touchVoiceBuffer(key);
-    return Promise.resolve(voiceBufCache[key]);
-  }
-  if(voiceLoadPromises[key]){ return voiceLoadPromises[key]; }
-  var fn = VOICE_FILES[key];
-  if(!fn){ return Promise.reject(new Error('no-file')); }
-  var url = voiceAbsUrl(fn);
-  voiceLoadPromises[key] = fetch(url).then(function(res){
-    if(!res.ok){ throw new Error('HTTP ' + res.status); }
-    return res.arrayBuffer();
-  }).then(function(ab){
-    var ctx = ensureVoiceCtx();
-    if(!ctx){ throw new Error('no-audiocontext'); }
-    var copy = ab.slice(0);
-    return new Promise(function(resolve, reject){
-      var settled = false;
-      function ok(v){ if(settled) return; settled = true; resolve(v); }
-      function bad(e){ if(settled) return; settled = true; reject(e || new Error('decode-failed')); }
-      try {
-        var ret = ctx.decodeAudioData(copy, ok, bad);
-        if(ret && typeof ret.then === 'function'){ ret.then(ok, bad); }
-      } catch(e){ bad(e); }
-    });
-  }).then(function(decoded){
-    delete voiceLoadPromises[key];
-    return cacheVoiceBuffer(key, decoded);
-  }).catch(function(err){
-    delete voiceLoadPromises[key];
-    throw err;
-  });
-  return voiceLoadPromises[key];
-}
-function preloadVoiceKeys(keys){
-  (keys || []).forEach(function(k){
-    if(k && VOICE_FILES[k]){ loadVoiceBuffer(k).catch(function(){}); }
-  });
-}
-function playVoiceViaWebAudio(key){
-  var ctx = ensureVoiceCtx();
-  if(!ctx){ return Promise.reject(new Error('no-audiocontext')); }
-  var myGen = voiceGen;
-  return loadVoiceBuffer(key).then(function(decoded){
-    if(myGen !== voiceGen){ return; }
-    if(ctx.state === 'suspended'){
-      return ctx.resume().then(function(){ return decoded; });
-    }
-    return decoded;
-  }).then(function(decoded){
-    if(myGen !== voiceGen || !decoded){ return; }
-    var src = ctx.createBufferSource();
-    src.buffer = decoded;
-    src.connect(ctx.destination);
-    voicePlayingNodes.push(src);
-    src.onended = function(){
-      var i = voicePlayingNodes.indexOf(src);
-      if(i >= 0){ voicePlayingNodes.splice(i, 1); }
-    };
-    src.start(0);
-  });
-}
-function playVoiceViaElement(key){
-  var fn = VOICE_FILES[key];
-  if(!fn){ return Promise.reject(new Error('no-file')); }
-  var url = voiceAbsUrl(fn);
+function unlockVoice(){
   var a = ensureVoiceAudio();
-  if(!a){ return Promise.reject(new Error('no-audio-el')); }
-  var myGen = voiceGen;
-  return new Promise(function(resolve, reject){
-    if(myGen !== voiceGen){ resolve(); return; }
-    var settled = false;
-    function ok(){ if(settled) return; settled = true; cleanup(); resolve(); }
-    function bad(err){ if(settled) return; settled = true; cleanup(); reject(err || new Error('audio-el-failed')); }
-    function cleanup(){
-      a.removeEventListener('playing', ok);
-      a.removeEventListener('error', onErr);
-    }
-    function onErr(){
-      var err = (a.error && a.error.message) ? a.error.message : 'media-error';
-      bad(new Error(err));
-    }
-    a.addEventListener('playing', ok);
-    a.addEventListener('error', onErr);
-    try {
-      a.muted = false;
-      a.volume = 1;
-      a.src = url;
-      a.load();
-      var p = a.play();
-      if(p && p.catch){ p.catch(bad); }
-    } catch(e){ bad(e); }
-  });
+  if(!a){ return; }
+  try{
+    a.muted = true;
+    var p = a.play();
+    if(p && p.then){ p.then(function(){ a.pause(); a.muted = false; }).catch(function(){ a.muted = false; }); }
+    else { a.muted = false; }
+  }catch(e){ try{ a.muted = false; }catch(_){} }
 }
-function playVoiceMp3(key, opts){
+function stopVoice(){
+  voiceGen++;
+  var a = voiceAudio || document.getElementById('voicePlayer');
+  if(a){ try{ a.pause(); }catch(e){} }
+}
+function playVoice(key, opts){
   opts = opts || {};
-  if(!VOICE_FILES[key]){ return false; }
-  unlockVoiceAudio();
-  // 跟练里先停掉上一段，避免两段叠音造成「音画不同步」
-  if(!opts.overlap){ stopCurrentVoice(); }
-  else if('speechSynthesis' in window){ try{ window.speechSynthesis.cancel(); }catch(e){} }
+  if(!key){ return false; }
+  var a = ensureVoiceAudio();
+  if(!a){ return false; }
+  if(!opts.overlap){ stopVoice(); }
   var myGen = voiceGen;
-  var showErr = opts.showError === true || (!playerOpen && opts.showError !== false);
-  playVoiceViaWebAudio(key).catch(function(err1){
-    console.warn('[voice] webaudio failed', err1, key);
-    return playVoiceViaElement(key);
-  }).catch(function(err2){
-    console.warn('[voice] element failed', err2, key);
-    // m4a 加载或解码失败时，不能因 playVoiceMp3 的同步 true 而吞掉兜底。
-    // 仅在本次语音仍有效时朗读，避免用户切动作后播出上一动作的提示。
-    if(myGen === voiceGen && opts.fallbackText){
-      speakViaWebSpeech(opts.fallbackText, opts);
-      return;
+  var url;
+  try{ url = new URL(VOICE_BASE + key + '.m4a', location.href).href; }
+  catch(e){ url = VOICE_BASE + key + '.m4a'; }
+  try{
+    a.muted = false;
+    a.volume = 1;
+    a.src = url;
+    var p = a.play();
+    if(p && p.catch){
+      p.catch(function(err){
+        if(myGen !== voiceGen){ return; }
+        if(opts.showError){
+          var name = (err && err.name) ? err.name : 'unknown';
+          try{ showToast('音频播放失败：' + name, 'error'); }catch(_){}
+        }
+      });
     }
-    if(!showErr){ return; }
-    var name = (err2 && err2.name) ? err2.name : ((err2 && err2.message) ? err2.message : 'unknown');
-    try{ showToast && showToast('音频播放失败：' + name, 'error'); }catch(e){}
-  });
+  }catch(e){
+    if(opts.showError){ try{ showToast('音频播放失败', 'error'); }catch(_){} }
+    return false;
+  }
   return true;
-}
-function prefetchUpcomingVoices(){
-  var keys = ['countdown-3','switch-side'];
-  for(var i = stepIndex; i < Math.min(steps.length, stepIndex + 4); i++){
-    var s = steps[i];
-    if(!s){ continue; }
-    if(s.type === 'warmup'){ keys.push(resolveVoiceKey('warmup-', s.move)); }
-    else if(s.type === 'work'){ keys.push(resolveVoiceKey('work-', s.move)); }
-    else if(s.type === 'stretch'){ keys.push(resolveVoiceKey('stretch-', s.move)); }
-    else if(s.type === 'break'){ keys.push('encourage-1','encourage-2','encourage-3'); }
-  }
-  preloadVoiceKeys(keys);
-}
-// 微信/iOS：尽早解锁音频会话
-(function bindVoiceUnlock(){
-  var once = function(){ unlockVoiceAudio(); cleanup(); };
-  var cleanup = function(){
-    document.removeEventListener('touchstart', once, true);
-    document.removeEventListener('click', once, true);
-  };
-  document.addEventListener('touchstart', once, true);
-  document.addEventListener('click', once, true);
-  document.addEventListener('visibilitychange', function(){
-    if(!document.hidden){ unlockVoiceAudio(); }
-  });
-  if(typeof WeixinJSBridge !== 'undefined' && WeixinJSBridge.invoke){
-    try { WeixinJSBridge.invoke('getNetworkType', {}, function(){ unlockVoiceAudio(); }); } catch(e){}
-  } else {
-    document.addEventListener('WeixinJSBridgeReady', function(){
-      try { WeixinJSBridge.invoke('getNetworkType', {}, function(){ unlockVoiceAudio(); }); } catch(e){}
-    }, false);
-  }
-})();
-
-/* ---- 语音选择：仅用「御姐」一个音色 ----
-   已统一为云端 TTS 预生成的 mp3，候选名单只保留 1 个作为占位。 */
-var VOICE_PREFERRED = ['Tingting','婷婷'];
-// 明显的男声/老年声，自动选择时避开
-var VOICE_AVOID = /grandpa|grandma|eddy|reed|rocko|yunbo|yunfeng|yunxi|yunyang|yunjian|kangkang|haoxiang|云希|云扬|云健|康康|昊翔/i;
-var voicesReady = false;
-var voiceSpeakQueue = [];
-function flushVoiceSpeakQueue(){
-  if(!('speechSynthesis' in window)){ voiceSpeakQueue = []; return; }
-  if(!window.speechSynthesis.getVoices().length){ return; }
-  voicesReady = true;
-  var q = voiceSpeakQueue.slice();
-  voiceSpeakQueue = [];
-  q.forEach(function(fn){ try{ fn(); }catch(e){} });
-}
-function onSpeechVoicesChanged(){
-  flushVoiceSpeakQueue();
-  renderVoiceOptions();
-}
-function zhVoices(){
-  if(!('speechSynthesis' in window)){ return []; }
-  return window.speechSynthesis.getVoices().filter(function(v){ return /^zh/i.test(v.lang); });
-}
-function pickVoice(){
-  var zh = zhVoices();
-  if(!zh.length){ return null; }
-  // 1) 用户在「我的」里手动指定的语音
-  var savedName = S.settings.voiceName || '';
-  if(savedName){
-    for(var s=0;s<zh.length;s++){ if(zh[s].name === savedName){ return zh[s]; } }
-  }
-  // 2) 优先名单里的年轻女声
-  for(var i=0;i<VOICE_PREFERRED.length;i++){
-    for(var j=0;j<zh.length;j++){ if(zh[j].name.indexOf(VOICE_PREFERRED[i]) >= 0){ return zh[j]; } }
-  }
-  // 3) 启发式：普通话、且避开男声/老年声
-  for(var k=0;k<zh.length;k++){
-    if(/^zh[-_]CN/i.test(zh[k].lang) && !VOICE_AVOID.test(zh[k].name)){ return zh[k]; }
-  }
-  return zh[0];
 }
 function speak(text, opts){
   if(!voiceEnabled()){ return; }
-  opts = opts || {};
-  // 1) 优先用预生成的 m4a（御姐音色，跨设备一致）
-  if(opts.mp3Key){
-    var voiceOpts = {};
-    Object.keys(opts).forEach(function(k){ voiceOpts[k] = opts[k]; });
-    voiceOpts.fallbackText = text;
-    if(playVoiceMp3(opts.mp3Key, voiceOpts)){ return; }
-  }
-  speakViaWebSpeech(text, opts);
-}
-function speakViaWebSpeech(text, opts){
-  // 无文本则不走 Web Speech（跟练中避免微信 TTS 失败弹窗）
-  if(text == null || text === ''){ return; }
-  // 系统 Web Speech（预生成 m4a 的异步失败兜底）
-  if(!('speechSynthesis' in window)){ return; }
-  try{
-    window.speechSynthesis.cancel();  // 不要先 pause()：部分引擎 pause 后队列不恢复，语音会哑掉
-    var doSpeak = function(){
-      var u = new SpeechSynthesisUtterance(text);
-      u.lang = 'zh-CN';
-      // 默认参数：pitch 略升（年轻感）+ rate 略降（更撩人、更稳）；调用方可用 opts 覆盖
-      u.rate  = (opts && typeof opts.rate  === 'number') ? opts.rate  : 0.95;
-      u.pitch = (opts && typeof opts.pitch === 'number') ? opts.pitch : 1.10;
-      u.volume = (opts && typeof opts.volume === 'number') ? opts.volume : 1.0;
-      var v = pickVoice();
-      if(v){ u.voice = v; }
-      window.speechSynthesis.speak(u);
-    };
-    if(voicesReady || window.speechSynthesis.getVoices().length > 0){
-      voicesReady = true;
-      doSpeak();
-    } else {
-      voiceSpeakQueue.push(doSpeak);
-    }
-  }catch(e){}
+  var key = opts && opts.voiceKey;
+  if(key){ playVoice(key, opts); }
 }
 var ENCOURAGE = ['坚持住，就快完成了','保持呼吸，你做得很稳','慢一点没关系，稳住就是胜利','每一次坚持，都在帮你保住肌肉','很好，注意动作质量，不抢时间'];
 function speakEncourage(){
   var n = Math.floor(Math.random() * ENCOURAGE.length);
-  speak(ENCOURAGE[n], { mp3Key: 'encourage-' + (n + 1) });
+  speak(ENCOURAGE[n], { voiceKey: 'encourage-' + (n + 1) });
 }
 function announceStep(step){
   if(!step){ return; }
-  var key = null, text = '';
-  if(step.type === 'warmup'){
-    key = resolveVoiceKey('warmup-', step.move);
-    text = '热身，' + step.move.name + '。' + (step.move.cue || '保持动作稳定。');
-  }
-  else if(step.type === 'work'){
-    key = resolveVoiceKey('work-', step.move);
-    text = '接下来，' + step.move.name + '。' + (step.move.cue || '保持动作稳定。');
-  }
-  else if(step.type === 'stretch'){
-    key = resolveVoiceKey('stretch-', step.move);
-    text = '拉伸，' + step.move.name + '，拉到' + step.move.target + '。' + (step.move.cue || '自然呼吸。');
-  }
-  else if(step.type === 'break'){ speakEncourage(); return; }
-  else if(step.type === 'rest'){
-    // 休息只保留提示音；微信里 Web Speech 不稳定，且无对应预生成音频
-    return;
-  }
-  if(key){ speak(text, { mp3Key: key }); }
-  else if(text){ speak(text); }
+  var key = C.voiceKey
+    ? C.voiceKey(step.type === 'stretch' ? 'stretch-' : (step.type === 'warmup' ? 'warmup-' : 'work-'), step.move)
+    : null;
+  if(step.type === 'break'){ speakEncourage(); }
+  else if(key){ speak('', { voiceKey: key }); }
 }
 
 /* ---- 屏幕常亮 ---- */
@@ -1323,15 +935,39 @@ function releaseWakeLock(){ if(wakeLock){ try{ wakeLock.release(); }catch(e){} w
 /* ============================================================
    跟练播放器（单一全屏视图）
    ============================================================ */
-var steps = [], stepIndex = 0, left = 0, totalDuration = 0, running = false, inCountdown = false, timer = null, tickRAF = 0, tickBase = 0, sideChanged = false;
-var sessionElapsed = 0, workElapsed = 0, stretchElapsed = 0, stepElapsedCounted = 0, skippedWork = 0;
-var completedMoveIds = {}, completedStretchIds = {}, sessionStarted = false, sessionLogged = false;
-var cdSpoken = false, lastLeft = -1;
-var playerOpen = false;
-var sessionLifts = {}, sessionFinishing = false, finishRetryEarly = null;
-var plLogMove = null;
-var plLogRound = 0;
-var plLogLevel = '';
+var PHASE = { idle:'idle', countdown:'countdown', running:'running', paused:'paused', finishing:'finishing', done:'done' };
+var TRANSITIONS = {
+  idle:{ countdown:1 },
+  countdown:{ running:1, paused:1, finishing:1 },
+  running:{ paused:1, finishing:1 },
+  paused:{ running:1, countdown:1, finishing:1, idle:1 },
+  finishing:{ done:1 },
+  done:{ idle:1, finishing:1 }
+};
+function emptySession(){
+  return {
+    phase:PHASE.idle, steps:[], stepIndex:0, left:0, totalDuration:0,
+    tickRAF:0, tickBase:0, timer:null,
+    elapsed:0, workElapsed:0, stretchElapsed:0, stepCounted:0, skippedWork:0,
+    completedMoveIds:{}, completedStretchIds:{},
+    lifts:{}, logged:false, finishRetryEarly:null,
+    sideChanged:false, cdSpoken:false, lastLeft:-1,
+    playerOpen:false, plLogMove:null, plLogRound:0, plLogLevel:''
+  };
+}
+var session = emptySession();
+function enterPhase(next){
+  if(session.phase === next){ return true; }
+  if(!(TRANSITIONS[session.phase] && TRANSITIONS[session.phase][next])){ return false; }
+  session.phase = next;
+  return true;
+}
+function sessionInProgress(){
+  return session.phase !== PHASE.idle && !(session.phase === PHASE.done && session.logged);
+}
+function sessionPlaying(){
+  return session.phase === PHASE.running || session.phase === PHASE.countdown;
+}
 
 function createPlan(){
   var cfg = presets[S.settings.preset] || presets.starter;
@@ -1353,34 +989,35 @@ function createPlan(){
   return plan;
 }
 function buildSteps(){
-  steps = createPlan();
-  totalDuration = steps.reduce(function(sum, step){ return sum + step.sec; }, 0);
+  session.steps = createPlan();
+  session.totalDuration = session.steps.reduce(function(sum, step){ return sum + step.sec; }, 0);
 }
 function resetSessionStats(){
-  sessionElapsed = 0; workElapsed = 0; stretchElapsed = 0; stepElapsedCounted = 0; skippedWork = 0;
-  completedMoveIds = {}; completedStretchIds = {}; sessionStarted = false; sessionLogged = false;
-  sessionLifts = {};
-  finishRetryEarly = null;
-  plLogMove = null; plLogRound = 0; plLogLevel = '';
+  session.elapsed = 0; session.workElapsed = 0; session.stretchElapsed = 0; session.stepCounted = 0; session.skippedWork = 0;
+  session.completedMoveIds = {}; session.completedStretchIds = {};
+  session.logged = false;
+  session.lifts = {};
+  session.finishRetryEarly = null;
+  session.plLogMove = null; session.plLogRound = 0; session.plLogLevel = '';
 }
 function captureStepProgress(reason){
-  var step = steps[stepIndex];
+  var step = session.steps[session.stepIndex];
   if(!step){ return; }
-  var elapsed = Math.max(0, Math.min(step.sec, step.sec - left));
-  var delta = Math.max(0, elapsed - stepElapsedCounted);
-  sessionElapsed += delta;
-  if(step.type === 'work'){ workElapsed += delta; }
-  if(step.type === 'stretch'){ stretchElapsed += delta; }
-  stepElapsedCounted = elapsed;
-  if(step.type === 'work' && (reason === 'natural' || elapsed >= step.sec*0.5)){ completedMoveIds[step.move.id] = true; }
-  if(step.type === 'stretch' && (reason === 'natural' || elapsed >= step.sec*0.5)){ completedStretchIds[step.move.id] = true; }
-  if(step.type === 'work' && reason === 'skip'){ skippedWork++; }
+  var elapsed = Math.max(0, Math.min(step.sec, step.sec - session.left));
+  var delta = Math.max(0, elapsed - session.stepCounted);
+  session.elapsed += delta;
+  if(step.type === 'work'){ session.workElapsed += delta; }
+  if(step.type === 'stretch'){ session.stretchElapsed += delta; }
+  session.stepCounted = elapsed;
+  if(step.type === 'work' && (reason === 'natural' || elapsed >= step.sec*0.5)){ session.completedMoveIds[step.move.id] = true; }
+  if(step.type === 'stretch' && (reason === 'natural' || elapsed >= step.sec*0.5)){ session.completedStretchIds[step.move.id] = true; }
+  if(step.type === 'work' && reason === 'skip'){ session.skippedWork++; }
   if(step.type === 'work' && (reason === 'natural' || reason === 'stop' || (reason === 'skip' && elapsed >= step.sec * 0.5))){
     commitCurrentLift(step.move, step.round);
   }
 }
 function readPlLogSet(){
-  var kind = plLogMove ? liftKind(plLogMove) : null;
+  var kind = session.plLogMove ? liftKind(session.plLogMove) : null;
   if(!kind){ return null; }
   if(kind === 'load'){
     return normalizeLiftSet({
@@ -1388,18 +1025,18 @@ function readPlLogSet(){
       reps: $('plReps') ? $('plReps').value : 0
     });
   }
-  if(!plLogLevel){ return null; }
-  return normalizeLiftSet({ level: plLogLevel });
+  if(!session.plLogLevel){ return null; }
+  return normalizeLiftSet({ level: session.plLogLevel });
 }
 function commitCurrentLift(move, round){
   if(!move){ return; }
   var key = move.id + ':' + (round || 0);
-  if(sessionLifts[key]){ return; }
+  if(session.lifts[key]){ return; }
   var set = readPlLogSet();
   if(!set){ return; }
-  sessionLifts[key] = set;
-  if(!sessionLifts[move.id]){ sessionLifts[move.id] = []; }
-  sessionLifts[move.id].push(set);
+  session.lifts[key] = set;
+  if(!session.lifts[move.id]){ session.lifts[move.id] = []; }
+  session.lifts[move.id].push(set);
   mutateState(function(){ upsertLiftRec(move.id, set); });
 }
 function bindPlLog(move, round){
@@ -1408,34 +1045,35 @@ function bindPlLog(move, round){
   var kind = liftKind(move);
   if(!kind || !move){
     box.hidden = true;
-    plLogMove = null;
+    session.plLogMove = null;
     return;
   }
-  plLogMove = move;
-  plLogRound = round || 0;
+  session.plLogMove = move;
+  session.plLogRound = round || 0;
   box.hidden = false;
   var rec = getLift(move.id);
   $('plLogLast').textContent = formatLiftLine(move, rec);
   var load = $('plLogLoad');
   var levels = $('plLogLevels');
+  if(!load || !levels){ return; }
   if(kind === 'load'){
     load.hidden = false;
     levels.hidden = true;
-    var prev = sessionLifts[move.id + ':' + plLogRound];
+    var prev = session.lifts[move.id + ':' + session.plLogRound];
     $('plKg').value = prev ? (prev.kg || '') : (rec && rec.kg ? rec.kg : '');
     $('plReps').value = prev ? (prev.reps || '') : (rec && rec.reps ? rec.reps : '');
-    var next = rec && rec.kg ? suggestNextKg(rec.kg, sessionLifts[move.id] || (rec.kg ? [{reps: rec.reps, kg: rec.kg}] : []), rec.reps || 10) : 0;
+    var next = rec && rec.kg ? suggestNextKg(rec.kg, session.lifts[move.id] || (rec.kg ? [{reps: rec.reps, kg: rec.kg}] : []), rec.reps || 10) : 0;
     $('plLogHint').textContent = next && rec && next > rec.kg
       ? ('这组能做到 ' + (rec.reps || 10) + ' 次的话，下次可试 ' + next + ' kg')
       : '做完这一组会自动记下';
   } else {
     load.hidden = true;
     levels.hidden = false;
-    var prevLv = sessionLifts[move.id + ':' + plLogRound];
-    plLogLevel = (prevLv && prevLv.level) || (rec && rec.level) || liftLevels(kind)[0].id;
-    renderLevelChips(levels, kind, plLogLevel, function(id){ plLogLevel = id; });
-    var nxt = nextLevelId(kind, plLogLevel);
-    $('plLogHint').textContent = (nxt && nxt !== plLogLevel)
+    var prevLv = session.lifts[move.id + ':' + session.plLogRound];
+    session.plLogLevel = (prevLv && prevLv.level) || (rec && rec.level) || liftLevels(kind)[0].id;
+    renderLevelChips(levels, kind, session.plLogLevel, function(id){ session.plLogLevel = id; });
+    var nxt = nextLevelId(kind, session.plLogLevel);
+    $('plLogHint').textContent = (nxt && nxt !== session.plLogLevel)
       ? ('稳住了下次可试：' + liftLevelName(kind, nxt))
       : '点一下难度，做完自动记下';
   }
@@ -1456,19 +1094,29 @@ function renderLevelChips(el, kind, selected, onPick){
     el.appendChild(b);
   });
 }
-function elapsedBefore(i){ var s=0; for(var k=0;k<i;k++){ s+=steps[k].sec; } return s; }
+function elapsedBefore(i){ var s=0; for(var k=0;k<i;k++){ s+=session.steps[k].sec; } return s; }
 function updateProgress(){
-  var step = steps[stepIndex];
-  var done = elapsedBefore(stepIndex) + (step ? (step.sec - left) : 0);
-  var pct = totalDuration ? Math.min(100, done/totalDuration*100) : 0;
+  var step = session.steps[session.stepIndex];
+  var done = elapsedBefore(session.stepIndex) + (step ? (step.sec - session.left) : 0);
+  var pct = session.totalDuration ? Math.min(100, done/session.totalDuration*100) : 0;
   $('plBar').style.width = pct + '%';
 }
 function setDemoVisible(visible){
   $('plDemoWrap').hidden = !visible;
-  if(!visible){ stopFrameAnimation(); currentDemoUrl = ''; }
+  if(!visible){ stopFrameAnimation(); currentDemoUrl = ''; $('plDemo').dataset.swapToken = ''; }
+}
+function showBodyweightInstructions(move, label){
+  if(S.settings.routine !== 'bodyweight' || !move){ return; }
+  var steps = move.steps || [move.cue];
+  $('plInstructions').innerHTML = '<p class="instruction-label">' + escapeHtml(label) + '</p><ol>' + steps.map(function(text){ return '<li>' + escapeHtml(text) + '</li>'; }).join('') + '</ol>';
+  $('plInstructions').hidden = false;
 }
 function renderDemo(move, badge, animate){
-  if(!move || move.noMedia){ setDemoVisible(false); $('plDemo').removeAttribute('src'); return; }
+  if(!move || move.noMedia){
+    setDemoVisible(false);
+    $('plDemo').removeAttribute('src'); $('plDemo').removeAttribute('data-src');
+    return;
+  }
   setDemoVisible(true);
   stopFrameAnimation();
   preloadMove(move, !!animate);
@@ -1477,7 +1125,10 @@ function renderDemo(move, badge, animate){
   var show = function(){
     var src = move.frames && move.frames.length ? imagePath(move,false,frame) : imagePath(move,useMotion);
     currentDemoUrl = src;
-    swapImage($('plDemo'), src, move.name);
+    swapImage($('plDemo'), src, move.name, S.settings.routine === 'bodyweight' ? function(){
+      setDemoVisible(false);
+      showBodyweightInstructions(move, '示范暂不可用 · 文字步骤');
+    } : null);
   };
   show();
   if(useMotion && move.frames && move.frames.length > 1){
@@ -1490,10 +1141,10 @@ function renderDots(){
   var box = $('plDots'); box.innerHTML = '';
   var pt = primaryType();
   var idx = [];
-  steps.forEach(function(s,i){ if(s.type===pt){ idx.push(i); } });
+  session.steps.forEach(function(s,i){ if(s.type===pt){ idx.push(i); } });
   var cur = -1;
-  idx.forEach(function(i,wi){ if(i <= stepIndex){ cur = wi; } });
-  var onNow = steps[stepIndex] && steps[stepIndex].type === pt;
+  idx.forEach(function(i,wi){ if(i <= session.stepIndex){ cur = wi; } });
+  var onNow = session.steps[session.stepIndex] && session.steps[session.stepIndex].type === pt;
   idx.forEach(function(i,wi){
     var d = document.createElement('span');
     d.className = 'd' + (wi < cur ? ' done' : (wi === cur && onNow ? ' now' : ''));
@@ -1503,10 +1154,14 @@ function renderDots(){
 function renderNext(){
   var el = $('plNext');
   var m = null;
-  for(var i = stepIndex+1; i < steps.length; i++){
-    var s = steps[i];
+  for(var i = session.stepIndex+1; i < session.steps.length; i++){
+    var s = session.steps[i];
     if(s.type === 'rest' || s.type === 'break'){ m = s.next; break; }
     if(s.move){ m = s.move; break; }
+  }
+  if(S.settings.routine === 'bodyweight'){
+    el.textContent = m ? '接下来 · ' + m.name : '这是最后一个动作';
+    return;
   }
   if(m && !m.noMedia){
     preloadMove(m, false);
@@ -1518,10 +1173,11 @@ function renderNext(){
   }
 }
 function renderStep(){
-  var step = steps[stepIndex];
+  var step = session.steps[session.stepIndex];
   if(!step){ finishWorkout(false); return; }
-  $('plClock').textContent = String(left);
-  sideChanged = false;
+  $('plInstructions').hidden = true;
+  $('plClock').textContent = String(session.left);
+  session.sideChanged = false;
   var rounds = (presets[S.settings.preset]||presets.starter).rounds;
   var phase = $('plPhase');
   if(step.type === 'warmup'){
@@ -1536,7 +1192,7 @@ function renderStep(){
     $('plRound').textContent = '第 ' + step.round + ' / ' + rounds + ' 轮';
     $('plClock').className = 'pl-clock num';
     $('plMv').textContent = step.move.name;
-    renderDemo(step.move, step.move.hold || step.move.staticOnly ? '静态姿势参考' : (motionOn() ? (step.move.frames ? '起止姿势参考' : '跟随节奏') : '静态参考'), true);
+    renderDemo(step.move, step.move.mediaLabel || (step.move.hold || step.move.staticOnly ? '静态姿势参考' : (motionOn() ? (step.move.frames ? '起止姿势参考' : '跟随节奏') : '静态参考')), true);
     var cue = '<b>' + escapeHtml(step.move.name) + ' · 主练 ' + escapeHtml(step.move.primary || step.move.area) + '</b>' + escapeHtml(step.move.cue);
     if(step.move.sideMode === 'half'){ cue += ' 过半会提示换侧。'; }
     else if(step.move.sideMode === 'alternate'){ cue += ' 左右交替。'; }
@@ -1566,66 +1222,89 @@ function renderStep(){
     else { renderDemo(step.move, '拉伸 · ' + step.move.position, true); }
     $('plCue').innerHTML = '<b>' + escapeHtml(step.move.name) + ' · 拉到 ' + escapeHtml(step.move.target) + '（' + escapeHtml(step.move.position) + '）</b>' + escapeHtml(step.move.cue);
   }
-  for(var ni=stepIndex+1; ni<steps.length; ni++){ var ns=steps[ni]; if(ns.move && !ns.move.noMedia){ preloadMove(ns.move, ns.type==='work'); break; } }
+  for(var ni=session.stepIndex+1; ni<session.steps.length; ni++){ var ns=session.steps[ni]; if(ns.move && !ns.move.noMedia){ preloadMove(ns.move, ns.type==='work'); break; } }
   updateProgress();
   renderDots();
   renderNext();
-  if(step.type === 'work'){ bindPlLog(step.move, step.round); }
+  if(S.settings.routine === 'bodyweight'){
+    var shownMove = step.move || step.next;
+    if(step.type === 'work'){
+      $('plRound').textContent = '动作 ' + (moves.indexOf(step.move)+1) + ' / ' + moves.length + (rounds > 1 ? ' · 第 ' + step.round + ' 轮' : '');
+      $('plCue').textContent = step.move.shortCue;
+      $('plBadge').textContent = step.move.mediaLabel || (motionOn() ? '动作示范 · 按自己的节奏' : '静态参考');
+    } else if(step.type === 'rest' || step.type === 'break'){
+      $('plMv').textContent = step.type === 'rest' ? '休息一下' : '轮间休息';
+      $('plCue').textContent = '恢复呼吸，摆好下一动作的起始位。';
+    } else {
+      $('plCue').textContent = step.move.noMedia ? '' : step.move.cue;
+    }
+    if(shownMove && shownMove.noMedia){ showBodyweightInstructions(shownMove, '文字步骤 · 暂无匹配动图'); }
+    $('plLog').hidden = true; session.plLogMove = null;
+  } else if(step.type === 'work'){ bindPlLog(step.move, step.round); }
   else if(step.type === 'rest' || step.type === 'break'){
     var prev = null;
-    for(var pi = stepIndex - 1; pi >= 0; pi--){
-      if(steps[pi].type === 'work'){ prev = steps[pi]; break; }
+    for(var pi = session.stepIndex - 1; pi >= 0; pi--){
+      if(session.steps[pi].type === 'work'){ prev = session.steps[pi]; break; }
     }
     if(prev){ bindPlLog(prev.move, prev.round); }
-    else if($('plLog')){ $('plLog').hidden = true; plLogMove = null; }
-  } else if($('plLog')){ $('plLog').hidden = true; plLogMove = null; }
+    else if($('plLog')){ $('plLog').hidden = true; session.plLogMove = null; }
+  } else if($('plLog')){ $('plLog').hidden = true; session.plLogMove = null; }
 }
 function tick(){
-  if(!running || inCountdown){ return; }
-  var step = steps[stepIndex];
+  if(session.phase !== PHASE.running){ return; }
+  var step = session.steps[session.stepIndex];
   if(!step){ return; }
-  var realLeft = step.sec - Math.floor((Date.now() - tickBase)/1000);
-  if(step.type === 'work' && step.move.sideMode === 'half' && !sideChanged && realLeft <= Math.ceil(step.sec/2)){
-    sideChanged = true;
+  var realLeft = step.sec - Math.floor((Date.now() - session.tickBase)/1000);
+  if(step.type === 'work' && step.move.sideMode === 'half' && !session.sideChanged && realLeft <= Math.ceil(step.sec/2)){
+    session.sideChanged = true;
     $('plCue').innerHTML = '<b>现在换侧</b>先稳住身体，再开始另一侧。';
     $('plBadge').textContent = '换另一侧';
-    cueShort(); speak('换另一侧', { mp3Key: 'switch-side' });
+    cueShort(); speak('换另一侧', { voiceKey: 'switch-side' });
   }
-  if(realLeft <= 0){ left = 0; captureStepProgress('natural'); advance(1,'natural',true); return; }
-  left = realLeft;
-  if(left !== lastLeft){          // 每帧写 DOM 无意义，秒数变化时再更新
-    lastLeft = left;
-    $('plClock').textContent = String(left);
+  if(realLeft <= 0){
+    session.left = 0; captureStepProgress('natural'); advance(1,'natural',true);
+    if(session.phase === PHASE.running){ startTick(); }
+    return;
+  }
+  session.left = realLeft;
+  if(session.left !== session.lastLeft){
+    session.lastLeft = session.left;
+    $('plClock').textContent = String(session.left);
     updateProgress();
-    if(left <= 3 && left >= 1){
+    if(session.left <= 3 && session.left >= 1){
       cueShort();
-      if(left === 3 && !cdSpoken){ cdSpoken = true; speak('3，2，1', { mp3Key: 'countdown-3' }); }
+      if(session.left === 3 && !session.cdSpoken){ session.cdSpoken = true; speak('3，2，1', { voiceKey: 'countdown-3' }); }
     }
   }
-  tickRAF = window.requestAnimationFrame(tick);
+  session.tickRAF = window.requestAnimationFrame(tick);
 }
-function startTick(){ tickRAF = window.requestAnimationFrame(tick); }
-function stopTick(){ if(tickRAF){ window.cancelAnimationFrame(tickRAF); tickRAF = 0; } }
+function startTick(){ session.tickRAF = window.requestAnimationFrame(tick); }
+function stopTick(){ if(session.tickRAF){ window.cancelAnimationFrame(session.tickRAF); session.tickRAF = 0; } }
+function stopSessionTimer(){
+  if(session.timer){ window.clearInterval(session.timer); session.timer = null; }
+  stopTick();
+}
 function enterStep(){
-  var step = steps[stepIndex];
+  var step = session.steps[session.stepIndex];
   if(!step){ finishWorkout(false); return; }
-  left = step.sec; tickBase = Date.now(); sideChanged = false; cdSpoken = false; lastLeft = -1; stepElapsedCounted = 0;
+  if(session.phase === PHASE.countdown && !enterPhase(PHASE.running)){ return; }
+  session.left = step.sec; session.tickBase = Date.now(); session.sideChanged = false; session.cdSpoken = false; session.lastLeft = -1; session.stepCounted = 0;
   renderStep();
-  prefetchUpcomingVoices();
   if(step.type === 'work'){ cueStart(); } else { cueRest(); }
   announceStep(step);
 }
 function advance(dir, reason, alreadyCaptured){
   if(!alreadyCaptured){ captureStepProgress(reason || (dir > 0 ? 'skip' : 'back')); }
-  var next = stepIndex + dir;
-  if(next >= steps.length){ finishWorkout(false); return; }
+  var next = session.stepIndex + dir;
+  if(next >= session.steps.length){ finishWorkout(false); return; }
   if(next < 0){ next = 0; }
-  stepIndex = next; enterStep();
+  session.stepIndex = next; enterStep();
 }
 function runCountdown(){
-  inCountdown = true;
+  if(session.phase !== PHASE.countdown && !enterPhase(PHASE.countdown)){ return; }
   var n = 3;
   setDemoVisible(false);
+  $('plInstructions').hidden = true;
   $('plPhase').textContent = '准备开始'; $('plPhase').className = 'pl-phase warm';
   $('plClock').className = 'pl-clock num cd';
   $('plClock').textContent = String(n);
@@ -1633,16 +1312,13 @@ function runCountdown(){
   $('plRound').textContent = '先站稳';
   $('plCue').innerHTML = '<b>准备</b>确认脚下没有障碍，保持自然呼吸；倒数后先从轻松热身开始。';
   $('plDots').innerHTML = ''; $('plNext').innerHTML = '';
-  if($('plLog')){ $('plLog').hidden = true; plLogMove = null; }
-  unlockVoiceAudio();
-  // 只预取临近步骤。一次性解码整节课会让移动端短时间常驻大量 PCM。
-  preloadVoiceKeys(['countdown-start','countdown-3','switch-side']);
-  cueShort(); speak('3，2，1，开始', { mp3Key: 'countdown-start' });
-  timer = window.setInterval(function(){
+  if($('plLog')){ $('plLog').hidden = true; session.plLogMove = null; }
+  unlockVoice();
+  cueShort(); speak('3，2，1，开始', { voiceKey: 'countdown-start' });
+  session.timer = window.setInterval(function(){
     n--;
     if(n <= 0){
-      window.clearInterval(timer); timer = null;
-      inCountdown = false;
+      stopSessionTimer();
       enterStep();
       startTick();
       return;
@@ -1653,16 +1329,20 @@ function runCountdown(){
 }
 var playerReturnFocus = null;
 function openPlayer(){
-  playerOpen = true;
+  session.playerOpen = true;
   playerReturnFocus = document.activeElement;
-  var pl = $('player');
+  var pl = $('player'), isBodyweight = S.settings.routine === 'bodyweight';
+  pl.classList.toggle('bodyweight', isBodyweight);
+  $('plPrev').textContent = isBodyweight ? '上一个' : '⏮';
+  $('plSkip').textContent = isBodyweight ? '跳过' : '⏭';
+  $('plEnd').textContent = isBodyweight ? '结束' : '■';
   pl.classList.add('open');
   pl.setAttribute('aria-hidden','false');
   pl.removeAttribute('inert');
   document.body.style.overflow = 'hidden';
 }
 function closePlayer(){
-  playerOpen = false;
+  session.playerOpen = false;
   var pl = $('player');
   pl.classList.remove('open');
   pl.setAttribute('aria-hidden','true');
@@ -1674,85 +1354,89 @@ function closePlayer(){
   playerReturnFocus = null;
 }
 function startWorkout(){
-  if(running || sessionFinishing){ return; }
-  if(finishRetryEarly !== null){ openPlayer(); return; }
+  if(session.phase === PHASE.running || session.phase === PHASE.countdown || session.phase === PHASE.finishing){ return; }
+  if(session.phase === PHASE.done && session.finishRetryEarly !== null){ openPlayer(); return; }
   if(getReadiness() === 'red' && S.settings.routine !== 'stretch'){
     showToast('今天先不训练：优先补液并处理症状；严重或持续请联系医疗人员', 'error');
     return;
   }
-  if(!steps.length || stepIndex >= steps.length){ resetWorkout(); }
+  if(!session.steps.length || session.stepIndex >= session.steps.length){ resetWorkout(); }
   ensureAudio();
-  unlockVoiceAudio();
-  sessionStarted = true;
-  running = true;
-  $('plPause').textContent = '⏸';
+  unlockVoice();
+  $('plPause').textContent = S.settings.routine === 'bodyweight' ? '暂停' : '⏸';
+  $('plPause').setAttribute('aria-label', '暂停');
   $('plPrev').disabled = false; $('plSkip').disabled = false;
   requestWakeLock();
   openPlayer();
-  if(left < (steps[stepIndex] && steps[stepIndex].sec) && stepElapsedCounted > 0){
-    tickBase = Date.now() - ((steps[stepIndex].sec - left) * 1000);
+  if(session.phase === PHASE.paused && session.stepCounted > 0 && session.left < (session.steps[session.stepIndex] && session.steps[session.stepIndex].sec)){
+    if(!enterPhase(PHASE.running)){ return; }
+    session.tickBase = Date.now() - ((session.steps[session.stepIndex].sec - session.left) * 1000);
     renderStep();
     startTick();
-  } else { runCountdown(); }
+    return;
+  }
+  if(session.phase === PHASE.idle || session.phase === PHASE.paused){
+    if(!enterPhase(PHASE.countdown)){ return; }
+  }
+  runCountdown();
 }
 function pauseWorkout(){
-  if(!running){ startWorkout(); return; }
+  if(session.phase !== PHASE.running && session.phase !== PHASE.countdown){ startWorkout(); return; }
   captureStepProgress('pause');
-  running = false;
-  stopCurrentVoice();
-  if(timer){ window.clearInterval(timer); timer = null; } stopTick();
-  inCountdown = false;
-  $('plPause').textContent = '▶';
+  if(!enterPhase(PHASE.paused)){ return; }
+  stopVoice();
+  stopSessionTimer();
+  $('plPause').textContent = S.settings.routine === 'bodyweight' ? '继续' : '▶';
+  $('plPause').setAttribute('aria-label', '继续');
   $('plPhase').textContent = '已暂停';
   releaseWakeLock();
 }
 function resetWorkout(){
-  running = false; inCountdown = false;
-  if(timer){ window.clearInterval(timer); timer = null; } stopTick();
+  stopSessionTimer();
+  stopVoice();
+  session = emptySession();
   buildSteps();
-  resetSessionStats();
-  stepIndex = 0; left = steps.length ? steps[0].sec : 0; tickBase = 0;
+  session.left = session.steps.length ? session.steps[0].sec : 0;
   $('plPause').textContent = '⏸';
   updateProgress();
 }
 async function finishWorkout(early){
-  if(sessionLogged || sessionFinishing){ return; }
-  sessionFinishing = true;
+  if(session.logged || session.phase === PHASE.finishing){ return; }
+  if(session.phase !== PHASE.finishing && !enterPhase(PHASE.finishing)){ return; }
   captureStepProgress(early ? 'stop' : 'natural');
-  running = false; inCountdown = false;
-  if(timer){ window.clearInterval(timer); timer = null; } stopTick();
+  stopSessionTimer();
   releaseWakeLock();
-  left = 0; stepIndex = steps.length; updateProgress();
+  session.left = 0; session.stepIndex = session.steps.length; updateProgress();
   cueFinish();
   var isStretch = S.settings.routine === 'stretch';
-  var effectiveWork = isStretch ? stretchElapsed : workElapsed;
-  var mvCount = isStretch ? Object.keys(completedStretchIds).length : Object.keys(completedMoveIds).length;
-  var shouldLog = effectiveWork >= 20 || sessionElapsed >= 30 || mvCount > 0;
+  var effectiveWork = isStretch ? session.stretchElapsed : session.workElapsed;
+  var mvCount = isStretch ? Object.keys(session.completedStretchIds).length : Object.keys(session.completedMoveIds).length;
+  var shouldLog = effectiveWork >= 20 || session.elapsed >= 30 || mvCount > 0;
   var didLog = false;
   if(shouldLog){
     didLog = await addTraining({
-      status: early ? 'stopped' : (skippedWork > 0 ? 'partial' : 'completed'),
+      status: early ? 'stopped' : (session.skippedWork > 0 ? 'partial' : 'completed'),
       routine:S.settings.routine, preset:S.settings.preset, readiness:getReadiness(),
-      actualSeconds:sessionElapsed, plannedSeconds:totalDuration, workSeconds:effectiveWork,
-      completedMoves:mvCount, skippedMoves:skippedWork
+      actualSeconds:session.elapsed, plannedSeconds:session.totalDuration, workSeconds:effectiveWork,
+      completedMoves:mvCount, skippedMoves:session.skippedWork
     });
-    if(didLog){ sessionLogged = true; }
+    if(didLog){ session.logged = true; }
   }
-  sessionFinishing = false;
-  finishRetryEarly = shouldLog && !didLog ? !!early : null;
-  $('plDoneBtn').textContent = finishRetryEarly !== null ? '重试保存' : '好的';
-  var mins = (Math.round(sessionElapsed/6)/10);
+  enterPhase(PHASE.done);
+  session.finishRetryEarly = shouldLog && !didLog ? !!early : null;
+  $('plDoneBtn').textContent = session.finishRetryEarly !== null ? '重试保存' : (S.settings.routine === 'bodyweight' ? '回到训练' : '好的');
+  var mins = (Math.round(session.elapsed/6)/10);
   var unit = isStretch ? ' 个拉伸' : ' 个动作';
-  $('plDoneTitle').textContent = finishRetryEarly !== null ? '本次尚未保存' : (early && didLog ? '已按实际记录' : (isStretch ? '拉伸结束' : '训练结束'));
+  $('plDoneTitle').textContent = session.finishRetryEarly !== null ? '本次尚未保存' : (early && didLog ? '已按实际记录' : (isStretch ? '拉伸结束' : '训练结束'));
   $('plDoneSub').textContent = '实际 ' + mins + ' 分钟 · 完成 ' + mvCount + unit +
     (didLog ? ' · 已写入' : (shouldLog ? ' · 保存失败' : ' · 太短未写入，下次做 1 个动作即可'));
   var liftBox = $('plDoneLifts');
   if(liftBox){
     var lines = [];
-    Object.keys(sessionLifts).forEach(function(k){
+    Object.keys(session.lifts).forEach(function(k){
       if(k.indexOf(':') >= 0){ return; }
       var mv = moveById(k);
-      var sets = sessionLifts[k] || [];
+      var sets = session.lifts[k] || [];
       if(!mv || !sets.length){ return; }
       var kind = liftKind(mv);
       if(kind === 'load'){
@@ -1768,39 +1452,35 @@ async function finishWorkout(early){
   }
   $('plDone').classList.add('show');
   $('plDone').setAttribute('aria-hidden','false');
-  // 用预生成 m4a；加载失败时带同一句 Web Speech 兜底。
   var doneKey = didLog ? (early ? 'finish-early' : (isStretch ? 'finish-stretch' : 'finish-done')) : null;
-  var doneText = early ? '本次已按实际完成量记录。' : (isStretch ? '拉伸完成，放松一下。' : '训练完成，放松一下。今天的饮食按实际记录即可。');
-  if(doneKey){ speak(doneText, { mp3Key: doneKey }); }
-  else { speak(shouldLog ? '保存失败，请重试保存。' : '本次时间较短，未写入训练记录。'); }
+  if(doneKey){ speak('', { voiceKey: doneKey }); }
 }
 $('plPause').addEventListener('click', function(){ pauseWorkout(); });
-$('plSkip').addEventListener('click', function(){ if(running && !inCountdown){ advance(1,'skip'); } });
-$('plPrev').addEventListener('click', function(){ if(running && !inCountdown && stepIndex > 0){ advance(-1,'back'); } });
+$('plSkip').addEventListener('click', function(){ if(session.phase === PHASE.running){ advance(1,'skip'); } });
+$('plPrev').addEventListener('click', function(){ if(session.phase === PHASE.running && session.stepIndex > 0){ advance(-1,'back'); } });
 $('plEnd').addEventListener('click', function(){
   showConfirm('按已经做完的记录下来？未做完的明天不必补罚。', function(){ finishWorkout(true); }, { title:'结束并记录', okText:'记下' });
 });
 $('plExit').addEventListener('click', function(){
-  if(running){ pauseWorkout(); }
+  if(sessionPlaying()){ pauseWorkout(); }
   closePlayer();
   renderAll();
-  if(sessionStarted && !sessionLogged){ showToast('已暂停，不会在后台计时；可继续或结束并记录', ''); }
+  if(sessionInProgress()){ showToast('已暂停，不会在后台计时；可继续或结束并记录', ''); }
 });
 $('plDoneBtn').addEventListener('click', function(){
-  if(sessionFinishing){ return; }
-  if(finishRetryEarly !== null){ finishWorkout(finishRetryEarly); return; }
+  if(session.phase === PHASE.finishing){ return; }
+  if(session.finishRetryEarly !== null){ finishWorkout(session.finishRetryEarly); return; }
   $('plDone').classList.remove('show');
   $('plDone').setAttribute('aria-hidden','true');
   closePlayer();
   resetWorkout();
-  goPage('today');
+  goPage(S.settings.routine === 'bodyweight' ? 'training' : 'today');
 });
 document.addEventListener('visibilitychange', function(){
-  if(document.hidden && running && !inCountdown){ pauseWorkout(); }
+  if(document.hidden && session.phase === PHASE.running){ pauseWorkout(); }
 });
-/* ---- 防止训练中误关页面导致进度丢失 ---- */
 window.addEventListener('beforeunload', function(e){
-  if((running || finishRetryEarly !== null) && sessionStarted && !sessionLogged){
+  if(sessionInProgress() || session.finishRetryEarly !== null){
     e.preventDefault();
     e.returnValue = '';
     return '';
@@ -1911,7 +1591,7 @@ function renderToday(){
       '<span class="g num">' + l.grams + '<small> g</small></span><button class="del" aria-label="删除' + escapeHtml(l.food) + '">删除</button>';
     div.querySelector('.del').addEventListener('click',function(){ deleteLog(l.id); }); box.appendChild(div);
   });
-  var stretch = S.settings.routine === 'stretch', active = sessionStarted && !sessionLogged;
+  var stretch = S.settings.routine === 'stretch', active = sessionInProgress();
   $('tName').textContent = routineNames[S.settings.routine] || '徒手基础';
   $('tDesc').textContent = active ? '本次已暂停，可以接着练' : ((stretch ? '放松拉伸' : presetNames[S.settings.preset]) + ' · ' + (Math.round(totalDurationEstimate()/6)/10) + ' 分钟');
   $('tGo').textContent = active ? '继续' : '去跟练';
@@ -1982,7 +1662,13 @@ $('tGo').addEventListener('click', function(){ goPage('training'); });
 
 /* ---- 训练页 ---- */
 function renderTraining(){
-  var isStretch = S.settings.routine === 'stretch', active = sessionStarted && !sessionLogged;
+  var isStretch = S.settings.routine === 'stretch', isBodyweight = S.settings.routine === 'bodyweight', active = sessionInProgress();
+  $('bodyweightPlan').hidden = !isBodyweight;
+  $('bodyweightEquipment').hidden = !isBodyweight;
+  $('movesDetails').hidden = isBodyweight;
+  $('btnPlan').hidden = isBodyweight;
+  var cfg = presets[S.settings.preset] || presets.starter;
+  $('bodyweightDose').textContent = '每个 ' + cfg.work + ' 秒 · ' + cfg.rounds + ' 轮';
   document.querySelectorAll('#routineSeg button').forEach(function(b){ var on=b.dataset.routine === S.settings.routine; b.classList.toggle('on',on); b.setAttribute('aria-pressed',String(on)); });
   document.querySelectorAll('#presetSeg button').forEach(function(b){ var on=b.dataset.preset === S.settings.preset; b.classList.toggle('on',on); b.setAttribute('aria-pressed',String(on)); });
   document.querySelectorAll('#readyRow button').forEach(function(b){ var on=b.dataset.ready === getReadiness(); b.classList.toggle('on',on); b.setAttribute('aria-pressed',String(on)); });
@@ -2001,10 +1687,20 @@ function renderTraining(){
   makeMoveCards();
 }
 function makeMoveCards(){
-  var box = $('moveList'); box.innerHTML = '';
+  $('moveList').innerHTML = ''; $('bodyweightMoveList').innerHTML = '';
+  var isBodyweight = S.settings.routine === 'bodyweight';
+  var box = $(isBodyweight ? 'bodyweightMoveList' : 'moveList');
   var isStretch = S.settings.routine === 'stretch';
   var list = isStretch ? stretchSets.stretch : moves;
   list.forEach(function(m, i){
+    if(isBodyweight){
+      var row = document.createElement('button');
+      row.type = 'button'; row.className = 'sequence-move';
+      row.innerHTML = '<span class="sequence-number num">' + pad2(i+1) + '</span><span class="sequence-name">' + escapeHtml(m.name) + '</span><span class="chev" aria-hidden="true">›</span>';
+      row.addEventListener('click', function(){ openMoveDetail(m); });
+      box.appendChild(row);
+      return;
+    }
     var card = document.createElement('button');
     card.type = 'button';
     card.className = 'card press move-card';
@@ -2024,7 +1720,7 @@ function makeMoveCards(){
   });
 }
 function canChangePlan(){
-  if(sessionFinishing || (sessionStarted && !sessionLogged)){ showToast('先继续或结束本次跟练，再调整课程。'); return false; }
+  if(session.phase === PHASE.finishing || sessionInProgress()){ showToast('先继续或结束本次跟练，再调整课程。'); return false; }
   return true;
 }
 $('routineSeg').addEventListener('click', async function(e){
@@ -2065,8 +1761,8 @@ $('readyRow').addEventListener('click', async function(e){
 });
 async function openWorkoutPlan(preview){
   await storageInit; await mutationQueue;
-  if(sessionFinishing){ return; }
-  if(sessionStarted && !sessionLogged){ if(preview === true){ openPlanPreview(); } else { startWorkout(); } return; }
+  if(session.phase === PHASE.finishing){ return; }
+  if(sessionInProgress()){ if(preview === true){ openPlanPreview(); } else { startWorkout(); } return; }
   if(getReadiness() === 'red' && S.settings.routine !== 'stretch'){ showToast('今天身体不适，请先休息', 'error'); return; }
   resetWorkout();
   if(preview === true){ openPlanPreview(); } else { startWorkout(); }
@@ -2079,7 +1775,7 @@ var planModal = $('planModal');
 function planSummary(){
   var warm = 0, work = 0, stretch = 0, rest = 0, rounds = 0;
   var warmNames = [], workNames = [], stretchNames = [], seenWork = {};
-  steps.forEach(function(s){
+  session.steps.forEach(function(s){
     if(s.type === 'warmup'){ warm += s.sec; warmNames.push(s.move.name); }
     else if(s.type === 'work'){ work += s.sec; rounds = Math.max(rounds, s.round); if(!seenWork[s.move.id]){ seenWork[s.move.id] = true; workNames.push(s.move.name); } }
     else if(s.type === 'stretch'){ stretch += s.sec; stretchNames.push(s.move.name); }
@@ -2372,46 +2068,41 @@ function renderLiftHist(){
 
 /* ---- 我的页 ---- */
 function renderSettings(){
-  $('backupStatus').textContent = S.lastBackupAt ? '上次导出：' + new Date(S.lastBackupAt).toLocaleDateString() + '。请确认文件已保存。' : '还未导出备份，建议定期保存一份。';
-  $('targetVal').textContent = S.settings.proteinTarget;
+  setText('backupStatus', S.lastBackupAt ? '上次导出：' + new Date(S.lastBackupAt).toLocaleDateString() + '。请确认文件已保存。' : '还未导出备份，建议定期保存一份。');
+  setText('targetVal', S.settings.proteinTarget);
   var bw = S.settings.bodyWeightKg || (latestWeight() && latestWeight().kg) || 0;
-  $('weightSetVal').textContent = bw ? bw : '—';
-  if($('heightSetVal')){ $('heightSetVal').textContent = S.settings.heightCm ? S.settings.heightCm : '—'; }
+  setText('weightSetVal', bw ? bw : '—');
+  setText('heightSetVal', S.settings.heightCm ? S.settings.heightCm : '—');
   var adj = adjustedWeightKg(bw, S.settings.heightCm);
-  var sug = suggestedProteinTarget(bw, S.settings.proteinPerKg, S.settings.heightCm, S.settings.proteinWeightMode);
+  var sug = suggestedProteinTarget(bw, S.settings.proteinPerKg, S.settings.heightCm, 'adjusted');
   if(bw && adj && S.settings.heightCm && adj < bw){
-    $('weightHint').textContent = bw + ' kg · 调整体重 ' + adj + ' kg（BMI 较高时不全按实际体重算蛋白）';
-    $('targetHint').textContent = sug ? ('按调整体重约 ' + sug + ' g，也可手改小一点先执行') : '可手改目标';
+    setText('weightHint', bw + ' kg · 调整体重 ' + adj + ' kg（BMI 较高时不全按实际体重算蛋白）');
+    setText('targetHint', sug ? ('按调整体重约 ' + sug + ' g，也可手改小一点先执行') : '可手改目标');
   } else {
-    $('weightHint').textContent = bw ? ('当前 ' + bw + ' kg') : '用来按体重估算蛋白目标';
-    $('targetHint').textContent = sug ? ('按体重约 ' + sug + ' g，也可手改') : '先记下体重和身高，或直接手改目标';
+    setText('weightHint', bw ? ('当前 ' + bw + ' kg') : '用来按体重估算蛋白目标');
+    setText('targetHint', sug ? ('按体重约 ' + sug + ' g，也可手改') : '先记下体重和身高，或直接手改目标');
   }
-  $('perKgVal').textContent = S.settings.proteinPerKg;
-  $('waterTargetVal').textContent = S.settings.waterTarget;
-  $('setSound').checked = S.settings.sound !== false;
-  $('setVoice').checked = S.settings.voice !== false;
-  $('setMotion').checked = S.settings.motion !== false;
-  renderVoiceOptions();
+  setText('perKgVal', S.settings.proteinPerKg);
+  setText('waterTargetVal', S.settings.waterTarget);
+  if($('setSound')){ $('setSound').checked = S.settings.sound !== false; }
+  if($('setVoice')){ $('setVoice').checked = S.settings.voice !== false; }
+  if($('setMotion')){ $('setMotion').checked = S.settings.motion !== false; }
+  renderVoiceHint();
 }
 
-/* ---- 语音音色选择 ---- */
-function renderVoiceOptions(){
-  var missing = {};
-  Object.keys(routines).forEach(function(id){ (routines[id] || []).forEach(function(m){
-    if(!resolveVoiceKey(id === 'stretch' ? 'stretch-' : 'work-', m)){ missing[m.id] = true; }
-  }); });
-  var count = Object.keys(missing).length;
-  $('voiceHint').textContent = count ? '御姐预录女声；' + count + ' 个动作暂用系统语音。' : '跟练使用预录御姐女声；音频不可用时尝试系统语音。';
+function renderVoiceHint(){
+  var el = $('voiceHint');
+  if(!el){ return; }
+  var silent = (C.SILENT_VOICE && Object.keys(C.SILENT_VOICE).length) || 0;
+  el.textContent = silent
+    ? '跟练播预录御姐女声；' + silent + ' 个动作无预录，保持静音。'
+    : '跟练播预录御姐女声；没有对应文件时静音。';
 }
 $('btnVoicePreview').addEventListener('click', function(){
-  // 试听优先预生成 m4a；不可用时由 speak 自动回退系统语音。
   if(!voiceEnabled()){ showToast('语音指导未开启', 'error'); return; }
-  speak('坚持住，就快完成了', { mp3Key:'encourage-1', showError:true });
+  unlockVoice();
+  speak('坚持住，就快完成了', { voiceKey:'encourage-1', showError:true });
 });
-if('speechSynthesis' in window){
-  window.speechSynthesis.addEventListener('voiceschanged', onSpeechVoicesChanged);
-  flushVoiceSpeakQueue();
-}
 $('btnSetTarget').addEventListener('click', function(){
   showPrompt('设置每日蛋白目标（20–300 g）：', String(S.settings.proteinTarget), async function(t){
     if(t === '' || t == null){ return; }
@@ -2434,7 +2125,7 @@ if($('btnSetHeight')){
       if(!await mutateState(function(){ S.settings.heightCm = Math.round(n); })){ renderSettings(); return; }
       renderSettings();
       var kg = S.settings.bodyWeightKg || (latestWeight() && latestWeight().kg);
-      var sug = suggestedProteinTarget(kg, S.settings.proteinPerKg, S.settings.heightCm, S.settings.proteinWeightMode);
+      var sug = suggestedProteinTarget(kg, S.settings.proteinPerKg, S.settings.heightCm, 'adjusted');
       if(sug && sug !== S.settings.proteinTarget){
         showConfirm('按调整体重，把蛋白目标改成 ' + sug + ' g？也可继续用手改。', function(){
           applyProteinFromWeight();
@@ -2454,7 +2145,7 @@ $('btnSetWeight').addEventListener('click', function(){
       showToast('请输入 ' + WEIGHT_KG_MIN + '–' + WEIGHT_KG_MAX + ' 之间的数字', 'error'); return;
     }
     if(!await addWeight(n)){ return; }
-    var sug = suggestedProteinTarget(n, S.settings.proteinPerKg, S.settings.heightCm, S.settings.proteinWeightMode);
+    var sug = suggestedProteinTarget(n, S.settings.proteinPerKg, S.settings.heightCm, 'adjusted');
     if(sug && sug !== S.settings.proteinTarget){
       var adj = adjustedWeightKg(n, S.settings.heightCm);
       var used = (adj && S.settings.heightCm) ? adj : n;
@@ -2591,35 +2282,36 @@ function renderAll(){
 var appRegistration = null, updateRequested = false, offlineProbe = 0;
 function updateOfflineStatus(){
   showWaitingUpdate();
+  if(!$('offlineStatus')){ return; }
   var probe = ++offlineProbe;
   var active = appRegistration && appRegistration.active;
-  if(!active){ $('offlineStatus').textContent = '离线资源准备中，完成前请保持联网。'; return; }
+  if(!active){ setText('offlineStatus', '离线资源准备中，完成前请保持联网。'); return; }
   var channel = new MessageChannel();
   var timeout = window.setTimeout(function(){
     channel.port1.close();
-    if(probe === offlineProbe){ $('offlineStatus').textContent = '暂未确认离线准备状态，请联网检查更新。'; }
+    if(probe === offlineProbe){ setText('offlineStatus', '暂未确认离线准备状态，请联网检查更新。'); }
   }, 4000);
   channel.port1.onmessage = function(e){
     window.clearTimeout(timeout);
     channel.port1.close();
     if(probe !== offlineProbe){ return; }
-    $('offlineStatus').textContent = e.data.ready
+    setText('offlineStatus', e.data && e.data.ready
       ? '可离线打开。示范图在联网浏览后保存。'
-      : '离线资源尚不完整，请联网重新打开后检查。';
+      : '离线资源尚不完整，请联网重新打开后检查。');
   };
   active.postMessage({type:'OFFLINE_STATUS'}, [channel.port2]);
 }
 function showWaitingUpdate(){
-  $('btnUpdateApp').hidden = !(appRegistration && appRegistration.waiting);
+  if($('btnUpdateApp')){ $('btnUpdateApp').hidden = !(appRegistration && appRegistration.waiting); }
 }
-$('btnUpdateApp').addEventListener('click', async function(){
-  if(sessionStarted && !sessionLogged){ showToast('请先结束并记录本次训练，再更新应用'); return; }
+if($('btnUpdateApp')){ $('btnUpdateApp').addEventListener('click', async function(){
+  if(sessionInProgress()){ showToast('请先结束并记录本次训练，再更新应用'); return; }
   await mutationQueue;
   if(appRegistration && appRegistration.waiting){
     updateRequested = true;
     appRegistration.waiting.postMessage({type:'ACTIVATE_UPDATE'});
   }
-});
+}); }
 if('serviceWorker' in navigator){
   window.addEventListener('load', async function(){
     try{
@@ -2629,25 +2321,29 @@ if('serviceWorker' in navigator){
         var installing = appRegistration.installing;
         if(installing){ installing.addEventListener('statechange', function(){
           if(installing.state === 'installed'){ showWaitingUpdate(); updateOfflineStatus(); }
-          if(installing.state === 'redundant'){ $('offlineStatus').textContent = '本次离线更新未完成，现有版本仍可继续使用。'; }
+          if(installing.state === 'redundant'){ setText('offlineStatus', '本次离线更新未完成，现有版本仍可继续使用。'); }
         }); }
       });
       await navigator.serviceWorker.ready;
       updateOfflineStatus();
       appRegistration.update().catch(function(){});
-    }catch(e){ $('offlineStatus').textContent = '本次未能启用离线功能，请保持联网使用。'; }
+    }catch(e){ setText('offlineStatus', '本次未能启用离线功能，请保持联网使用。'); }
   });
   navigator.serviceWorker.addEventListener('controllerchange', function(){
-    if(updateRequested){ window.location.reload(); }
+    if(updateRequested || !sessionInProgress()){ window.location.reload(); }
     else { updateOfflineStatus(); }
   });
-} else { $('offlineStatus').textContent = '当前浏览器不支持离线安装，请保持联网使用。'; }
+} else { setText('offlineStatus', '当前浏览器不支持离线安装，请保持联网使用。'); }
 
 /* ---- 初始化 ---- */
-buildSteps();
-renderToday();
-renderSettings();
-storageInit = recoverFromIdb();
+try{
+  buildSteps();
+  renderToday();
+  renderSettings();
+}catch(e){ reportAppError(e); }
+storageInit = Promise.resolve();
+storageReady = true;
+if(storageReadOnly){ showToast('数据读取异常，原文已保留。请到「我的」导出或导入备份。', 'error'); }
 
 /* ---- 跨标签页同步 ---- */
 window.addEventListener('storage', function(e){
@@ -2656,10 +2352,10 @@ window.addEventListener('storage', function(e){
     var fresh = readState().state;
     if(fresh && fresh.updatedAt > (S.updatedAt || 0)){
       S = fresh; bumpLogIndex();
-      if(!sessionStarted || sessionLogged){ moves = routines[S.settings.routine]; buildSteps(); }
+      if(!sessionInProgress()){ moves = routines[S.settings.routine]; buildSteps(); }
       renderAll();
     }
-  });
+  }).catch(function(){ return false; });
 });
 
 /* ---- 测试钩子：仅在 test.html 设置 window.__EXPOSE_FOR_TEST__ 时暴露纯函数 ---- */
@@ -2672,7 +2368,7 @@ if(window.__EXPOSE_FOR_TEST__){
     computeTrainingStreak:computeTrainingStreak, rebuildLogIndexFromLogs:rebuildLogIndexFromLogs,
     getRoutineIds:function(){ return ROUTINE_IDS.slice(); },
     getRoutineMoveIds:function(r){ return (routines[r] || []).map(function(m){ return m.id; }); },
-    mealFromTs:mealFromTs, mealTargets:mealTargets,
+    mealFromTs:mealFromTs,
     suggestedProteinTarget:suggestedProteinTarget, adjustedWeightKg:adjustedWeightKg, idealWeightKg:idealWeightKg,
     weekStart:weekStart, weekAvgWeight:weekAvgWeight,
     isStrengthTraining:isStrengthTraining, countWeekStrengthDays:countWeekStrengthDays,
@@ -2682,21 +2378,21 @@ if(window.__EXPOSE_FOR_TEST__){
     captureStepProgress:captureStepProgress,
     resetSessionStats:resetSessionStats,
     buildSteps:buildSteps,
-    getSteps:function(){ return steps; },
-    setSteps:function(v){ steps = v; },
-    getStepIndex:function(){ return stepIndex; },
-    setStepIndex:function(v){ stepIndex = v; },
-    getLeft:function(){ return left; },
-    setLeft:function(v){ left = v; },
-    getSessionElapsed:function(){ return sessionElapsed; },
-    getWorkElapsed:function(){ return workElapsed; },
-    getStretchElapsed:function(){ return stretchElapsed; },
-    getStepElapsedCounted:function(){ return stepElapsedCounted; },
-    setStepElapsedCounted:function(v){ stepElapsedCounted = v; },
-    getSkippedWork:function(){ return skippedWork; },
-    getCompletedMoveIds:function(){ return completedMoveIds; },
-    getCompletedStretchIds:function(){ return completedStretchIds; },
-    getTotalDuration:function(){ return totalDuration; },
+    getSteps:function(){ return session.steps; },
+    setSteps:function(v){ session.steps = v; },
+    getStepIndex:function(){ return session.stepIndex; },
+    setStepIndex:function(v){ session.stepIndex = v; },
+    getLeft:function(){ return session.left; },
+    setLeft:function(v){ session.left = v; },
+    getSessionElapsed:function(){ return session.elapsed; },
+    getWorkElapsed:function(){ return session.workElapsed; },
+    getStretchElapsed:function(){ return session.stretchElapsed; },
+    getStepElapsedCounted:function(){ return session.stepCounted; },
+    setStepElapsedCounted:function(v){ session.stepCounted = v; },
+    getSkippedWork:function(){ return session.skippedWork; },
+    getCompletedMoveIds:function(){ return session.completedMoveIds; },
+    getCompletedStretchIds:function(){ return session.completedStretchIds; },
+    getTotalDuration:function(){ return session.totalDuration; },
     getPresets:function(){ return presets; },
     getSettings:function(){ return S.settings; },
     setPreset:function(p){ S.settings.preset = p; },

@@ -60,10 +60,138 @@ async function unitPage(context, base){
     return summary.trim();
   }finally{await page.close();}
 }
+async function bodyweightFlow(browser, base){
+  const context = await browser.newContext({viewport:{width:390,height:844},serviceWorkers:'block'});
+  try{
+    const page = await context.newPage(), errors = [];
+    page.on('pageerror', err => errors.push(err.message));
+    await page.clock.install();
+    await page.goto(base + '/index.html');
+    await page.click('[data-page="training"]');
+    await page.locator('.sequence-move').nth(2).click();
+    assert.match(await page.locator('#mdMedia').getAttribute('src'), /chair-stand-steps\.svg$/);
+    await page.click('#moveClose');
+    await page.click('#btnStart');
+    await textIs(page,'plPhase','热身');
+    for(let i=0;i<5;i++) await page.click('#plSkip');
+    await textIs(page,'plMv','臀桥');
+    assert.equal(await page.locator('#player').evaluate(el => el.classList.contains('bodyweight')),true);
+    assert.equal(await page.locator('#plLog').isVisible(),false);
+    assert.equal(await page.locator('#plPause').textContent(),'暂停');
+    assert.equal(await page.locator('#plCue').textContent(),'脚跟推地抬髋，顶端夹臀，不要拱腰。');
+    await page.clock.fastForward(21000);
+    await page.click('#plPause');
+    const paused = await page.textContent('#plClock');
+    await page.clock.fastForward(5000);
+    assert.equal(await page.textContent('#plClock'),paused,'暂停时计时停止');
+    await page.click('#plPause');
+    await textIs(page,'plPhase','训练中');
+    for(let i=0;i<4;i++) await page.click('#plSkip');
+    await textIs(page,'plMv','扶椅坐站（先徒手）');
+    await page.waitForFunction(() => document.getElementById('plDemo').getAttribute('src')?.endsWith('chair-stand-steps.svg'));
+    await textIs(page,'plBadge','分步示意');
+    assert.equal(await page.locator('#plLog').isVisible(),false);
+    for(let i=0;i<4;i++) await page.click('#plSkip');
+    await textIs(page,'plMv','坐姿毛巾划船');
+    assert.equal(await page.locator('#plInstructions li').count(),3);
+    assert.equal(await page.locator('#plDemoWrap').isVisible(),false,'无媒体动作不能残留上一张示范');
+    await page.click('#plPrev'); await page.click('#plPrev');
+    await textIs(page,'plMv','靠墙俯卧撑');
+    await page.waitForFunction(() => document.getElementById('plDemo').getAttribute('src')?.endsWith('0659.gif'));
+    assert.equal(await page.locator('#plInstructions').isVisible(),false,'返回有图动作后隐藏文字步骤');
+    await page.click('#plSkip'); await page.click('#plSkip');
+    await page.click('#plExit');
+    await textIs(page,'btnStart','继续跟练');
+    await page.click('#btnStart');
+    await page.click('#plEnd'); await page.click('#dlgOk');
+    await page.waitForSelector('#plDone.show');
+    const recorded = await page.evaluate(() => JSON.parse(localStorage.getItem('workbuddy-v5')).logs.filter(l => l.type === 'training'));
+    assert.equal(recorded.length,1);
+    assert.equal(recorded[0].routine,'bodyweight');
+    assert.ok(recorded[0].workSeconds >= 20 && recorded[0].workSeconds < recorded[0].plannedSeconds);
+    assert.equal(recorded[0].completedMoves,1);
+    assert.equal(recorded[0].lifts,undefined,'隐藏的难度选择不能自动生成训练重量记录');
+    await page.click('#plDoneBtn');
+    await page.click('[data-ready="yellow"]');
+    await textIs(page,'bodyweightDose','每个 20 秒 · 1 轮');
+    await page.click('[data-ready="red"]');
+    await page.waitForFunction(() => document.getElementById('btnStart').disabled);
+    assert.equal(await page.locator('#readyHint').isVisible(),true);
+    assert.deepEqual(errors,[]);
+  }finally{await context.close();}
+  const missing = await browser.newContext({viewport:{width:320,height:667},serviceWorkers:'block'});
+  try{
+    const page = await missing.newPage();
+    await page.route('**/3013.gif', route => route.abort());
+    await page.goto(base + '/index.html');
+    await page.click('[data-page="training"]'); await page.click('#btnStart');
+    await textIs(page,'plPhase','热身');
+    for(let i=0;i<5;i++) await page.click('#plSkip');
+    await page.waitForSelector('#plInstructions:not([hidden])');
+    assert.match(await page.locator('#plInstructions').textContent(),/示范暂不可用/);
+    assert.equal(await page.locator('#plInstructions li').count(),3);
+    assert.equal(await page.locator('#plDemoWrap').isVisible(),false);
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth),false);
+    const pause = await page.locator('#plPause').boundingBox();
+    assert.ok(pause.y >= 0 && pause.y + pause.height <= 667,'小屏幕暂停按钮应始终可见');
+  }finally{await missing.close();}
+  const full = await browser.newContext({viewport:{width:375,height:667},reducedMotion:'reduce'});
+  try{
+    const page = await full.newPage();
+    await page.clock.install();
+    await page.goto(base + '/index.html');
+    await page.waitForFunction(() => !!navigator.serviceWorker.controller);
+    await page.click('[data-page="training"]'); await page.locator('.sequence-move').nth(2).click();
+    await page.waitForFunction(async () => !!(await caches.match(new URL('assets/exercise-guides/chair-stand-steps.svg',document.baseURI).href)));
+    await page.click('#moveClose'); await page.click('#btnStart');
+    await textIs(page,'plPhase','热身');
+    await page.clock.fastForward(31000);
+    await textIs(page,'plMv','踝关节绕环');
+    const before = Number(await page.textContent('#plClock'));
+    await page.clock.runFor(3000);
+    assert.ok(Number(await page.textContent('#plClock')) < before,'自然换动作后仍需持续计时');
+    for(let i=0;i<4;i++) await page.clock.fastForward((Number(await page.textContent('#plClock'))+1)*1000);
+    await textIs(page,'plMv','臀桥');
+    await page.waitForFunction(() => document.getElementById('plDemo').getAttribute('src')?.endsWith('3013-poster.png'));
+    await textIs(page,'plBadge','静态参考');
+    for(let i=0;i<17;i++) await page.clock.fastForward((Number(await page.textContent('#plClock'))+1)*1000);
+    await page.waitForSelector('#plDone.show');
+    const logs = await page.evaluate(() => JSON.parse(localStorage.getItem('workbuddy-v5')).logs.filter(l => l.type === 'training'));
+    assert.equal(logs.length,1); assert.equal(logs[0].status,'completed');
+    assert.equal(logs[0].completedMoves,6); assert.equal(logs[0].workSeconds,240);
+    assert.equal(logs[0].actualSeconds,logs[0].plannedSeconds);
+    await textIs(page,'plDoneBtn','回到训练'); await page.click('#plDoneBtn');
+    assert.equal(await page.locator('#page-training').evaluate(el => el.classList.contains('active')),true);
+    await full.setOffline(true); await page.reload();
+    await page.click('[data-page="training"]'); await page.locator('.sequence-move').nth(2).click();
+    await page.waitForFunction(() => document.getElementById('mdMedia').complete && document.getElementById('mdMedia').naturalWidth > 0);
+  }finally{await full.close();}
+  const other = await browser.newContext({viewport:{width:390,height:844},serviceWorkers:'block'});
+  try{
+    const page = await other.newPage();
+    await page.goto(base + '/index.html');
+    await page.click('[data-page="training"]');
+    await openDetails(page,'trainingOptions');
+    await page.click('[data-routine="core"]');
+    await openDetails(page,'movesDetails');
+    await page.locator('.move-card',{hasText:'扶椅坐站'}).click();
+    assert.match(await page.locator('#mdMedia').getAttribute('src'),/chair-stand-steps\.svg$/,'腰腹稳定课不能用持铃示范');
+    assert.match(await page.textContent('#mdArea'),/无需负重/);
+    await page.click('#moveClose');
+    await page.click('[data-routine="dumbbell"]');
+    await page.locator('.move-card',{hasText:'扶凳箱式深蹲'}).click();
+    assert.match(await page.locator('#mdMedia').getAttribute('src'),/0291\.(gif|poster\.png)$/,'哑铃课保留原示范');
+    await page.click('#moveClose');
+  }finally{await other.close();}
+  console.log('✓ 徒手清单、分步示意、暂停继续、缺图提示、小屏幕和实际完成记录通过');
+  console.log('✓ 整套自动跟练、减少动画偏好与新示意图离线重开通过');
+  console.log('✓ 扶椅坐站在腰腹稳定课也用分步示意，居家哑铃仍用原持铃示范');
+}
 try{
   const base = (process.env.TEST_BASE_URL || await localServer()).replace(/\/$/,'');
   await verifyServer(base);
-  browser = await chromium.launch();
+  browser = await chromium.launch({channel:process.env.PLAYWRIGHT_CHANNEL || undefined});
+  await bodyweightFlow(browser,base);
   const context = await browser.newContext({viewport:{width:390,height:844},acceptDownloads:true});
   context.setDefaultTimeout(15000);
   context.setDefaultNavigationTimeout(30000);
@@ -101,8 +229,11 @@ try{
   await page.click('#toastUndo'); await textIs(page,'pToday','25');
 
   await page.click('[data-page="training"]');
-  assert.equal(await page.locator('#moveList').isVisible(),false,'动作列表默认收起');
+  assert.equal(await page.locator('#bodyweightMoveList').isVisible(),true,'默认徒手动作直接展示');
+  assert.equal(await page.locator('.sequence-move').count(),6);
+  assert.equal(await page.locator('#moveList').isVisible(),false,'默认徒手不重复显示动作库');
   await openDetails(page,'trainingOptions'); await page.click('[data-routine="dumbbell"]');
+  await page.waitForFunction(() => document.getElementById('bodyweightPlan').hidden);
   await page.click('[data-preset="starter"]'); await textIs(page,'durHint','12.1 分钟');
   await page.click('#trainingOptions > summary');
   await page.click('#btnPlan'); await textIs(page,'planTotal','12.1');
@@ -133,21 +264,14 @@ try{
   await page.click('[data-page="me"]'); await importBackup(page,backup);
   await page.click('[data-page="today"]'); await textIs(page,'pToday','25'); await textIs(page,'wToday','700');
 
-  // 超出旧上限的备份，真实 IndexedDB + localStorage 中仍完整保留，并可继续记入。
+  // 超出旧上限的备份，localStorage 中仍完整保留，并可继续记入。
   const large = {...backup, weights:[{ts:Date.now()-7*86400000,kg:80},{ts:Date.now(),kg:79.5}], logs:Array.from({length:3101},(_,i) => ({id:'history-'+i,type:'water',ts:Date.now()-40*86400000+i,ml:350}))};
   await page.click('[data-page="me"]'); await importBackup(page,large);
   await page.click('[data-page="today"]'); await page.click('#quickWater'); await textIs(page,'wToday','350');
   await page.reload(); await textIs(page,'wToday','350');
   await page.click('[data-page="me"]');
   assert.equal(JSON.parse(await download(page,'#btnExport')).logs.length,3102);
-  const copies = await page.evaluate(async () => {
-    const request = indexedDB.open('qingdaka-v6',1);
-    const db = await new Promise((resolve,reject) => {request.onsuccess=()=>resolve(request.result);request.onerror=reject;});
-    const read = db.transaction('kv').objectStore('kv').get('state');
-    const state = await new Promise((resolve,reject) => {read.onsuccess=()=>resolve(read.result);read.onerror=reject;});
-    db.close(); return [JSON.parse(localStorage.getItem('workbuddy-v5')).logs.length,state.logs.length];
-  });
-  assert.deepEqual(copies,[3102,3102]);
+  assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('workbuddy-v5')).logs.length), 3102);
   await page.click('[data-page="data"]'); await openDetails(page,'weightHistory');
   await page.setViewportSize({width:320,height:720});
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth),false,'有体重记录的图表在320px下不应溢出');
@@ -176,9 +300,14 @@ try{
   const damaged = await browser.newContext();
   damaged.setDefaultTimeout(15000);
   await damaged.addInitScript(() => { if(!localStorage.getItem('workbuddy-v5')) localStorage.setItem('workbuddy-v5','{damaged original'); });
-  const rescue = await damaged.newPage(); await rescue.goto(base + '/index.html');
+  const rescue = await damaged.newPage();
+  const rescueErrors = [];
+  rescue.on('pageerror', err => rescueErrors.push(err.message));
+  await rescue.goto(base + '/index.html');
   await rescue.waitForFunction(() => document.getElementById('toastText').textContent.includes('读取异常'));
   await rescue.click('[data-page="me"]');
+  await rescue.waitForFunction(() => document.getElementById('page-me')?.classList.contains('active'), {timeout:5000});
+  assert.deepEqual(rescueErrors, [], '只读模式下切换页面不应抛异常');
   assert.equal(await download(rescue,'#btnExport'),'{damaged original');
   await damaged.close();
   console.log('✅ 快捷记录、撤销、时长、月度导出、完整备份恢复、3102 条记录持久保存通过');
