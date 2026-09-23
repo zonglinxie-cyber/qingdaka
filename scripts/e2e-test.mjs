@@ -136,6 +136,16 @@ async function bodyweightFlow(browser, base){
     await page.click('#plSkip'); await page.click('#plSkip');
     await textIs(page,'plMv','死虫');
     assert.equal(await page.textContent('#plCue'),'对侧手脚慢慢伸出，腰背贴稳垫面，左右交替。','一句口令不能重复换边提示');
+    await page.waitForFunction(() => document.getElementById('plDemo').getAttribute('src')?.endsWith('dead-bug-tabletop.svg'));
+    await textIs(page,'plBadge','分步示意');
+    // 死虫的定格只能是起始位：伸出那一格靠轮换讲清「远离身体」是往哪走、走多远
+    let sawReach = false;
+    for(let i=0;i<8 && !sawReach;i++){
+      await page.clock.fastForward(700);
+      await new Promise(r => setTimeout(r, 200));
+      sawReach = /dead-bug-reach\.svg$/.test(await page.locator('#plDemo').getAttribute('src') || '');
+    }
+    assert.ok(sawReach,'死虫两格必须轮换，只给抬起位就看不出对侧手脚怎么伸');
     await page.click('#plSkip'); await page.click('#plSkip');
     await textIs(page,'plMv','扶椅坐站（先徒手）');
     await page.waitForFunction(() => document.getElementById('plDemo').getAttribute('src')?.endsWith('chair-stand-steps.svg'));

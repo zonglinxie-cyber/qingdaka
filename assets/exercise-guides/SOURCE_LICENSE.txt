@@ -9,6 +9,8 @@ Files:
   kneeling-plank-tap.svg
   hip-bridge-flat.svg
   hip-bridge-lift.svg
+  dead-bug-tabletop.svg
+  dead-bug-reach.svg
   generated/wall-plank-anatomy.png
   bird-dog.gif
   bird-dog-poster.png
@@ -38,6 +40,19 @@ position and gives a reduced-motion reader no setup position to copy. Same
 caveat as above: static teaching aids drawn for this app, not filmed or
 professionally validated demonstrations, and no third-party media was used as an
 input or reference for them.
+
+dead-bug-tabletop.svg / dead-bug-reach.svg are original, hand-authored vector
+schematics of the dead bug in the same side-view language: frame 1 is lying on
+the mat with the arms reaching up and the hips and knees at about 90 degrees,
+frame 2 lowers the near-side hand behind the head while the opposite (far-side)
+leg reaches forward and down, with a small arrow over the abdomen for the lower
+back staying pressed to the mat. They replace dataset GIF 0276, whose motion did
+match the written cues but which is an anatomical muscle illustration: it sits
+between three project-authored schematics in the same beginner routine and reads
+like a different app, and the file itself is covered by the release restriction
+in section 3. Same caveat as above: static teaching aids drawn for this app, not
+filmed or professionally validated demonstrations, and no third-party media was
+used as an input or reference for them.
 
 The bird-dog.gif / bird-dog-poster.png pair is a project-original looping
 demonstration generated for this app (four-point kneel to contralateral
@@ -105,8 +120,10 @@ Deployment scope (2026-09-24):
   3239 (gif + poster) was deleted once 跪姿平板 switched to the project-authored
   kneeling schematics listed in section 1, and 3013 (gif + poster) was deleted
   the same day once 臀桥 switched to the project-authored hip-bridge schematics
-  also listed in section 1. Seven legacy GIF/poster pairs from this section
-  remain deployed: 0276, 0291, 0292, 0404, 0659, 1459, 1677.
+  also listed in section 1. 0276 (gif + poster) was deleted the same day once
+  死虫 switched to the project-authored dead-bug schematics listed in section 1.
+  Six legacy GIF/poster pairs from this section remain deployed:
+  0291, 0292, 0404, 0659, 1459, 1677.
 
 Current host:
   https://github.com/omercotkd/exercises-gifs
