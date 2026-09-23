@@ -5,6 +5,8 @@ Updated: 2026-09-24
 
 Files:
   chair-stand-steps.svg
+  kneeling-plank-steady.svg
+  kneeling-plank-tap.svg
   generated/wall-plank-anatomy.png
   bird-dog.gif
   bird-dog-poster.png
@@ -14,6 +16,16 @@ unweighted sit-to-stand positions. It is a static teaching aid, not a filmed
 or professionally validated demonstration. No third-party media was used. It
 is the demonstration for 扶椅坐站 in every routine; the dataset GIF 0291 shows
 a person holding dumbbells and is kept only for 扶凳箱式深蹲 (居家哑铃).
+
+kneeling-plank-steady.svg / kneeling-plank-tap.svg are original, hand-authored
+vector schematics of the kneeling forearm plank drawn from the same side-view
+language as chair-stand-steps.svg: frame 1 is the straight head-shoulder-hip-
+knee line with the forearms planted and the knees on the mat, frame 2 lifts one
+hand to the opposite shoulder. They replace dataset GIF 3239, whose legs are
+extended on the toes and therefore did not show the kneeling version the
+written cues ask for. Same caveat as above: static teaching aids drawn for this
+app, not filmed or professionally validated demonstrations, and no third-party
+media was used as an input or reference for them.
 
 The bird-dog.gif / bird-dog-poster.png pair is a project-original looping
 demonstration generated for this app (four-point kneel to contralateral
@@ -76,6 +88,11 @@ Deployment scope (2026-09-23):
   absent from deploy/ and from the PWA cache.
   The other nine legacy GIF/poster pairs remain in the current personal
   prototype and therefore retain the release restriction below.
+
+Deployment scope (2026-09-24):
+  3239 (gif + poster) was deleted once 跪姿平板 switched to the project-authored
+  kneeling schematics listed in section 1. Eight legacy GIF/poster pairs from
+  this section remain deployed.
 
 Current host:
   https://github.com/omercotkd/exercises-gifs

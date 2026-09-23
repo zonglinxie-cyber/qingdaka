@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="460" viewBox="0 0 600 460" role="img" aria-labelledby="t d">
+  <title id="t">跪姿平板第二步：撑稳后抬起一只手点对侧肩</title>
+  <desc id="d">原创简化侧视静态示意，不是真人示范或专业动作认证。人物面朝左，姿势与第一格相同：双膝与小腿平放在垫面上，另一只前臂仍撑在垫面；抬起靠近观者这一侧的手，肘部朝上，手掌落到对侧肩上；头、肩、髋、膝仍保持同一条斜直线，身体不跟着转。</desc>
+  <defs>
+    <g id="profile-head">
+      <path d="M1-21C-10-22-20-14-20-4L-25 3Q-27 7-20 8L-19 15Q-17 23-7 23H3C15 21 21 9 20-4C19-15 11-21 1-21Z" fill="#3e5147"/>
+    </g>
+    <g id="body" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="2" y="364" width="290" height="20" rx="10" fill="#eef3ee" stroke="#dde5de" stroke-width="2"/>
+
+      <path d="M152 326L206 350L252 350" fill="none" stroke="#586f60" stroke-width="28"/>
+      <path d="M152 326L206 350L252 350" fill="none" stroke="#8fa597" stroke-width="22"/>
+      <path d="M252 343Q266 345 266 354Q266 361 254 359Z" fill="#354b3e"/>
+
+      <path d="M98 296L94 350H36" fill="none" stroke="#3e5147" stroke-width="18"/>
+      <circle cx="34" cy="350" r="9" fill="#3e5147"/>
+
+      <path d="M94 302L157 331" fill="none" stroke="#526b59" stroke-width="40"/>
+      <path d="M94 302L157 331" fill="none" stroke="#c0d0c2" stroke-width="34"/>
+
+      <path d="M157 331L213 358L261 358" fill="none" stroke="#465e4f" stroke-width="29"/>
+      <path d="M157 331L213 358L261 358" fill="none" stroke="#a3b6a7" stroke-width="23"/>
+      <path d="M261 351Q275 353 275 362Q275 369 263 367Z" fill="#354b3e"/>
+
+      <path d="M80 291L95 300" fill="none" stroke="#3e5147" stroke-width="17"/>
+      <use href="#profile-head" transform="translate(62 287) scale(.8) rotate(-48)"/>
+    </g>
+  </defs>
+
+  <rect width="600" height="460" fill="#ffffff"/>
+  <g font-family="PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" fill="#354a3e">
+    <circle cx="46" cy="50" r="17" fill="#eef3ee"/>
+    <text x="46" y="57" text-anchor="middle" font-size="20" font-weight="600">2</text>
+    <text x="75" y="58" font-size="24" font-weight="600">撑稳后，抬一手点对侧肩</text>
+  </g>
+
+  <g transform="translate(0 -384) scale(2)" stroke-linecap="round" stroke-linejoin="round">
+    <use href="#body"/>
+    <path d="M94 302L90 274" fill="none" stroke="#526b59" stroke-width="30"/>
+    <path d="M94 302L90 274" fill="none" stroke="#c0d0c2" stroke-width="24"/>
+    <path d="M94 302L80 246L106 288" fill="none" stroke="#3e5147" stroke-width="18"/>
+    <circle cx="107" cy="289" r="10" fill="#3e5147"/>
+  </g>
+
+</svg>

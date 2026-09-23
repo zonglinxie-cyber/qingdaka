@@ -93,11 +93,18 @@ await check('跟练口令逐条短提示；示范变体的角标与图注写清�
   // 没有示范图时靠分步填住示范区，否则播放器整屏留白
   const noMedia=[...work,...oneLine].filter(m=>m.noMedia);
   assert.ok(noMedia.length>0 && noMedia.every(m=>m.steps && m.steps.length===3), '无示范动作必须给三步文字步骤');
-  // 示范拍的是另一个变体（腿伸直/掌心向前/跪凳…）时，必须写在示范角标上；角标不换行，长了顶破宽度
-  const variantIds=['3239','0404','0292','2287','bird-dog','chair-stand'].sort();
+  // 示范拍的是另一个变体（掌心向前/跪凳三点/对侧同伸…）时，必须写在示范角标上；角标不换行，长了顶破宽度
+  const variantIds=['0404','0292','2287','bird-dog'].sort();
   const variants=work.filter(m=>variantIds.includes(m.id));
   assert.deepEqual([...new Set(variants.map(m=>m.id))].sort(),variantIds,'示范变体动作清单与课表不符');
   assert.ok(variants.every(m=>m.mediaLabel && m.mediaLabel.length<=10),'示范变体没标在角标上，或角标过长');
+  // 自制分步示意：画的就是家里要做的姿势，不再靠「示范是另一版」的角标兜底；图必须真在仓库里
+  for(const id of ['chair-stand','3239']){
+    const m=work.find(x=>x.id===id);
+    assert.ok(m&&m.frames&&m.frames.length,id+' 应当用自制的分步示意图，却没有 frames');
+    assert.equal(m.mediaLabel,'分步示意',id+' 的角标要说明这是分步示意，而不是某个变体示范');
+    m.frames.forEach(f=>assert.ok(fs.existsSync(new URL('../assets/exercise-guides/'+f,import.meta.url)),id+' 指向的示意图文件不在仓库：'+f));
+  }
   // 图的下沿归角标：自制示意图的说明写在 mediaNote、由 DOM 挂在图下，必须一行放得下
   assert.ok(work.every(m=>!(m.mediaNote||'').length || m.mediaNote.length<=12),'图注过长会折行顶破图卡');
   // 每节课程都有备物提示，训练页靠它替代旧的按课程分支

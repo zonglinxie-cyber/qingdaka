@@ -80,8 +80,9 @@ async function unitPage(context, base){
 async function bodyweightFlow(browser, base){
   const context = await browser.newContext({viewport:{width:390,height:844},serviceWorkers:'block'});
   try{
-    const page = await context.newPage(), errors = [];
+    const page = await context.newPage(), errors = [], requested = [];
     page.on('pageerror', err => errors.push(err.message));
+    page.on('request', r => requested.push(r.url()));
     await page.clock.install();
     await page.goto(base + '/index.html');
     await page.click('[data-page="training"]');
@@ -90,7 +91,9 @@ async function bodyweightFlow(browser, base){
     assert.equal(await page.textContent('#mdMediaNote'),'空手练习 · 椅子靠墙','分步示意图的说明挂在图下，不再烤进图里');
     await page.click('#moveClose');
     await page.locator('.sequence-move',{hasText:'跪姿平板'}).click();
-    assert.equal(await page.textContent('#mdMediaNote'),'示范为腿伸直版','示范是别的变体时详情也要标出来');
+    assert.match(await page.locator('#mdMedia').getAttribute('src'),/kneeling-plank-steady\.svg$/,'详情里的示范就是家里要做的跪姿，不再是腿伸直那张图');
+    assert.equal(await page.textContent('#mdMediaNote'),'膝盖着地 · 先撑稳');
+    assert.ok(requested.some(u=>/kneeling-plank-tap\.svg$/.test(u)),'两格示意都要预加载，跟练时轮换才不会空一帧');
     await page.click('#moveClose');
     await page.locator('.sequence-move',{hasText:'臀桥'}).click();
     assert.equal(await page.locator('#mdMediaNote').isVisible(),false,'示范与做法一致时不多出一行说明');
@@ -146,6 +149,18 @@ async function bodyweightFlow(browser, base){
     await page.waitForFunction(() => document.getElementById('plDemo').getAttribute('src')?.endsWith('0659.gif'));
     assert.equal(await page.locator('#plInstructions').isVisible(),false,'返回有图动作后隐藏文字步骤');
     await page.click('#plSkip'); await page.click('#plSkip');
+    await textIs(page,'plMv','坐姿毛巾划船');
+    await page.click('#plSkip'); await page.click('#plSkip');
+    await textIs(page,'plMv','跪姿平板（可点肩）');
+    await page.waitForFunction(() => document.getElementById('plDemo').getAttribute('src')?.endsWith('kneeling-plank-steady.svg'));
+    // 两格自制示意每 1.3s 轮换：先撑稳、再点肩。等待要推进虚拟时间，图片落地要真时间，两者都给。
+    let sawTap = false;
+    for(let i=0;i<8 && !sawTap;i++){
+      await page.clock.fastForward(700);
+      await new Promise(r => setTimeout(r, 200));
+      sawTap = /kneeling-plank-tap\.svg$/.test(await page.locator('#plDemo').getAttribute('src') || '');
+    }
+    assert.ok(sawTap,'两格分步示意必须轮换，停在第一格就看不出「稳了再点肩」');
     await page.click('#plExit');
     await textIs(page,'btnStart','继续跟练');
     await page.click('#btnStart');
@@ -315,6 +330,9 @@ async function bodyweightFlow(browser, base){
     await page.click('#moveClose');
     await page.locator('.sequence-move',{hasText:'轻负重行走'}).click();
     assert.match(await page.textContent('#mdArea'),/哑铃或水瓶/,'课表里要持重的动作，备物提示里必须已经说过');
+    await page.click('#moveClose');
+    await page.locator('.sequence-move',{hasText:'鸟狗式'}).click();
+    assert.equal(await page.textContent('#mdMediaNote'),'示范为对侧同伸','示范拍的是另一个变体时，详情里这一行要跟着图说清楚');
     await page.click('#moveClose');
     await page.click('[data-routine="dumbbell"]');
     assert.equal(await page.locator('#routineMoves .sequence-move').count(),5,'哑铃课同样平铺当日顺序');
