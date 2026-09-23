@@ -109,6 +109,13 @@ await check('跟练口令逐条短提示；示范变体的角标与图注写清�
   }
   // 主人只练默认徒手这一节：六节全部换成自制分步示意，既没有外部动图也不再出现「暂无示范图」
   assert.ok(moves.every(m=>m.frames&&m.frames.length),'默认徒手课每一节都要有自制分步示意');
+  // 拉伸课里自制的两格同理：图必须真在仓库里，角标说明也走「分步示意」
+  for(const id of ['quad-stand','1271']){
+    const m=content.STRETCH[id];
+    assert.ok(m&&m.frames&&m.frames.length>1,id+' 应当用自制的分步示意图，却没有两格 frames');
+    assert.equal(m.mediaLabel,'分步示意',id+' 的角标要说明这是分步示意，而不是某个变体示范');
+    m.frames.forEach(f=>assert.ok(fs.existsSync(new URL('../assets/exercise-guides/'+f,import.meta.url)),id+' 指向的示意图文件不在仓库：'+f));
+  }
   // 休息屏的口令写着「照着示范摆好起始位」：任何一课的正式动作都不许没有示范
   assert.ok(work.every(m=>!m.noMedia),'有正式动作缺示范，休息屏那句「照着示范」就指不到东西');
   // 图的下沿归角标：自制示意图的说明写在 mediaNote、由 DOM 挂在图下，必须一行放得下

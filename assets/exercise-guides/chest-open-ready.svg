@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="460" height="460" viewBox="0 0 460 460" role="img" aria-labelledby="t d">
+  <title id="t">胸前侧拉伸第一步：站直，双手在身后交握，手臂垂到臀部后方</title>
+  <desc id="d">原创简化侧视静态示意，不是真人示范或专业动作认证。人朝左站立，两脚踩在同一条地面线上（侧视里前后错开一点只为看清是两条腿，实际是并拢与髋同宽），上身直立，肩与髋在同一条竖直线上。两条手臂都从肩向后向下伸，肘部有一点点弯，两手在臀部后方、明显离开身体的位置交握：朝镜头这只手画成深色并带一圈白边，压在另一只手上，表示两手握住。这一格还没有向后用力。下一格把这双交握的手向后向下伸得更远，同时挺胸、肩向后向下沉。正侧视看不出两侧肩是否对称、也看不出肋骨外翻的限度，那两句由口令与文字步骤承担。</desc>
+  <defs>
+    <path id="profile-head" d="M1-21C-10-22-20-14-20-4L-25 3Q-27 7-20 8L-19 15Q-17 23-7 23H3C15 21 21 9 20-4C19-15 11-21 1-21Z" fill="#3e5147"/>
+    <path id="flat-shoe" d="M-8-3H8L11 10Q12 17 6 17H-26Q-30 17-30 13V11Q-29 7-21 5L-9 1Z"/>
+    <path id="torso" d="M-9.6-76.6Q0-82.7 10.4-75.7Q15.7-70.5 15.7-58.3L14.8-29.6L15.7-5.2Q4.4 2.6-13.9-2.6L-14.8-30.5L-15.7-58.3Q-16.5-70.5-9.6-76.6Z" fill="#c0d0c2" stroke="#526b59" stroke-width="3"/>
+  </defs>
+
+  <rect width="460" height="460" fill="#ffffff"/>
+  <g font-family="PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" fill="#354a3e">
+    <circle cx="30" cy="50" r="17" fill="#eef3ee"/>
+    <text x="30" y="57" text-anchor="middle" font-size="20" font-weight="600">1</text>
+    <text x="59" y="58" font-size="24" font-weight="600">双手在身后交握</text>
+  </g>
+
+  <g transform="translate(-55 -170) scale(1.46)" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M60 414H300" fill="none" stroke="#e1e7e2" stroke-width="2"/>
+
+    <path d="M182 236L202 270L219 299" fill="none" stroke="#586f60" stroke-width="15"/>
+    <path d="M182 236L202 270L219 299" fill="none" stroke="#8fa597" stroke-width="10"/>
+    <circle cx="219" cy="303" r="8" fill="#57695e"/>
+
+    <path d="M200 300L202 352L206 398" fill="none" stroke="#586f60" stroke-width="26"/>
+    <path d="M200 300L202 352L206 398" fill="none" stroke="#8fa597" stroke-width="20"/>
+    <use href="#flat-shoe" transform="translate(206 398)" fill="#57695e"/>
+
+    <path d="M188 298L186 354L184 402" fill="none" stroke="#465e4f" stroke-width="30"/>
+    <path d="M188 298L186 354L184 402" fill="none" stroke="#a3b6a7" stroke-width="24"/>
+    <use href="#flat-shoe" transform="translate(184 402)" fill="#354b3e"/>
+
+    <g transform="translate(194 300) rotate(-2)"><use href="#torso"/></g>
+    <path d="M188 224L186 204" fill="none" stroke="#3e5147" stroke-width="14"/>
+    <use href="#profile-head" transform="translate(184 186) rotate(-2)"/>
+
+    <path d="M186 234L206 268L222 296" fill="none" stroke="#465e4f" stroke-width="19"/>
+    <path d="M186 234L206 268L222 296" fill="none" stroke="#a3b6a7" stroke-width="14"/>
+    <circle cx="226" cy="300" r="9" fill="#3e5147" stroke="#ffffff" stroke-width="3"/>
+  </g>
+
+</svg>

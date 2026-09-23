@@ -447,9 +447,12 @@ async function bodyweightFlow(browser, base){
     assert.equal(await page.textContent('#plCue'),'抱一条腿往胸口靠，膝可微屈。过半会提示换侧。','换侧提示不能留到下一个动作');
     for(let i=0;i<3;i++) await page.click('#plSkip');
     await textIs(page,'plMv','胸前侧拉伸');
-    assert.equal(await page.textContent('#plCue'),'示范举着短杠；你双手身后交握即可。','双侧动作不加换侧提示');
+    // 换图是预载完成后才写 src 的，读慢了会拿到上一节的 1377.gif
+    await page.waitForFunction(() => /chest-open-(ready|lift)\.svg$/.test(document.getElementById('plDemo').getAttribute('src') || ''));
+    assert.equal(await page.textContent('#plBadge'),'拉伸 · 站姿','这一节的角标仍写姿势，不写「分步示意」');
+    assert.equal(await page.textContent('#plCue'),'双手身后交握，向后向下伸开，挺胸沉肩。','双侧动作不加换侧提示');
     await page.clock.runFor(15000);
-    assert.equal(await page.textContent('#plCue'),'示范举着短杠；你双手身后交握即可。','双侧动作过半也不出换侧提示');
+    assert.equal(await page.textContent('#plCue'),'双手身后交握，向后向下伸开，挺胸沉肩。','双侧动作过半也不出换侧提示');
   }finally{await side.close();}
   // 320 窄屏 + 难度档位面板：口令两行时示范必须自己缩，不能压到上下两块
   const tight = await browser.newContext({viewport:{width:320,height:667},serviceWorkers:'block'});
@@ -482,7 +485,7 @@ async function bodyweightFlow(browser, base){
 const GUIDE_FRAMES = ['chair-stand-steps.svg','dead-bug-tabletop.svg','dead-bug-reach.svg',
   'hip-bridge-flat.svg','hip-bridge-lift.svg','kneeling-plank-steady.svg','kneeling-plank-tap.svg',
   'towel-row-ready.svg','towel-row-pull.svg','wall-pushup-start.svg','wall-pushup-bend.svg',
-  'quad-stand-ready.svg','quad-stand-hold.svg'];
+  'quad-stand-ready.svg','quad-stand-hold.svg','chest-open-ready.svg','chest-open-lift.svg'];
 async function guideInkClearsBadge(page){
   const bad = await page.evaluate(async list => {
     const im = document.getElementById('plDemo'), bd = document.getElementById('plBadge');

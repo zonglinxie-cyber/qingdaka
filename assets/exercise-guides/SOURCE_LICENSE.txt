@@ -17,6 +17,8 @@ Files:
   towel-row-pull.svg
   quad-stand-ready.svg
   quad-stand-hold.svg
+  chest-open-ready.svg
+  chest-open-lift.svg
   generated/wall-plank-anatomy.png
   bird-dog.gif
   bird-dog-poster.png
@@ -91,6 +93,22 @@ text-only "no demo" screen for 扶墙股四头拉伸, which was the last move in
 follow-along flow without a picture. Same caveat as above: these are simplified
 illustrations, not a person demonstrating the movement and not professional or
 medical clearance.
+
+chest-open-ready.svg / chest-open-lift.svg are original, hand-authored vector
+drawings made for this project in the same house style (same palette, same
+simplified side-view vocabulary, no tracing of any third-party image, frame or
+dataset). They are the two frames of the standing chest-front stretch: frame 1
+is the start position (standing tall, both arms reaching down and back, the two
+hands clasped behind the hips), frame 2 is the target position (elbows straighter,
+the clasped hands let further back and down, an arrow marking that direction,
+the head still neutral). They replace dataset file 1271, an anatomical
+illustration of a man holding a bar behind his head with the pectorals coloured
+in: the app could only use that picture by telling the user to ignore it
+("示范举着短杠；你双手身后交握即可"), which is the opposite of a demonstration.
+Both frames share every static coordinate, so only the two arms and the arrow
+change between them. Same caveat as above: these are simplified illustrations,
+not a person demonstrating the movement and not professional or medical
+clearance.
 
 towel-row-ready.svg / towel-row-pull.svg are original, hand-authored vector
 schematics of the seated towel row in the same side-view language, drawn on the
@@ -204,8 +222,12 @@ project-generated media listed in section 1.
 
 Files (GIF + -poster.png frame still, 360x360, white background):
   Warm-up:        3221, 1368, 0257, 1428, 1167
-  Stretch:        1377, 1576, 1271, 0643, 0794, 1365, 0669, 1424, 1403
-  (quad-stand is a text-only standing quad stretch with no media file.)
+  Stretch:        1377, 1576, 0643, 0794, 1365, 0669, 1424, 1403
+  (quad-stand never had a file from this set: it shipped as a text-only screen
+  until the project-authored quad-stand frames listed in section 1 replaced it.
+  1271's gif and poster were deleted on 2026-09-24 once 胸前侧拉伸 switched to
+  the project-authored chest-open frames in section 1, so thirteen pairs from
+  this section remain, not fourteen.)
 
 Source repository and dataset:
   https://github.com/omercotkd/exercises-gifs  (assets/<id>.gif)
