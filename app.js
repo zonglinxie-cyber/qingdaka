@@ -1159,6 +1159,12 @@ function phaseProgress(type){
   }
   return n + ' / ' + total;
 }
+/* 一句口令 = 要领 + 换侧说明；换侧的时机由 tick 过半时提示，所以内容里不再重复写「换边」 */
+function oneLineCue(m){
+  var cue = m.shortCue || m.cue;
+  var side = m.sideMode === 'half' ? '过半会提示换侧。' : (m.sideMode === 'alternate' ? '左右交替。' : '');
+  return (side && cue.indexOf(side) < 0) ? cue + side : cue;
+}
 function renderStep(){
   var step = session.steps[session.stepIndex];
   if(!step){ finishWorkout(false); return; }
@@ -1173,16 +1179,14 @@ function renderStep(){
     $('plClock').className = 'pl-clock num';
     $('plMv').textContent = step.move.name;
     renderDemo(step.move, '热身', true);
-    $('plCue').textContent = step.move.shortCue || step.move.cue;
+    $('plCue').textContent = oneLineCue(step.move);
   } else if(step.type === 'work'){
     phase.textContent = '训练中'; phase.className = 'pl-phase';
     $('plRound').textContent = '动作 ' + (moves.indexOf(step.move)+1) + ' / ' + moves.length + (rounds > 1 ? ' · 第 ' + step.round + ' 轮' : '');
     $('plClock').className = 'pl-clock num';
     $('plMv').textContent = step.move.name;
     renderDemo(step.move, step.move.mediaLabel || (step.move.hold || step.move.staticOnly ? '静态姿势参考' : (motionOn() ? '动作示范 · 按自己的节奏' : '静态参考')), true);
-    var cue = step.move.shortCue || step.move.cue;
-    var side = step.move.sideMode === 'half' ? '过半会提示换侧。' : (step.move.sideMode === 'alternate' ? '左右交替。' : '');
-    $('plCue').textContent = (side && cue.indexOf(side) < 0) ? cue + side : cue;
+    $('plCue').textContent = oneLineCue(step.move);
   } else if(step.type === 'rest'){
     phase.textContent = '换动作'; phase.className = 'pl-phase rest';
     $('plRound').textContent = '第 ' + step.round + ' 轮';
@@ -1207,7 +1211,7 @@ function renderStep(){
     $('plMv').textContent = step.move.name;
     if(step.move.noMedia){ setDemoVisible(false); }
     else { renderDemo(step.move, '拉伸 · ' + step.move.position, true); }
-    $('plCue').textContent = step.move.shortCue || step.move.cue;
+    $('plCue').textContent = oneLineCue(step.move);
   }
   for(var ni=session.stepIndex+1; ni<session.steps.length; ni++){ var ns=session.steps[ni]; if(ns.move && !ns.move.noMedia){ preloadMove(ns.move, ns.type==='work'); break; } }
   updateProgress();
@@ -1230,9 +1234,9 @@ function tick(){
   var step = session.steps[session.stepIndex];
   if(!step){ return; }
   var realLeft = step.sec - Math.floor((Date.now() - session.tickBase)/1000);
-  if(step.type === 'work' && step.move.sideMode === 'half' && !session.sideChanged && realLeft <= Math.ceil(step.sec/2)){
+  if(step.move && step.move.sideMode === 'half' && !session.sideChanged && realLeft <= Math.ceil(step.sec/2)){
     session.sideChanged = true;
-    $('plCue').innerHTML = '<b>现在换侧</b>先稳住身体，再开始另一侧。';
+    $('plCue').innerHTML = '<b>现在换侧</b>' + (step.type === 'stretch' ? '另一侧同样轻拉到发紧就好。' : '先稳住身体，再开始另一侧。');
     $('plBadge').textContent = '换另一侧';
     cueShort(); speak('换另一侧', { voiceKey: 'switch-side' });
   }
@@ -1836,7 +1840,8 @@ function closeMoveDetail(){
 }
 function openStretchDetail(m){
   $('mdName').textContent = m.name;
-  $('mdArea').textContent = '拉到 ' + m.target + ' · ' + m.position + ' · 保持约 ' + m.sec + ' 秒';
+  $('mdArea').textContent = '拉到 ' + m.target + ' · ' + m.position + ' · ' +
+    (m.sideMode === 'half' ? '全程约 ' + m.sec + ' 秒，左右各一半' : '保持约 ' + m.sec + ' 秒');
   setDetailMedia(m);
   $('mdMuscles').innerHTML = '<span class="main">目标 ' + escapeHtml(m.target) + '</span><span>' + escapeHtml(m.position) + '</span>';
   $('mdSteps').innerHTML = '';

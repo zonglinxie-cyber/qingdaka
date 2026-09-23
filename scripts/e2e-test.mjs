@@ -228,19 +228,50 @@ async function bodyweightFlow(browser, base){
     await page.click('#moveClose');
     await page.click('[data-routine="stretch"]');
     assert.equal(await page.locator('#routineMoves .sequence-move').count(),9,'拉伸课同样平铺当日顺序');
+    await page.locator('.sequence-move',{hasText:'扶墙小腿拉伸'}).click();
+    assert.match(await page.textContent('#mdArea'),/全程约 28 秒，左右各一半/,'单侧拉伸的详情要说清左右各一半');
+    await page.click('#moveClose');
+    await page.locator('.sequence-move',{hasText:'胸前侧拉伸'}).click();
+    assert.match(await page.textContent('#mdArea'),/保持约 28 秒/,'双侧拉伸的详情不写换侧');
+    await page.click('#moveClose');
     await page.click('#btnStart');
     await textIs(page,'plPhase','拉伸');
     assert.equal(await page.textContent('#plRound'),'全身拉伸 1 / 9','拉伸要显示第几个');
-    assert.equal(await page.textContent('#plCue'),'后腿跟贴地、膝伸直，前倾到发紧换腿。','拉伸也是一句口令');
+    assert.equal(await page.textContent('#plCue'),'后腿跟贴地、膝伸直，前倾到发紧。过半会提示换侧。','单侧拉伸要说明过半会提示换侧');
     assert.equal(await page.locator('#plLog').isVisible(),false,'拉伸没有档位，不出记录面板');
     await page.click('#plSkip'); await page.click('#plSkip');
     await textIs(page,'plMv','扶墙股四头拉伸');
     assert.equal(await page.locator('#plDemoWrap').isVisible(),false,'无示范的拉伸不占位');
     assert.equal(await page.locator('#plInstructions li').count(),3,'无示范时用分步填住示范区');
     assert.notEqual((await page.locator('#plInstructions li').first().textContent()).trim(),await page.textContent('#plCue'),'分步不能只是重复单行口令');
-    assert.equal(await page.textContent('#plCue'),'扶墙抓同侧脚背拉向臀部，换边。');
+    assert.equal(await page.textContent('#plCue'),'扶墙抓同侧脚背拉向臀部。过半会提示换侧。');
     assert.equal(await page.textContent('#plNext'),'接下来 · 坐姿臀部拉伸');
   }finally{await other.close();}
+  // 单侧动作过半提示换侧：拉伸说拉伸的话，双侧动作不打扰
+  const side = await browser.newContext({viewport:{width:390,height:844},serviceWorkers:'block'});
+  try{
+    const page = await side.newPage();
+    await page.clock.install();
+    await page.goto(base + '/index.html');
+    await page.click('[data-page="training"]');
+    await openDetails(page,'trainingOptions');
+    await page.click('[data-routine="stretch"]');
+    await page.click('#btnStart');
+    await page.clock.runFor(4000);
+    await textIs(page,'plPhase','拉伸');
+    assert.equal(await page.textContent('#plBadge'),'拉伸 · 站姿·扶墙','拉伸角标要写明姿势');
+    await page.clock.runFor(15000);
+    assert.equal(await page.textContent('#plCue'),'现在换侧另一侧同样轻拉到发紧就好。','单侧拉伸过半要提示换侧');
+    assert.equal(await page.textContent('#plBadge'),'换另一侧');
+    await page.click('#plSkip');
+    await textIs(page,'plMv','仰卧抬腿拉伸');
+    assert.equal(await page.textContent('#plCue'),'抱一条腿往胸口靠，膝可微屈。过半会提示换侧。','换侧提示不能留到下一个动作');
+    for(let i=0;i<3;i++) await page.click('#plSkip');
+    await textIs(page,'plMv','胸前侧拉伸');
+    assert.equal(await page.textContent('#plCue'),'示范举着短杠；你双手身后交握即可。','双侧动作不加换侧提示');
+    await page.clock.runFor(15000);
+    assert.equal(await page.textContent('#plCue'),'示范举着短杠；你双手身后交握即可。','双侧动作过半也不出换侧提示');
+  }finally{await side.close();}
   // 320 窄屏 + 难度档位面板：口令两行时示范必须自己缩，不能压到上下两块
   const tight = await browser.newContext({viewport:{width:320,height:667},serviceWorkers:'block'});
   try{

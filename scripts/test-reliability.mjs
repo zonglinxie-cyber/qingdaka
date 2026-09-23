@@ -84,6 +84,12 @@ await check('跟练口令逐条短提示；示范是别的变体时角标写清�
   // 热身与拉伸走同一套播放器版式，口令同样只能一屏读完
   const oneLine=[...content.warmupMoves,...Object.values(content.STRETCH),...content.stretchSets.stretch];
   assert.ok(oneLine.every(m=>m.shortCue && m.shortCue.length<=30), '热身或拉伸缺了一句口令');
+  // 播放器按 sideMode 补换侧说明，所以检查的是屏幕上真正出现的那一行
+  const shown=m=>{const c=m.shortCue||m.cue,s=m.sideMode==='half'?'过半会提示换侧。':(m.sideMode==='alternate'?'左右交替。':'');return s&&c.indexOf(s)<0?c+s:c;};
+  assert.ok([...work,...oneLine].every(m=>shown(m).length<=30), '补上换侧说明后口令超出一屏');
+  const half=[...work,...oneLine].filter(m=>m.sideMode==='half');
+  assert.ok(half.length>=9 && half.every(m=>!/换边|换腿|换脚/.test(m.shortCue)), '单侧动作由播放器过半提示换侧，口令不再重复换边');
+  assert.ok([...Object.values(content.STRETCH),...content.warmupMoves].every(m=>m.sideMode), '热身与拉伸都要写明是否单侧');
   // 没有示范图时靠分步填住示范区，否则播放器整屏留白
   const noMedia=[...work,...oneLine].filter(m=>m.noMedia);
   assert.ok(noMedia.length>0 && noMedia.every(m=>m.steps && m.steps.length===3), '无示范动作必须给三步文字步骤');
