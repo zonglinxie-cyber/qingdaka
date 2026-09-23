@@ -73,6 +73,8 @@ async function bodyweightFlow(browser, base){
     await page.click('#moveClose');
     await page.click('#btnStart');
     await textIs(page,'plPhase','热身');
+    assert.equal(await page.textContent('#plRound'),'1 / 5','热身要显示第几个');
+    assert.equal(await page.textContent('#plCue'),'按自己稳住的高度抬膝，手臂自然摆。','热身也是一句口令');
     for(let i=0;i<5;i++) await page.click('#plSkip');
     await textIs(page,'plMv','臀桥');
     assert.equal(await page.locator('#plNext').textContent(),'接下来 · 死虫');
@@ -192,10 +194,25 @@ async function bodyweightFlow(browser, base){
     await page.locator('.sequence-move',{hasText:'扶凳箱式深蹲'}).click();
     assert.match(await page.locator('#mdMedia').getAttribute('src'),/0291\.(gif|poster\.png)$/,'哑铃课保留原示范');
     await page.click('#moveClose');
+    await page.click('[data-routine="stretch"]');
+    assert.equal(await page.locator('#routineMoves .sequence-move').count(),9,'拉伸课同样平铺当日顺序');
+    await page.click('#btnStart');
+    await textIs(page,'plPhase','拉伸');
+    assert.equal(await page.textContent('#plRound'),'全身拉伸 1 / 9','拉伸要显示第几个');
+    assert.equal(await page.textContent('#plCue'),'后腿跟贴地、膝伸直，前倾到发紧换腿。','拉伸也是一句口令');
+    assert.equal(await page.locator('#plLog').isVisible(),false,'拉伸没有档位，不出记录面板');
+    await page.click('#plSkip'); await page.click('#plSkip');
+    await textIs(page,'plMv','扶墙股四头拉伸');
+    assert.equal(await page.locator('#plDemoWrap').isVisible(),false,'无示范的拉伸不占位');
+    assert.equal(await page.locator('#plInstructions li').count(),3,'无示范时用分步填住示范区');
+    assert.notEqual((await page.locator('#plInstructions li').first().textContent()).trim(),await page.textContent('#plCue'),'分步不能只是重复单行口令');
+    assert.equal(await page.textContent('#plCue'),'扶墙抓同侧脚背拉向臀部，换边。');
+    assert.equal(await page.textContent('#plNext'),'接下来 · 坐姿臀部拉伸');
   }finally{await other.close();}
   console.log('✓ 徒手清单、分步示意、暂停继续、缺图提示、小屏幕和实际完成记录通过');
   console.log('✓ 整套自动跟练、减少动画偏好与新示意图离线重开通过');
   console.log('✓ 扶椅坐站在腰腹稳定课也用分步示意，居家哑铃仍用原持铃示范');
+  console.log('✓ 热身与拉伸同样是示范优先、一句口令');
 }
 try{
   const base = (process.env.TEST_BASE_URL || await localServer()).replace(/\/$/,'');

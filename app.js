@@ -1150,6 +1150,15 @@ function renderNext(){
   }
   $('plNext').textContent = m ? '接下来 · ' + m.name : '这是最后一个动作';
 }
+function phaseProgress(type){
+  var n = 0, total = 0;
+  for(var i = 0; i < session.steps.length; i++){
+    if(session.steps[i].type !== type){ continue; }
+    total++;
+    if(i <= session.stepIndex){ n++; }
+  }
+  return n + ' / ' + total;
+}
 function renderStep(){
   var step = session.steps[session.stepIndex];
   if(!step){ finishWorkout(false); return; }
@@ -1160,11 +1169,11 @@ function renderStep(){
   var phase = $('plPhase');
   if(step.type === 'warmup'){
     phase.textContent = '热身'; phase.className = 'pl-phase warm';
-    $('plRound').textContent = '先热起来';
+    $('plRound').textContent = phaseProgress('warmup');
     $('plClock').className = 'pl-clock num';
     $('plMv').textContent = step.move.name;
     renderDemo(step.move, '热身', true);
-    $('plCue').innerHTML = '<b>' + escapeHtml(step.move.name) + ' · ' + escapeHtml(step.move.target) + '</b>' + escapeHtml(step.move.cue);
+    $('plCue').textContent = step.move.shortCue || step.move.cue;
   } else if(step.type === 'work'){
     phase.textContent = '训练中'; phase.className = 'pl-phase';
     $('plRound').textContent = '动作 ' + (moves.indexOf(step.move)+1) + ' / ' + moves.length + (rounds > 1 ? ' · 第 ' + step.round + ' 轮' : '');
@@ -1192,12 +1201,12 @@ function renderStep(){
     preloadMove(step.next, true);
   } else if(step.type === 'stretch'){
     phase.textContent = '拉伸'; phase.className = 'pl-phase stretch';
-    $('plRound').textContent = S.settings.routine === 'stretch' ? '全身拉伸' : '练后放松';
+    $('plRound').textContent = (S.settings.routine === 'stretch' ? '全身拉伸 ' : '练后放松 ') + phaseProgress('stretch');
     $('plClock').className = 'pl-clock num rest';
     $('plMv').textContent = step.move.name;
     if(step.move.noMedia){ setDemoVisible(false); }
     else { renderDemo(step.move, '拉伸 · ' + step.move.position, true); }
-    $('plCue').innerHTML = '<b>' + escapeHtml(step.move.name) + ' · 拉到 ' + escapeHtml(step.move.target) + '（' + escapeHtml(step.move.position) + '）</b>' + escapeHtml(step.move.cue);
+    $('plCue').textContent = step.move.shortCue || step.move.cue;
   }
   for(var ni=session.stepIndex+1; ni<session.steps.length; ni++){ var ns=session.steps[ni]; if(ns.move && !ns.move.noMedia){ preloadMove(ns.move, ns.type==='work'); break; } }
   updateProgress();

@@ -81,6 +81,12 @@ await check('跟练口令逐条短提示；坐站分步示意替换持铃示范�
   assert.ok(work.every(m=>m.shortCue && m.shortCue.length<=30), '口令过长或缺失');
   assert.ok(work.every(m=>m.primary && m.steps.length===3), '动作内容不完整');
   assert.ok(work.every(m=>!/哑铃|器械|机/.test(m.name) || m.equipment), '名称提到器材就要写清器材');
+  // 热身与拉伸走同一套播放器版式，口令同样只能一屏读完
+  const oneLine=[...content.warmupMoves,...Object.values(content.STRETCH),...content.stretchSets.stretch];
+  assert.ok(oneLine.every(m=>m.shortCue && m.shortCue.length<=30), '热身或拉伸缺了一句口令');
+  // 没有示范图时靠分步填住示范区，否则播放器整屏留白
+  const noMedia=[...work,...oneLine].filter(m=>m.noMedia);
+  assert.ok(noMedia.length>0 && noMedia.every(m=>m.steps && m.steps.length===3), '无示范动作必须给三步文字步骤');
   // 每节课程都有备物提示，训练页靠它替代旧的按课程分支
   assert.deepEqual(Object.keys(content.routineGear).sort(),['bodyweight','core','dumbbell','gym','stretch']);
   assert.ok(Object.keys(content.routineGear).every(k=>content.routineGear[k].length>10));
