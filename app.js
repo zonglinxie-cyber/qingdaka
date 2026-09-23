@@ -1074,13 +1074,17 @@ function bindPlLog(move, round, label){
     levels.hidden = false;
     var prevLv = session.lifts[move.id + ':' + session.plLogRound];
     session.plLogLevel = (prevLv && prevLv.level) || (rec && rec.level) || '';
-    renderLevelChips(levels, kind, session.plLogLevel, function(id){ session.plLogLevel = id; });
-    var nxt = nextLevelId(kind, session.plLogLevel);
-    $('plLogHint').textContent = !session.plLogLevel
-      ? '点一下这组的难度；没点就不记。'
-      : (nxt && nxt !== session.plLogLevel
-        ? ('稳住了下次可试：' + liftLevelName(kind, nxt))
-        : '点一下难度，做完自动记下');
+    /* 提示跟着档位走：点了之后还说「没点就不记」，等于告诉人刚才那一下没生效 */
+    var showLevelHint = function(){
+      var nxt = nextLevelId(kind, session.plLogLevel);
+      $('plLogHint').textContent = !session.plLogLevel
+        ? '点一下这组的难度；没点就不记。'
+        : (nxt && nxt !== session.plLogLevel
+          ? ('稳住了下次可试：' + liftLevelName(kind, nxt))
+          : '这一档已是最高难度，做完自动记下');
+    };
+    renderLevelChips(levels, kind, session.plLogLevel, function(id){ session.plLogLevel = id; showLevelHint(); });
+    showLevelHint();
   }
 }
 function renderLevelChips(el, kind, selected, onPick){

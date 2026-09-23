@@ -199,6 +199,30 @@ async function bodyweightFlow(browser, base){
     assert.equal(await page.locator('#plLog').isVisible(),true,'这一屏要同时容下难度面板');
     await stageFits(page);
   }finally{await missing.close();}
+  const picked = await browser.newContext({viewport:{width:390,height:844},serviceWorkers:'block'});
+  try{
+    const page = await picked.newPage();
+    await page.clock.install();
+    await page.goto(base + '/index.html');
+    await page.click('[data-page="training"]');
+    await openDetails(page,'trainingOptions');
+    await page.click('[data-routine="core"]');   // 第一节就是有三档坡度的墙面斜板支撑
+    await page.click('#btnStart');
+    await textIs(page,'plPhase','热身');
+    for(let i=0;i<5;i++) await page.click('#plSkip');
+    await textIs(page,'plMv','墙面斜板支撑');
+    assert.match(await page.textContent('#plLogHint'),/没点就不记/,'没点档位时要说明不会记');
+    await page.locator('#plLogLevels button').first().click();
+    assert.equal(await page.locator('#plLogLevels button.on').count(),1,'点完要看到选中的档位');
+    assert.doesNotMatch(await page.textContent('#plLogHint'),/没点就不记/,'点完档位，提示不能还停在「没点就不记」');
+    assert.match(await page.textContent('#plLogHint'),/下次可试/,'点了低档要给出下一档');
+    await page.locator('#plLogLevels button').last().click();
+    assert.match(await page.textContent('#plLogHint'),/最高难度/,'点到顶格要说清没有更高一档');
+    await page.clock.fastForward((Number(await page.textContent('#plClock'))+1)*1000);   // 做完这一节，不是跳过去
+    await page.click('#plEnd'); await page.click('#dlgOk');
+    await page.waitForSelector('#plDone.show');
+    assert.match(await page.textContent('#plDoneLifts'),/墙面斜板支撑 · 远墙（难）/,'点过的档位要出现在结束屏');
+  }finally{await picked.close();}
   const full = await browser.newContext({viewport:{width:375,height:667},reducedMotion:'reduce'});
   try{
     const page = await full.newPage();
