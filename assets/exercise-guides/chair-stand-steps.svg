@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="600" height="520" viewBox="0 0 600 520" role="img" aria-labelledby="guide-title guide-desc">
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="460" viewBox="0 0 600 460" role="img" aria-labelledby="guide-title guide-desc">
   <title id="guide-title">扶椅坐站：空手练习静态分步示意</title>
   <desc id="guide-desc">原创简化侧视静态示意，不是真人示范或专业动作认证。两格人物与椅子使用一致尺度。第一格：髋膝弯曲，臀部轻触椅面前缘，脚掌着地，上身略前倾，手扶大腿。第二格：双脚踩稳后直立，不过度挺腰，两手空手自然垂下，椅子留在身后。椅背紧邻墙面。</desc>
   <defs>
@@ -16,7 +16,7 @@
     <path id="flat-shoe" d="M-8-3H8L11 10Q12 17 6 17H-26Q-30 17-30 13V11Q-29 7-21 5L-9 1Z"/>
   </defs>
 
-  <rect width="600" height="520" fill="#ffffff"/>
+  <rect width="600" height="460" fill="#ffffff"/>
   <path d="M300 86V437" fill="none" stroke="#edf1ee" stroke-width="2"/>
 
   <g font-family="PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" fill="#354a3e">
@@ -71,6 +71,4 @@
     <path d="M90 179L86 199" fill="none" stroke="#c0d0c2" stroke-width="16"/>
   </g>
 
-  <rect x="164" y="461" width="272" height="39" rx="19.5" fill="#f1f5f1"/>
-  <text x="300" y="487" text-anchor="middle" font-family="PingFang SC, Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="20" fill="#536b5b">空手练习 · 椅子靠墙</text>
 </svg>

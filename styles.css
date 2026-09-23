@@ -302,7 +302,7 @@ summary small{float:right;margin-left:8px;font-size:12px;color:var(--muted);font
 .player .pl-clock{grid-column:2;grid-row:1;font-size:44px;white-space:nowrap;margin:0}
 .player .pl-clock::after{content:'秒';font-family:var(--font-body);font-size:12px;font-weight:400;margin-left:5px;color:var(--muted)}
 .player .pl-demo-wrap{grid-column:1 / -1;grid-row:2;justify-self:center;align-self:center;width:min(100%,clamp(200px,calc(100dvh - 340px),440px));max-height:100%;margin:0;border-radius:18px;box-shadow:none;background:#fff;flex-shrink:0}
-.player .pl-demo-wrap img{object-fit:contain}
+.player .pl-demo-wrap img{object-fit:contain;padding-bottom:34px}
 .player .pl-badge{top:auto;bottom:10px;left:50%;transform:translateX(-50%);white-space:nowrap;font-size:11px;font-weight:500}
 .player .pl-cue{grid-column:1 / -1;grid-row:3;margin:0;max-width:none;font-size:16px;line-height:1.65;text-align:left}
 .player .pl-log{grid-column:1 / -1;grid-row:4;margin:0;width:auto;align-self:start}

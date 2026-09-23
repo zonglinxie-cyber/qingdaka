@@ -73,7 +73,7 @@ function applyMoveMeta(list){
 var chairStandMove = Object.assign({}, boxSquat, {
   id:'chair-stand', shortCue:'先空手，轻触椅面后踩稳站起；膝盖朝脚尖。', name:'扶椅坐站（先徒手）', area:'大腿、臀部与躯干稳定',
   sideMode:'none', equipment:'稳固椅子（靠墙），无需负重',
-  frames:['chair-stand-steps.svg'], mediaLabel:'分步示意',
+  frames:['chair-stand-steps.svg'], mediaLabel:'分步示意', mediaNote:'空手练习 · 椅子靠墙',
   primary:'股四头肌、臀大肌', secondary:'腘绳肌、腹壁稳定肌',
   benefit:'强化起身、上下楼和日常活动所需的大肌群。',
   steps:['把稳固椅子靠墙，双脚踩稳，先不拿哑铃','臀部向后坐，轻触椅面；可用双手扶大腿或椅侧协助','脚跟推地站起，能稳定完成后再考虑轻负重'],

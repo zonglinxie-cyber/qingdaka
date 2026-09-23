@@ -1819,10 +1819,10 @@ function setDetailMedia(m){
   img.src = src;
   img.alt = m.name + ' 示范';
   // 示范拍的是另一个变体时，跟练角标已经说过；详情里图是主角，说明必须跟着图。
-  // 自制的分步示意图（frames）画的就是要练的做法，图里也带着说明，不再多出一行
+  // 分步示意图自己不带说明：播放器角标就压在图的下沿，图里再烤一行会叠成两个标签。
   var note = $('mdMediaNote');
-  var showNote = m && m.mediaLabel && !m.frames;
-  if(note){ note.textContent = showNote ? m.mediaLabel : ''; note.hidden = !showNote; }
+  var noteTx = m ? (m.mediaNote || (m.frames ? '' : m.mediaLabel)) : '';
+  if(note){ note.textContent = noteTx; note.hidden = !noteTx; }
 }
 /* 示范取不到（离线首装、iOS 回收了缓存）时不能留一个方框大的空图：
    收掉图，把图注位改成说明，下面的文字步骤本来就在。 */

@@ -67,7 +67,7 @@ await check('所有课程与档位的列表、预览、播放器时长一致且�
   ctx.S.settings={routine:'dumbbell',preset:'starter'};ctx.moves=ctx.routines.dumbbell;ctx.buildSteps();
   assert.equal(ctx.session.totalDuration,723);
 });
-await check('跟练口令逐条短提示；示范是别的变体时角标写清且不超长',()=>{
+await check('跟练口令逐条短提示；示范变体的角标与图注写清且不超长',()=>{
   const ctx = vm.createContext({window:{}});
   vm.runInContext(fs.readFileSync(new URL('../content.js',import.meta.url),'utf8'),ctx);
   const content = ctx.window.QDK_CONTENT, moves = content.routines.bodyweight;
@@ -98,6 +98,8 @@ await check('跟练口令逐条短提示；示范是别的变体时角标写清�
   const variants=work.filter(m=>variantIds.includes(m.id));
   assert.deepEqual([...new Set(variants.map(m=>m.id))].sort(),variantIds,'示范变体动作清单与课表不符');
   assert.ok(variants.every(m=>m.mediaLabel && m.mediaLabel.length<=10),'示范变体没标在角标上，或角标过长');
+  // 图的下沿归角标：自制示意图的说明写在 mediaNote、由 DOM 挂在图下，必须一行放得下
+  assert.ok(work.every(m=>!(m.mediaNote||'').length || m.mediaNote.length<=12),'图注过长会折行顶破图卡');
   // 每节课程都有备物提示，训练页靠它替代旧的按课程分支
   assert.deepEqual(Object.keys(content.routineGear).sort(),['bodyweight','core','dumbbell','gym','stretch']);
   assert.ok(Object.keys(content.routineGear).every(k=>content.routineGear[k].length>10));
