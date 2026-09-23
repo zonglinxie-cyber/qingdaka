@@ -1791,6 +1791,11 @@ function setDetailMedia(m){
   preloadMove(m, true);
   img.src = src;
   img.alt = m.name + ' 示范';
+  // 示范拍的是另一个变体时，跟练角标已经说过；详情里图是主角，说明必须跟着图。
+  // 自制的分步示意图（frames）画的就是要练的做法，图里也带着说明，不再多出一行
+  var note = $('mdMediaNote');
+  var showNote = m && m.mediaLabel && !m.frames;
+  if(note){ note.textContent = showNote ? m.mediaLabel : ''; note.hidden = !showNote; }
 }
 function openMoveDetail(m){
   $('mdName').textContent = m.name;

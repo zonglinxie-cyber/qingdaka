@@ -87,6 +87,13 @@ async function bodyweightFlow(browser, base){
     await page.click('[data-page="training"]');
     await page.locator('.sequence-move').nth(2).click();
     assert.match(await page.locator('#mdMedia').getAttribute('src'), /chair-stand-steps\.svg$/);
+    assert.equal(await page.locator('#mdMediaNote').isVisible(),false,'自制分步示意自己带着说明，不再重复一行');
+    await page.click('#moveClose');
+    await page.locator('.sequence-move',{hasText:'跪姿平板'}).click();
+    assert.equal(await page.textContent('#mdMediaNote'),'示范为腿伸直版','示范是别的变体时详情也要标出来');
+    await page.click('#moveClose');
+    await page.locator('.sequence-move',{hasText:'臀桥'}).click();
+    assert.equal(await page.locator('#mdMediaNote').isVisible(),false,'示范与做法一致时不多出一行说明');
     await page.click('#moveClose');
     await page.click('#btnStart');
     assert.equal(await page.textContent('#plPhase'),'准备开始');
