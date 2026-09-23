@@ -35,6 +35,23 @@ async function verifyServer(base){
 async function textIs(page, id, expected){
   await page.waitForFunction(({id,expected}) => document.getElementById(id)?.textContent === expected, {id,expected});
 }
+/* 窄屏播放器要整屏放得下：内容重叠、被裁切或偷偷滚动都算回归 */
+async function stageFits(page){
+  const r = await page.evaluate(() => {
+    const st = document.querySelector('.pl-stage'), sr = st.getBoundingClientRect();
+    const vis = [...st.children].filter(e => !e.hidden && e.offsetParent !== null)
+      .map(e => { const b = e.getBoundingClientRect(); return [e.id, b.top, b.bottom]; });
+    let overlap = false;
+    for(let i=0;i<vis.length;i++) for(let j=i+1;j<vis.length;j++){
+      const pair = [vis[i][0],vis[j][0]].sort().join('|');
+      if(pair === 'plClock|plMv') continue;
+      if(vis[i][1] < vis[j][2]-1 && vis[j][1] < vis[i][2]-1) overlap = true;
+    }
+    return { overlap, scrolls: st.scrollHeight > st.clientHeight+1,
+      clipped: vis.some(v => v[1] < sr.top-1 || v[2] > sr.bottom+1) };
+  });
+  assert.deepEqual(r, {overlap:false, scrolls:false, clipped:false}, '窄屏播放器排版溢出');
+}
 async function download(page, selector){
   if(selector === '#btnExport'){ await openDetails(page,'backupDetails'); }
   if(selector === '#btnArchiveExport'){ await openDetails(page,'archiveDetails'); }
@@ -72,6 +89,9 @@ async function bodyweightFlow(browser, base){
     assert.match(await page.locator('#mdMedia').getAttribute('src'), /chair-stand-steps\.svg$/);
     await page.click('#moveClose');
     await page.click('#btnStart');
+    assert.equal(await page.textContent('#plPhase'),'准备开始');
+    assert.equal(await page.textContent('#plMv'),'原地踏步激活','倒数时就该看到第一个动作');
+    assert.equal(await page.locator('#plDemoWrap').isHidden(),false,'倒数时示范不能空着');
     await textIs(page,'plPhase','热身');
     assert.equal(await page.textContent('#plRound'),'1 / 5','热身要显示第几个');
     assert.equal(await page.textContent('#plCue'),'按自己稳住的高度抬膝，手臂自然摆。','热身也是一句口令');
@@ -145,6 +165,12 @@ async function bodyweightFlow(browser, base){
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth),false);
     const pause = await page.locator('#plPause').boundingBox();
     assert.ok(pause.y >= 0 && pause.y + pause.height <= 667,'小屏幕暂停按钮应始终可见');
+    await stageFits(page);
+    await page.click('#plSkip'); await page.click('#plSkip');
+    await page.click('#plSkip'); await page.click('#plSkip');
+    await textIs(page,'plMv','扶椅坐站（先徒手）');
+    assert.equal(await page.locator('#plLog').isVisible(),true,'这一屏要同时容下难度面板');
+    await stageFits(page);
   }finally{await missing.close();}
   const full = await browser.newContext({viewport:{width:375,height:667},reducedMotion:'reduce'});
   try{
@@ -209,6 +235,22 @@ async function bodyweightFlow(browser, base){
     assert.equal(await page.textContent('#plCue'),'扶墙抓同侧脚背拉向臀部，换边。');
     assert.equal(await page.textContent('#plNext'),'接下来 · 坐姿臀部拉伸');
   }finally{await other.close();}
+  // 320 窄屏 + 难度档位面板：口令两行时示范必须自己缩，不能压到上下两块
+  const tight = await browser.newContext({viewport:{width:320,height:667},serviceWorkers:'block'});
+  try{
+    const page = await tight.newPage();
+    await page.goto(base + '/index.html');
+    await page.click('[data-page="training"]');
+    await openDetails(page,'trainingOptions');
+    await page.click('[data-routine="core"]');
+    await page.click('#btnStart');
+    await page.waitForTimeout(3600);
+    for(let i=0;i<5;i++) await page.click('#plSkip');
+    await textIs(page,'plMv','墙面斜板支撑');
+    assert.match(await page.textContent('#plCue'),/能说短句/);
+    assert.equal(await page.locator('#plLog').isVisible(),true);
+    await stageFits(page);
+  }finally{await tight.close();}
   console.log('✓ 徒手清单、分步示意、暂停继续、缺图提示、小屏幕和实际完成记录通过');
   console.log('✓ 整套自动跟练、减少动画偏好与新示意图离线重开通过');
   console.log('✓ 扶椅坐站在腰腹稳定课也用分步示意，居家哑铃仍用原持铃示范');

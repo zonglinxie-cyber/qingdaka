@@ -1277,14 +1277,15 @@ function advance(dir, reason, alreadyCaptured){
 function runCountdown(){
   if(session.phase !== PHASE.countdown && !enterPhase(PHASE.countdown)){ return; }
   var n = 3;
-  setDemoVisible(false);
+  var first = session.steps[session.stepIndex] || session.steps[0];
   $('plInstructions').hidden = true;
   $('plPhase').textContent = '准备开始'; $('plPhase').className = 'pl-phase warm';
   $('plClock').className = 'pl-clock num cd';
   $('plClock').textContent = String(n);
-  $('plMv').textContent = '马上开始';
+  $('plMv').textContent = first && first.move ? first.move.name : '马上开始';
   $('plRound').textContent = '先站稳';
-  $('plCue').innerHTML = '<b>准备</b>确认脚下没有障碍，保持自然呼吸；倒数后先从轻松热身开始。';
+  if(first && first.move){ renderDemo(first.move, '准备 · 先摆好位', false); } else { setDemoVisible(false); }
+  $('plCue').textContent = '倒数结束就开始；先照着示范把起始位摆好。';
   $('plNext').textContent = ''; hidePlLog();
   unlockVoice();
   cueShort(); speak('3，2，1，开始', { voiceKey: 'countdown-start' });
