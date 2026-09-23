@@ -7,6 +7,8 @@ Files:
   chair-stand-steps.svg
   kneeling-plank-steady.svg
   kneeling-plank-tap.svg
+  hip-bridge-flat.svg
+  hip-bridge-lift.svg
   generated/wall-plank-anatomy.png
   bird-dog.gif
   bird-dog-poster.png
@@ -26,6 +28,16 @@ extended on the toes and therefore did not show the kneeling version the
 written cues ask for. Same caveat as above: static teaching aids drawn for this
 app, not filmed or professionally validated demonstrations, and no third-party
 media was used as an input or reference for them.
+
+hip-bridge-flat.svg / hip-bridge-lift.svg are original, hand-authored vector
+schematics of the glute bridge in the same side-view language: frame 1 is lying
+on the mat with the knees bent and both soles flat, frame 2 lifts the hips until
+a dashed rule shows shoulder-hip-knee in one line. They replace dataset GIF
+3013, an anatomical muscle illustration whose still frame shows only the raised
+position and gives a reduced-motion reader no setup position to copy. Same
+caveat as above: static teaching aids drawn for this app, not filmed or
+professionally validated demonstrations, and no third-party media was used as an
+input or reference for them.
 
 The bird-dog.gif / bird-dog-poster.png pair is a project-original looping
 demonstration generated for this app (four-point kneel to contralateral
@@ -91,8 +103,10 @@ Deployment scope (2026-09-23):
 
 Deployment scope (2026-09-24):
   3239 (gif + poster) was deleted once 跪姿平板 switched to the project-authored
-  kneeling schematics listed in section 1. Eight legacy GIF/poster pairs from
-  this section remain deployed.
+  kneeling schematics listed in section 1, and 3013 (gif + poster) was deleted
+  the same day once 臀桥 switched to the project-authored hip-bridge schematics
+  also listed in section 1. Seven legacy GIF/poster pairs from this section
+  remain deployed: 0276, 0291, 0292, 0404, 0659, 1459, 1677.
 
 Current host:
   https://github.com/omercotkd/exercises-gifs
@@ -104,7 +118,7 @@ original creators and dataset owner. Therefore the host's MIT file is not a
 complete or reliable chain of title for the media.
 
 Release status:
-  LEGACY / PROTOTYPE-ONLY. Do not describe the remaining nine deployed pairs of
+  LEGACY / PROTOTYPE-ONLY. Do not describe the remaining seven deployed pairs of
   this section as copyright-cleared or commercially safe. Replace them with commissioned,
   self-recorded, or otherwise clearly licensed continuous demonstrations
   before treating the application as a public commercial release.

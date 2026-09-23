@@ -96,6 +96,11 @@ async function bodyweightFlow(browser, base){
     assert.ok(requested.some(u=>/kneeling-plank-tap\.svg$/.test(u)),'两格示意都要预加载，跟练时轮换才不会空一帧');
     await page.click('#moveClose');
     await page.locator('.sequence-move',{hasText:'臀桥'}).click();
+    assert.match(await page.locator('#mdMedia').getAttribute('src'),/hip-bridge-flat\.svg$/,'臀桥的示范改成画的就是家里要做的两格，不再是仰卧的解剖图');
+    assert.equal(await page.textContent('#mdMediaNote'),'脚跟踩稳 · 抬髋成线');
+    assert.ok(requested.some(u=>/hip-bridge-lift\.svg$/.test(u)),'臀桥第二格也要预加载');
+    await page.click('#moveClose');
+    await page.locator('.sequence-move',{hasText:'靠墙俯卧撑'}).click();
     assert.equal(await page.locator('#mdMediaNote').isVisible(),false,'示范与做法一致时不多出一行说明');
     await page.click('#moveClose');
     await page.click('#btnStart');
@@ -111,6 +116,16 @@ async function bodyweightFlow(browser, base){
     assert.equal(await page.locator('#plLog').isVisible(),false);
     assert.equal(await page.locator('#plPause').textContent(),'暂停');
     assert.equal(await page.locator('#plCue').textContent(),'脚跟推地抬髋，顶端夹臀，不要拱腰。');
+    await page.waitForFunction(() => document.getElementById('plDemo').getAttribute('src')?.endsWith('hip-bridge-flat.svg'));
+    await textIs(page,'plBadge','分步示意');
+    // 两格按 1.3s 轮换：躺下屈膝 → 抬髋成线，正好是这一节的动作节奏。
+    let sawLift = false;
+    for(let i=0;i<8 && !sawLift;i++){
+      await page.clock.fastForward(700);
+      await new Promise(r => setTimeout(r, 200));
+      sawLift = /hip-bridge-lift\.svg$/.test(await page.locator('#plDemo').getAttribute('src') || '');
+    }
+    assert.ok(sawLift,'臀桥两格必须轮换，只给躺着的起始位就看不出抬到哪');
     await page.clock.fastForward(21000);
     await page.click('#plPause');
     const paused = await page.textContent('#plClock');
@@ -184,7 +199,7 @@ async function bodyweightFlow(browser, base){
   const missing = await browser.newContext({viewport:{width:320,height:667},serviceWorkers:'block'});
   try{
     const page = await missing.newPage();
-    await page.route('**/3013.gif', route => route.abort());
+    await page.route('**/hip-bridge-flat.svg', route => route.abort());
     await page.goto(base + '/index.html');
     await page.click('[data-page="training"]');
     const openMove = name => page.evaluate(n => {
@@ -302,8 +317,11 @@ async function bodyweightFlow(browser, base){
     assert.ok(Number(await page.textContent('#plClock')) < before,'自然换动作后仍需持续计时');
     for(let i=0;i<4;i++) await page.clock.fastForward((Number(await page.textContent('#plClock'))+1)*1000);
     await textIs(page,'plMv','臀桥');
-    await page.waitForFunction(() => document.getElementById('plDemo').getAttribute('src')?.endsWith('3013-poster.png'));
-    await textIs(page,'plBadge','静态参考');
+    await page.waitForFunction(() => document.getElementById('plDemo').getAttribute('src')?.endsWith('hip-bridge-flat.svg'));
+    await textIs(page,'plBadge','分步示意');
+    // 开了减少动效就不轮换：停在第一格起始位，进阶位由图注和文字步骤承担
+    await page.clock.fastForward(4000);
+    assert.match(await page.getAttribute('#plDemo','src'),/hip-bridge-flat\.svg$/,'减少动效时两格不该轮换');
     for(let i=0;i<17;i++) await page.clock.fastForward((Number(await page.textContent('#plClock'))+1)*1000);
     await page.waitForSelector('#plDone.show');
     const logs = await page.evaluate(() => JSON.parse(localStorage.getItem('workbuddy-v5')).logs.filter(l => l.type === 'training'));

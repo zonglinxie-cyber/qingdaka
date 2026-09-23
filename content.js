@@ -27,7 +27,7 @@ function voiceKey(prefix, move){
   return prefix + id;
 }
 
-var hipBridge = { id:'3013', shortCue:'脚跟推地抬髋，顶端夹臀，不要拱腰。', name:'臀桥', area:'臀部与后侧链', sideMode:'none', equipment:'', steps:['仰卧屈膝，双脚与髋同宽','收紧腹部，脚跟推地抬髋','到肩—髋—膝接近直线后慢慢回位'], cue:'肋骨不要外翻；顶端夹臀，不要用腰向上拱。呼吸：抬髋时呼气，下放时吸气。', mistake:'常见错误：抬得越高越好，导致腰部过伸。' };
+var hipBridge = { id:'3013', shortCue:'脚跟推地抬髋，顶端夹臀，不要拱腰。', name:'臀桥', frames:['hip-bridge-flat.svg','hip-bridge-lift.svg'], mediaLabel:'分步示意', mediaNote:'脚跟踩稳 · 抬髋成线', area:'臀部与后侧链', sideMode:'none', equipment:'', steps:['仰卧屈膝，双脚与髋同宽','收紧腹部，脚跟推地抬髋','到肩—髋—膝接近直线后慢慢回位'], cue:'肋骨不要外翻；顶端夹臀，不要用腰向上拱。呼吸：抬髋时呼气，下放时吸气。', mistake:'常见错误：抬得越高越好，导致腰部过伸。' };
 var deadBug = { id:'0276', shortCue:'对侧手脚慢慢伸出，腰背贴稳垫面，左右交替。', name:'死虫', area:'核心稳定', sideMode:'alternate', equipment:'', steps:['腰背自然贴稳垫面，髋膝约 90°','一侧手臂与对侧腿缓慢远离身体','腰背不离垫，回位后换侧'], cue:'范围由腰背能否保持稳定决定；宁可短一点。呼吸：手脚伸出时呼气，回位时吸气。', mistake:'常见错误：手脚下放过低，腰背拱起。' };
 var wallPush = { id:'0659', shortCue:'身体保持直线，屈肘靠近墙，再慢慢推回。', name:'靠墙俯卧撑', area:'胸肩与上肢推力', sideMode:'none', equipment:'', steps:['面对墙站立，双手略宽于肩','身体保持一条直线，屈肘靠近墙','手掌推墙，回到起始位'], cue:'脚离墙越远越难；先选能稳定控制的位置。呼吸：推墙时呼气，靠近时吸气。', mistake:'常见错误：只移动头部，或塌腰、耸肩。' };
 var kneelingPlank = { id:'3239', shortCue:'先撑稳不塌腰，稳了再抬一只手点肩。', name:'跪姿平板（可点肩）', frames:['kneeling-plank-steady.svg','kneeling-plank-tap.svg'], mediaLabel:'分步示意', mediaNote:'膝盖着地 · 先撑稳', area:'核心与肩稳定', sideMode:'alternate', equipment:'', steps:['膝盖着地、前臂撑地，头到膝保持直线','先稳住跪姿平板，能说话、不塌腰','稳了再轻点对侧肩；一晃就停在平板'], cue:'先撑住：能说话、不塌腰，再考虑点肩。点肩时髋不跟着晃，一晃就退回只撑住。呼吸：全程不憋气。', mistake:'常见错误：塌腰，或猛地点肩扭腰。' };
