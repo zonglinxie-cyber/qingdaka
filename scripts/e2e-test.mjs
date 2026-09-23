@@ -176,6 +176,7 @@ async function bodyweightFlow(browser, base){
     assert.equal(await page.textContent('#plCue'),'恢复呼吸，照着示范摆好起始位。','下一动作有示范时不该说「照着下面的步骤」');
     assert.equal(await page.textContent('#plBadge'),'下一动作 · 坐姿毛巾划船','休息屏的定格必须是毛巾划船的起始位');
     await page.waitForFunction(() => document.getElementById('plDemo').getAttribute('src')?.endsWith('towel-row-ready.svg'));
+    await guideInkClearsBadge(page);
     await page.click('#plSkip');
     await textIs(page,'plMv','坐姿毛巾划船');
     await page.click('#plPrev'); await page.click('#plPrev');
@@ -462,6 +463,39 @@ async function bodyweightFlow(browser, base){
    每跳一次读一次状态，只对不变式。两条规则：正式动作都有示范，休息屏就把下一动作摆出来、
    名字只挂在角标上（底下不能再重复一行）；矮屏休息屏要把「记刚才那组」和文字步骤一起放下。
    图取不到时的兜底（收起图、由「接下来」那一行报名字）在缺图走查里用网络拦截覆盖。 */
+/* 自制分步示意的墨迹不能压到示范角标。这条以前只能人工量像素（34px 留白带在 <img> 的
+   padding-bottom 上，画出来的图比示范框矮，量错一次就把整张图白缩小两成），这里按真实
+   DOM 的 contain 几何重算一遍：画出来的图底在哪、角标顶在哪、每张图的墨迹最低一行在哪。 */
+const GUIDE_FRAMES = ['chair-stand-steps.svg','dead-bug-tabletop.svg','dead-bug-reach.svg',
+  'hip-bridge-flat.svg','hip-bridge-lift.svg','kneeling-plank-steady.svg','kneeling-plank-tap.svg',
+  'towel-row-ready.svg','towel-row-pull.svg','wall-pushup-start.svg','wall-pushup-bend.svg'];
+async function guideInkClearsBadge(page){
+  const bad = await page.evaluate(async list => {
+    const im = document.getElementById('plDemo'), bd = document.getElementById('plBadge');
+    const cs = getComputedStyle(im), r = im.getBoundingClientRect();
+    const contentH = r.height - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+    const badgeTop = bd.getBoundingClientRect().top - r.top, out = [];
+    for(const f of list){
+      const img = new Image(); img.src = 'assets/exercise-guides/' + f; await img.decode();
+      const c = document.createElement('canvas'); c.width = img.naturalWidth; c.height = img.naturalHeight;
+      const g = c.getContext('2d'); g.drawImage(img, 0, 0);
+      const d = g.getImageData(0, 0, c.width, c.height).data;
+      let inkBottom = -1;
+      for(let y = c.height - 1; y >= 0 && inkBottom < 0; y--) for(let x = 0; x < c.width; x++){
+        const i = (y * c.width + x) * 4;
+        if(d[i + 3] > 8 && (d[i] < 235 || d[i + 1] < 235 || d[i + 2] < 235)){ inkBottom = y; break; }
+      }
+      if(inkBottom < 0) out.push(f + ' 读不出墨迹');
+      else {
+        const drawnH = img.naturalHeight * Math.min(r.width / img.naturalWidth, contentH / img.naturalHeight);
+        const ink = parseFloat(cs.paddingTop) + (contentH - drawnH) / 2 + inkBottom / img.naturalHeight * drawnH;
+        if(ink > badgeTop - 4) out.push(f + ' 墨迹底 ' + ink.toFixed(0) + '／角标顶 ' + badgeTop.toFixed(0));
+      }
+    }
+    return out;
+  }, GUIDE_FRAMES);
+  assert.deepEqual(bad, [], '自制分步示意的墨迹压到示范角标：' + bad.join('，'));
+}
 async function restScreenWalk(browser, base, viewport, preset){
   const context = await browser.newContext({viewport, serviceWorkers:'block'});
   try{
