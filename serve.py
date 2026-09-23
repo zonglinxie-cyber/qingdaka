@@ -21,6 +21,13 @@ class Handler(SimpleHTTPRequestHandler):
     def log_message(self, fmt, *args):
         pass
 
+    def handle_one_request(self):
+        # 跟练会预载动图、换节时浏览器会掐断没传完的请求，这是正常使用不是故障
+        try:
+            super().handle_one_request()
+        except (BrokenPipeError, ConnectionResetError):
+            self.close_connection = True
+
     def do_GET(self):
         return SimpleHTTPRequestHandler.do_GET(self)
 
