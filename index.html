@@ -82,7 +82,7 @@
           <h2 id="trainingName">徒手基础</h2>
           <p class="workout-time"><b id="durHint">—</b><span id="trainingLevel">入门档</span></p>
           <p class="card-note" id="roundHint"></p>
-          <p class="card-note" id="bodyweightEquipment">备好稳固椅子、长毛巾和垫子；上下地面困难时不要勉强。</p>
+          <p class="card-note" id="routineGear">备好稳固椅子、长毛巾和垫子；上下地面困难时不要勉强。</p>
           <div class="readiness" id="readySection">
             <h3>今天感觉怎么样？</h3>
             <div class="ready-row" id="readyRow"><button class="ready-btn green on" data-ready="green" aria-pressed="true">不错</button><button class="ready-btn yellow" data-ready="yellow" aria-pressed="false">一般</button><button class="ready-btn red" data-ready="red" aria-pressed="false">不适</button></div>
@@ -91,10 +91,10 @@
           <button class="btn-start" id="btnStart">开始跟练</button>
         </article>
 
-        <section class="workout-sequence" id="bodyweightPlan" aria-labelledby="bodyweightPlanTitle">
-          <div class="sequence-heading"><h2 id="bodyweightPlanTitle">按这个顺序练</h2><span id="bodyweightDose"></span></div>
-          <div id="bodyweightMoveList"></div>
-          <p class="sequence-note">点动作看做法；开始后会先热身，最后带你放松。</p>
+        <section class="workout-sequence" id="routinePlan" aria-labelledby="routinePlanTitle">
+          <div class="sequence-heading"><h2 id="routinePlanTitle">按这个顺序练</h2><span id="routineDose"></span></div>
+          <div id="routineMoves"></div>
+          <p class="sequence-note" id="routinePlanNote">点动作看做法；开始后会先热身，最后带你放松。</p>
         </section>
         <details class="disclosure" id="trainingOptions">
           <summary>换课程或强度</summary>
@@ -104,9 +104,6 @@
           <div class="seg" id="presetSeg"><button data-preset="recovery">恢复</button><button data-preset="starter" class="on">入门</button><button data-preset="standard">标准</button><button data-preset="steady">进阶</button></div>
         </div>
           </div>
-        </details>
-        <details class="disclosure" id="movesDetails"><summary>动作示范<small id="moveCount"></small></summary>
-          <div class="disclosure-body" id="moveList"></div>
         </details>
         <p class="training-week" id="weekChip">本周力量 <b id="weekStrengthNum">0</b> / 3 次<span>近7天练了 <b id="streakNum">0</b> 天</span></p>
       </div>
@@ -246,6 +243,7 @@
     <div class="pl-instructions" id="plInstructions" hidden></div>
     <div class="pl-cue" id="plCue"></div>
     <div class="pl-log" id="plLog" hidden>
+      <div class="pl-log-for" id="plLogFor"></div>
       <div class="pl-log-last" id="plLogLast"></div>
       <div class="pl-log-row" id="plLogLoad">
         <label>kg<input id="plKg" type="number" inputmode="decimal" step="0.5" min="0" max="400"></label>
@@ -254,21 +252,20 @@
       <div class="pl-log-levels" id="plLogLevels" hidden></div>
       <div class="pl-log-hint" id="plLogHint"></div>
     </div>
-    <div class="pl-dots" id="plDots"></div>
     <div class="pl-next" id="plNext"></div>
   </div>
   <div class="pl-controls">
-    <button class="pl-btn" id="plPrev" aria-label="上一个" disabled>⏮</button>
-    <button class="pl-btn main" id="plPause" aria-label="暂停/继续">⏸</button>
-    <button class="pl-btn" id="plSkip" aria-label="跳过">⏭</button>
-    <button class="pl-btn end" id="plEnd" aria-label="结束">■</button>
+    <button class="pl-btn" id="plPrev" aria-label="上一个" disabled>上一个</button>
+    <button class="pl-btn main" id="plPause" aria-label="暂停/继续">暂停</button>
+    <button class="pl-btn" id="plSkip" aria-label="跳过">跳过</button>
+    <button class="pl-btn end" id="plEnd" aria-label="结束">结束</button>
   </div>
   <div class="pl-done" id="plDone" aria-hidden="true">
     <div class="big">🎉</div>
     <h3 id="plDoneTitle">训练完成</h3>
     <div class="sub" id="plDoneSub"></div>
     <div class="pl-done-lifts" id="plDoneLifts"></div>
-    <button class="btn" id="plDoneBtn">好的</button>
+    <button class="btn" id="plDoneBtn">回到训练</button>
   </div>
 </div>
 

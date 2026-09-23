@@ -220,11 +220,8 @@ function formatLiftLine(move, rec){
   return '还没记过';
 }
 function moveById(id){
-  var lists = [bodyweightMoves, dumbbellMoves, gymMoves];
-  if(typeof coreMoves !== 'undefined'){ lists.push(coreMoves); }
-  if(typeof routines !== 'undefined'){
-    Object.keys(routines).forEach(function(k){ lists.push(routines[k]); });
-  }
+  var lists = [];
+  Object.keys(routines).forEach(function(k){ lists.push(routines[k]); });
   for(var L = 0; L < lists.length; L++){
     var arr = lists[L] || [];
     for(var i = 0; i < arr.length; i++){
@@ -762,9 +759,9 @@ if(!C || !C.routines){
   reportAppError(new Error('content.js 未加载，请 Command+Shift+R'));
   return;
 }
-var bodyweightMoves = C.bodyweightMoves, dumbbellMoves = C.dumbbellMoves, gymMoves = C.gymMoves, coreMoves = C.coreMoves, routines = C.routines, routineNames = C.routineNames, presets = C.presets, presetNames = C.presetNames, warmupMoves = C.warmupMoves, STRETCH = C.STRETCH, stretchSets = C.stretchSets;
+var routines = C.routines, routineNames = C.routineNames, routineGear = C.routineGear, presets = C.presets, presetNames = C.presetNames, warmupMoves = C.warmupMoves, STRETCH = C.STRETCH, stretchSets = C.stretchSets;
 
-var moves = routines[S.settings.routine] || bodyweightMoves;
+var moves = routines[S.settings.routine] || routines.bodyweight;
 
 function imagePath(move, animated, frameIndex){
   if(move.frames && move.frames.length){ return assetBase + move.frames[Math.min(frameIndex||0, move.frames.length-1)]; }
@@ -1039,18 +1036,24 @@ function commitCurrentLift(move, round){
   session.lifts[move.id].push(set);
   mutateState(function(){ upsertLiftRec(move.id, set); });
 }
-function bindPlLog(move, round){
+function hidePlLog(){
+  var box = $('plLog');
+  if(box){ box.hidden = true; }
+  session.plLogMove = null;
+}
+function bindPlLog(move, round, label){
   var box = $('plLog');
   if(!box){ return; }
   var kind = liftKind(move);
   if(!kind || !move){
-    box.hidden = true;
-    session.plLogMove = null;
+    hidePlLog();
     return;
   }
   session.plLogMove = move;
   session.plLogRound = round || 0;
   box.hidden = false;
+  var forEl = $('plLogFor');
+  if(forEl){ forEl.textContent = (label || '这组') + ' · ' + move.name + ' 第 ' + (round || 1) + ' 轮'; }
   var rec = getLift(move.id);
   $('plLogLast').textContent = formatLiftLine(move, rec);
   var load = $('plLogLoad');
@@ -1070,12 +1073,14 @@ function bindPlLog(move, round){
     load.hidden = true;
     levels.hidden = false;
     var prevLv = session.lifts[move.id + ':' + session.plLogRound];
-    session.plLogLevel = (prevLv && prevLv.level) || (rec && rec.level) || liftLevels(kind)[0].id;
+    session.plLogLevel = (prevLv && prevLv.level) || (rec && rec.level) || '';
     renderLevelChips(levels, kind, session.plLogLevel, function(id){ session.plLogLevel = id; });
     var nxt = nextLevelId(kind, session.plLogLevel);
-    $('plLogHint').textContent = (nxt && nxt !== session.plLogLevel)
-      ? ('稳住了下次可试：' + liftLevelName(kind, nxt))
-      : '点一下难度，做完自动记下';
+    $('plLogHint').textContent = !session.plLogLevel
+      ? '点一下这组的难度；没点就不记。'
+      : (nxt && nxt !== session.plLogLevel
+        ? ('稳住了下次可试：' + liftLevelName(kind, nxt))
+        : '点一下难度，做完自动记下');
   }
 }
 function renderLevelChips(el, kind, selected, onPick){
@@ -1105,8 +1110,8 @@ function setDemoVisible(visible){
   $('plDemoWrap').hidden = !visible;
   if(!visible){ stopFrameAnimation(); currentDemoUrl = ''; $('plDemo').dataset.swapToken = ''; }
 }
-function showBodyweightInstructions(move, label){
-  if(S.settings.routine !== 'bodyweight' || !move){ return; }
+function showTextSteps(move, label){
+  if(!move){ return; }
   var steps = move.steps || [move.cue];
   $('plInstructions').innerHTML = '<p class="instruction-label">' + escapeHtml(label) + '</p><ol>' + steps.map(function(text){ return '<li>' + escapeHtml(text) + '</li>'; }).join('') + '</ol>';
   $('plInstructions').hidden = false;
@@ -1125,10 +1130,10 @@ function renderDemo(move, badge, animate){
   var show = function(){
     var src = move.frames && move.frames.length ? imagePath(move,false,frame) : imagePath(move,useMotion);
     currentDemoUrl = src;
-    swapImage($('plDemo'), src, move.name, S.settings.routine === 'bodyweight' ? function(){
+    swapImage($('plDemo'), src, move.name, function(){
       setDemoVisible(false);
-      showBodyweightInstructions(move, '示范暂不可用 · 文字步骤');
-    } : null);
+      showTextSteps(move, '示范暂不可用 · 文字步骤');
+    });
   };
   show();
   if(useMotion && move.frames && move.frames.length > 1){
@@ -1136,41 +1141,14 @@ function renderDemo(move, badge, animate){
   }
   $('plBadge').textContent = badge || '示范';
 }
-function primaryType(){ return S.settings.routine === 'stretch' ? 'stretch' : 'work'; }
-function renderDots(){
-  var box = $('plDots'); box.innerHTML = '';
-  var pt = primaryType();
-  var idx = [];
-  session.steps.forEach(function(s,i){ if(s.type===pt){ idx.push(i); } });
-  var cur = -1;
-  idx.forEach(function(i,wi){ if(i <= session.stepIndex){ cur = wi; } });
-  var onNow = session.steps[session.stepIndex] && session.steps[session.stepIndex].type === pt;
-  idx.forEach(function(i,wi){
-    var d = document.createElement('span');
-    d.className = 'd' + (wi < cur ? ' done' : (wi === cur && onNow ? ' now' : ''));
-    box.appendChild(d);
-  });
-}
 function renderNext(){
-  var el = $('plNext');
   var m = null;
   for(var i = session.stepIndex+1; i < session.steps.length; i++){
     var s = session.steps[i];
     if(s.type === 'rest' || s.type === 'break'){ m = s.next; break; }
     if(s.move){ m = s.move; break; }
   }
-  if(S.settings.routine === 'bodyweight'){
-    el.textContent = m ? '接下来 · ' + m.name : '这是最后一个动作';
-    return;
-  }
-  if(m && !m.noMedia){
-    preloadMove(m, false);
-    el.innerHTML = '<img src="' + imagePath(m,false) + '" alt=""><span>下一个 · <b>' + escapeHtml(m.name) + '</b></span>';
-  } else if(m){
-    el.innerHTML = '<span>下一个 · <b>' + escapeHtml(m.name) + '</b></span>';
-  } else {
-    el.innerHTML = '<span>快完成了 · <b>坚持住 💪</b></span>';
-  }
+  $('plNext').textContent = m ? '接下来 · ' + m.name : '这是最后一个动作';
 }
 function renderStep(){
   var step = session.steps[session.stepIndex];
@@ -1189,28 +1167,27 @@ function renderStep(){
     $('plCue').innerHTML = '<b>' + escapeHtml(step.move.name) + ' · ' + escapeHtml(step.move.target) + '</b>' + escapeHtml(step.move.cue);
   } else if(step.type === 'work'){
     phase.textContent = '训练中'; phase.className = 'pl-phase';
-    $('plRound').textContent = '第 ' + step.round + ' / ' + rounds + ' 轮';
+    $('plRound').textContent = '动作 ' + (moves.indexOf(step.move)+1) + ' / ' + moves.length + (rounds > 1 ? ' · 第 ' + step.round + ' 轮' : '');
     $('plClock').className = 'pl-clock num';
     $('plMv').textContent = step.move.name;
-    renderDemo(step.move, step.move.mediaLabel || (step.move.hold || step.move.staticOnly ? '静态姿势参考' : (motionOn() ? (step.move.frames ? '起止姿势参考' : '跟随节奏') : '静态参考')), true);
-    var cue = '<b>' + escapeHtml(step.move.name) + ' · 主练 ' + escapeHtml(step.move.primary || step.move.area) + '</b>' + escapeHtml(step.move.cue);
-    if(step.move.sideMode === 'half'){ cue += ' 过半会提示换侧。'; }
-    else if(step.move.sideMode === 'alternate'){ cue += ' 左右交替。'; }
-    $('plCue').innerHTML = cue;
+    renderDemo(step.move, step.move.mediaLabel || (step.move.hold || step.move.staticOnly ? '静态姿势参考' : (motionOn() ? '动作示范 · 按自己的节奏' : '静态参考')), true);
+    var cue = step.move.shortCue || step.move.cue;
+    var side = step.move.sideMode === 'half' ? '过半会提示换侧。' : (step.move.sideMode === 'alternate' ? '左右交替。' : '');
+    $('plCue').textContent = (side && cue.indexOf(side) < 0) ? cue + side : cue;
   } else if(step.type === 'rest'){
     phase.textContent = '换动作'; phase.className = 'pl-phase rest';
     $('plRound').textContent = '第 ' + step.round + ' 轮';
     $('plClock').className = 'pl-clock num rest';
-    $('plMv').textContent = '下一个：' + step.next.name;
-    $('plCue').innerHTML = '<b>利用休息摆好起始位</b>先看图，再调整垫子或站位。';
+    $('plMv').textContent = '休息一下';
+    $('plCue').textContent = '恢复呼吸，照着示范摆好起始位。';
     renderDemo(step.next, '下一动作', false);
     preloadMove(step.next, true);
   } else if(step.type === 'break'){
     phase.textContent = '轮间休息'; phase.className = 'pl-phase rest';
     $('plRound').textContent = '下一轮 ' + (step.round+1);
     $('plClock').className = 'pl-clock num rest';
-    $('plMv').textContent = '恢复呼吸';
-    $('plCue').innerHTML = '<b>恢复即可</b>小口补水；若不适，不必继续下一轮。';
+    $('plMv').textContent = '轮间休息';
+    $('plCue').textContent = '小口补水；若不适，不必继续下一轮。';
     renderDemo(step.next, '下一轮', false);
     preloadMove(step.next, true);
   } else if(step.type === 'stretch'){
@@ -1224,31 +1201,19 @@ function renderStep(){
   }
   for(var ni=session.stepIndex+1; ni<session.steps.length; ni++){ var ns=session.steps[ni]; if(ns.move && !ns.move.noMedia){ preloadMove(ns.move, ns.type==='work'); break; } }
   updateProgress();
-  renderDots();
   renderNext();
-  if(S.settings.routine === 'bodyweight'){
-    var shownMove = step.move || step.next;
-    if(step.type === 'work'){
-      $('plRound').textContent = '动作 ' + (moves.indexOf(step.move)+1) + ' / ' + moves.length + (rounds > 1 ? ' · 第 ' + step.round + ' 轮' : '');
-      $('plCue').textContent = step.move.shortCue;
-      $('plBadge').textContent = step.move.mediaLabel || (motionOn() ? '动作示范 · 按自己的节奏' : '静态参考');
-    } else if(step.type === 'rest' || step.type === 'break'){
-      $('plMv').textContent = step.type === 'rest' ? '休息一下' : '轮间休息';
-      $('plCue').textContent = '恢复呼吸，摆好下一动作的起始位。';
-    } else {
-      $('plCue').textContent = step.move.noMedia ? '' : step.move.cue;
-    }
-    if(shownMove && shownMove.noMedia){ showBodyweightInstructions(shownMove, '文字步骤 · 暂无匹配动图'); }
-    $('plLog').hidden = true; session.plLogMove = null;
-  } else if(step.type === 'work'){ bindPlLog(step.move, step.round); }
-  else if(step.type === 'rest' || step.type === 'break'){
+  var shown = step.move || step.next;
+  if(shown && shown.noMedia){ showTextSteps(shown, '文字步骤 · 暂无示范图'); }
+  if(step.type === 'work'){
+    bindPlLog(step.move, step.round, '记这组');
+  } else if(step.type === 'rest' || step.type === 'break'){
     var prev = null;
     for(var pi = session.stepIndex - 1; pi >= 0; pi--){
       if(session.steps[pi].type === 'work'){ prev = session.steps[pi]; break; }
     }
-    if(prev){ bindPlLog(prev.move, prev.round); }
-    else if($('plLog')){ $('plLog').hidden = true; session.plLogMove = null; }
-  } else if($('plLog')){ $('plLog').hidden = true; session.plLogMove = null; }
+    if(prev){ bindPlLog(prev.move, prev.round, '记刚才那组'); }
+    else { hidePlLog(); }
+  } else { hidePlLog(); }
 }
 function tick(){
   if(session.phase !== PHASE.running){ return; }
@@ -1311,8 +1276,7 @@ function runCountdown(){
   $('plMv').textContent = '马上开始';
   $('plRound').textContent = '先站稳';
   $('plCue').innerHTML = '<b>准备</b>确认脚下没有障碍，保持自然呼吸；倒数后先从轻松热身开始。';
-  $('plDots').innerHTML = ''; $('plNext').innerHTML = '';
-  if($('plLog')){ $('plLog').hidden = true; session.plLogMove = null; }
+  $('plNext').textContent = ''; hidePlLog();
   unlockVoice();
   cueShort(); speak('3，2，1，开始', { voiceKey: 'countdown-start' });
   session.timer = window.setInterval(function(){
@@ -1331,11 +1295,7 @@ var playerReturnFocus = null;
 function openPlayer(){
   session.playerOpen = true;
   playerReturnFocus = document.activeElement;
-  var pl = $('player'), isBodyweight = S.settings.routine === 'bodyweight';
-  pl.classList.toggle('bodyweight', isBodyweight);
-  $('plPrev').textContent = isBodyweight ? '上一个' : '⏮';
-  $('plSkip').textContent = isBodyweight ? '跳过' : '⏭';
-  $('plEnd').textContent = isBodyweight ? '结束' : '■';
+  var pl = $('player');
   pl.classList.add('open');
   pl.setAttribute('aria-hidden','false');
   pl.removeAttribute('inert');
@@ -1363,7 +1323,7 @@ function startWorkout(){
   if(!session.steps.length || session.stepIndex >= session.steps.length){ resetWorkout(); }
   ensureAudio();
   unlockVoice();
-  $('plPause').textContent = S.settings.routine === 'bodyweight' ? '暂停' : '⏸';
+  $('plPause').textContent = '暂停';
   $('plPause').setAttribute('aria-label', '暂停');
   $('plPrev').disabled = false; $('plSkip').disabled = false;
   requestWakeLock();
@@ -1386,7 +1346,7 @@ function pauseWorkout(){
   if(!enterPhase(PHASE.paused)){ return; }
   stopVoice();
   stopSessionTimer();
-  $('plPause').textContent = S.settings.routine === 'bodyweight' ? '继续' : '▶';
+  $('plPause').textContent = '继续';
   $('plPause').setAttribute('aria-label', '继续');
   $('plPhase').textContent = '已暂停';
   releaseWakeLock();
@@ -1397,7 +1357,7 @@ function resetWorkout(){
   session = emptySession();
   buildSteps();
   session.left = session.steps.length ? session.steps[0].sec : 0;
-  $('plPause').textContent = '⏸';
+  $('plPause').textContent = '暂停';
   updateProgress();
 }
 async function finishWorkout(early){
@@ -1424,7 +1384,7 @@ async function finishWorkout(early){
   }
   enterPhase(PHASE.done);
   session.finishRetryEarly = shouldLog && !didLog ? !!early : null;
-  $('plDoneBtn').textContent = session.finishRetryEarly !== null ? '重试保存' : (S.settings.routine === 'bodyweight' ? '回到训练' : '好的');
+  $('plDoneBtn').textContent = session.finishRetryEarly !== null ? '重试保存' : '回到训练';
   var mins = (Math.round(session.elapsed/6)/10);
   var unit = isStretch ? ' 个拉伸' : ' 个动作';
   $('plDoneTitle').textContent = session.finishRetryEarly !== null ? '本次尚未保存' : (early && didLog ? '已按实际记录' : (isStretch ? '拉伸结束' : '训练结束'));
@@ -1474,7 +1434,7 @@ $('plDoneBtn').addEventListener('click', function(){
   $('plDone').setAttribute('aria-hidden','true');
   closePlayer();
   resetWorkout();
-  goPage(S.settings.routine === 'bodyweight' ? 'training' : 'today');
+  goPage('training');
 });
 document.addEventListener('visibilitychange', function(){
   if(document.hidden && session.phase === PHASE.running){ pauseWorkout(); }
@@ -1662,13 +1622,10 @@ $('tGo').addEventListener('click', function(){ goPage('training'); });
 
 /* ---- 训练页 ---- */
 function renderTraining(){
-  var isStretch = S.settings.routine === 'stretch', isBodyweight = S.settings.routine === 'bodyweight', active = sessionInProgress();
-  $('bodyweightPlan').hidden = !isBodyweight;
-  $('bodyweightEquipment').hidden = !isBodyweight;
-  $('movesDetails').hidden = isBodyweight;
-  $('btnPlan').hidden = isBodyweight;
+  var isStretch = S.settings.routine === 'stretch', active = sessionInProgress();
   var cfg = presets[S.settings.preset] || presets.starter;
-  $('bodyweightDose').textContent = '每个 ' + cfg.work + ' 秒 · ' + cfg.rounds + ' 轮';
+  $('routineGear').textContent = routineGear[S.settings.routine] || '';
+  $('routineDose').textContent = isStretch ? stretchDoseLabel() : '每个 ' + cfg.work + ' 秒 · ' + cfg.rounds + ' 轮';
   document.querySelectorAll('#routineSeg button').forEach(function(b){ var on=b.dataset.routine === S.settings.routine; b.classList.toggle('on',on); b.setAttribute('aria-pressed',String(on)); });
   document.querySelectorAll('#presetSeg button').forEach(function(b){ var on=b.dataset.preset === S.settings.preset; b.classList.toggle('on',on); b.setAttribute('aria-pressed',String(on)); });
   document.querySelectorAll('#readyRow button').forEach(function(b){ var on=b.dataset.ready === getReadiness(); b.classList.toggle('on',on); b.setAttribute('aria-pressed',String(on)); });
@@ -1676,47 +1633,37 @@ function renderTraining(){
   $('trainingName').textContent = routineNames[S.settings.routine];
   $('trainingLevel').textContent = isStretch ? '放松' : presetNames[S.settings.preset];
   $('durHint').textContent = Math.round(totalDurationEstimate()/6)/10 + ' 分钟';
-  var count = isStretch ? stretchSets.stretch.length : moves.length;
+  var count = moves.length;
   $('roundHint').textContent = isStretch ? count + ' 个拉伸动作' : count + ' 个动作 · 含热身与放松';
-  $('moveCount').textContent = count + ' 个动作';
+  $('routinePlanNote').textContent = isStretch ? '点动作看做法；拉到发紧就停，不弹震、不憋气。' : '点动作看做法；开始后会先热身，最后带你放松。';
   $('readyHint').hidden = getReadiness() === 'green';
   $('readyHint').textContent = getReadiness() === 'yellow' ? '已切到恢复档。轻松一点，不适就停。' : '今天先休息。严重或持续不适，请联系医疗人员。';
   $('readyHint').classList.toggle('danger-text',getReadiness() === 'red');
   $('btnStart').disabled = getReadiness() === 'red' && !isStretch;
   $('btnStart').textContent = active ? '继续跟练' : (isStretch ? '开始拉伸' : '开始跟练');
-  makeMoveCards();
+  renderMoveList();
 }
-function makeMoveCards(){
-  $('moveList').innerHTML = ''; $('bodyweightMoveList').innerHTML = '';
-  var isBodyweight = S.settings.routine === 'bodyweight';
-  var box = $(isBodyweight ? 'bodyweightMoveList' : 'moveList');
+function stretchDoseLabel(){
+  var sec = 0;
+  moves.forEach(function(m){ sec = Math.max(sec, m.sec || 0); });
+  return '每个动作约 ' + sec + ' 秒';
+}
+function renderMoveList(){
+  var box = $('routineMoves');
+  box.innerHTML = '';
   var isStretch = S.settings.routine === 'stretch';
-  var list = isStretch ? stretchSets.stretch : moves;
-  list.forEach(function(m, i){
-    if(isBodyweight){
-      var row = document.createElement('button');
-      row.type = 'button'; row.className = 'sequence-move';
-      row.innerHTML = '<span class="sequence-number num">' + pad2(i+1) + '</span><span class="sequence-name">' + escapeHtml(m.name) + '</span><span class="chev" aria-hidden="true">›</span>';
-      row.addEventListener('click', function(){ openMoveDetail(m); });
-      box.appendChild(row);
-      return;
-    }
-    var card = document.createElement('button');
-    card.type = 'button';
-    card.className = 'card press move-card';
-    card.style.marginTop = i === 0 ? '0' : '10px';
-    var thumb = m.noMedia
-      ? '<div class="thumb nomedia">🧍</div>'
-      : '<div class="thumb"><img src="' + imagePath(m, motionOn()) + '" alt="" loading="lazy"></div>';
+  moves.forEach(function(m, i){
+    var row = document.createElement('button');
+    row.type = 'button'; row.className = 'sequence-move';
+    var sub = isStretch ? (m.target + ' · ' + m.position) : (m.primary || m.area);
     var last = (!isStretch && liftKind(m)) ? formatLiftLine(m) : '';
-    var sub = isStretch ? (escapeHtml(m.target) + ' · ' + escapeHtml(m.position)) : escapeHtml(m.primary || m.area);
-    if(last && last !== '还没记过'){ sub += ' · ' + escapeHtml(last); }
-    var badge = isStretch ? escapeHtml(m.position) : escapeHtml(m.level || '起步');
-    card.innerHTML = thumb +
-      '<div class="mb"><div class="n">' + escapeHtml(m.name) + '</div><div class="a">' + sub + '</div></div>' +
-      '<span class="lvl">' + badge + '</span><span class="chev">›</span>';
-    card.addEventListener('click', function(){ if(isStretch){ openStretchDetail(m); } else { openMoveDetail(m); } });
-    box.appendChild(card);
+    if(last && last !== '还没记过'){ sub += ' · ' + last.replace('上次：',''); }
+    row.innerHTML = '<span class="sequence-number num">' + pad2(i+1) + '</span>'
+      + '<span class="sequence-body"><span class="sequence-name">' + escapeHtml(m.name) + '</span>'
+      + '<span class="sequence-sub">' + escapeHtml(sub) + '</span></span>'
+      + '<span class="chev" aria-hidden="true">›</span>';
+    row.addEventListener('click', function(){ if(isStretch){ openStretchDetail(m); } else { openMoveDetail(m); } });
+    box.appendChild(row);
   });
 }
 function canChangePlan(){
@@ -2253,7 +2200,7 @@ $('importFile').addEventListener('change', async function(e){
     var span = dates.length ? '，时间 ' + new Date(dates[0]).toLocaleDateString() + ' 至 ' + new Date(dates[dates.length-1]).toLocaleDateString() : '';
     showConfirm('将覆盖本机 ' + S.logs.length + ' 条记录，导入 ' + next.logs.length + ' 条记录、' + next.weights.length + ' 条体重' + span + '。请先保留当前备份。', async function(){
       if(!await mutateState(function(){ S = next; }, true)){ return; }
-      moves = routines[S.settings.routine] || bodyweightMoves;
+      moves = routines[S.settings.routine] || routines.bodyweight;
       resetWorkout(); renderAll();
       showToast('备份已导入并保存', 'success');
     }, {title:'核对备份内容', okText:'覆盖导入', danger:true});
@@ -2396,7 +2343,7 @@ if(window.__EXPOSE_FOR_TEST__){
     getPresets:function(){ return presets; },
     getSettings:function(){ return S.settings; },
     setPreset:function(p){ S.settings.preset = p; },
-    setRoutine:function(r){ S.settings.routine = r; moves = routines[r] || bodyweightMoves; }
+    setRoutine:function(r){ S.settings.routine = r; moves = routines[r] || routines.bodyweight; }
   };
 }
 })();

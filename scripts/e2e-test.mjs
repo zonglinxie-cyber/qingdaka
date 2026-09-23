@@ -75,7 +75,7 @@ async function bodyweightFlow(browser, base){
     await textIs(page,'plPhase','热身');
     for(let i=0;i<5;i++) await page.click('#plSkip');
     await textIs(page,'plMv','臀桥');
-    assert.equal(await page.locator('#player').evaluate(el => el.classList.contains('bodyweight')),true);
+    assert.equal(await page.locator('#plNext').textContent(),'接下来 · 死虫');
     assert.equal(await page.locator('#plLog').isVisible(),false);
     assert.equal(await page.locator('#plPause').textContent(),'暂停');
     assert.equal(await page.locator('#plCue').textContent(),'脚跟推地抬髋，顶端夹臀，不要拱腰。');
@@ -86,12 +86,20 @@ async function bodyweightFlow(browser, base){
     assert.equal(await page.textContent('#plClock'),paused,'暂停时计时停止');
     await page.click('#plPause');
     await textIs(page,'plPhase','训练中');
-    for(let i=0;i<4;i++) await page.click('#plSkip');
+    await page.click('#plSkip'); await page.click('#plSkip');
+    await textIs(page,'plMv','死虫');
+    assert.equal(await page.textContent('#plCue'),'对侧手脚慢慢伸出，腰背贴稳垫面，左右交替。','一句口令不能重复换边提示');
+    await page.click('#plSkip'); await page.click('#plSkip');
     await textIs(page,'plMv','扶椅坐站（先徒手）');
     await page.waitForFunction(() => document.getElementById('plDemo').getAttribute('src')?.endsWith('chair-stand-steps.svg'));
     await textIs(page,'plBadge','分步示意');
-    assert.equal(await page.locator('#plLog').isVisible(),false);
-    for(let i=0;i<4;i++) await page.click('#plSkip');
+    assert.equal(await page.locator('#plLog').isVisible(),true,'可记档位的动作要能记');
+    assert.equal(await page.locator('#plLogLevels button.on').count(),0,'没点过的难度不能默认选中');
+    assert.match(await page.textContent('#plLogFor'),/扶椅坐站/);
+    await page.click('#plSkip');
+    await textIs(page,'plMv','休息一下');
+    assert.match(await page.textContent('#plNext'),/^接下来 · /,'休息时只说一次下一个动作');
+    await page.click('#plSkip'); await page.click('#plSkip');
     await textIs(page,'plMv','坐姿毛巾划船');
     assert.equal(await page.locator('#plInstructions li').count(),3);
     assert.equal(await page.locator('#plDemoWrap').isVisible(),false,'无媒体动作不能残留上一张示范');
@@ -113,7 +121,8 @@ async function bodyweightFlow(browser, base){
     assert.equal(recorded[0].lifts,undefined,'隐藏的难度选择不能自动生成训练重量记录');
     await page.click('#plDoneBtn');
     await page.click('[data-ready="yellow"]');
-    await textIs(page,'bodyweightDose','每个 20 秒 · 1 轮');
+    await textIs(page,'routineDose','每个 20 秒 · 1 轮');
+    assert.match(await page.textContent('#routineGear'),/稳固椅子/);
     await page.click('[data-ready="red"]');
     await page.waitForFunction(() => document.getElementById('btnStart').disabled);
     assert.equal(await page.locator('#readyHint').isVisible(),true);
@@ -173,13 +182,14 @@ async function bodyweightFlow(browser, base){
     await page.click('[data-page="training"]');
     await openDetails(page,'trainingOptions');
     await page.click('[data-routine="core"]');
-    await openDetails(page,'movesDetails');
-    await page.locator('.move-card',{hasText:'扶椅坐站'}).click();
+    await textIs(page,'routineGear','一张垫子；上下地面困难时用墙面斜板替代跪姿动作。');
+    await page.locator('.sequence-move',{hasText:'扶椅坐站'}).click();
     assert.match(await page.locator('#mdMedia').getAttribute('src'),/chair-stand-steps\.svg$/,'腰腹稳定课不能用持铃示范');
     assert.match(await page.textContent('#mdArea'),/无需负重/);
     await page.click('#moveClose');
     await page.click('[data-routine="dumbbell"]');
-    await page.locator('.move-card',{hasText:'扶凳箱式深蹲'}).click();
+    assert.equal(await page.locator('#routineMoves .sequence-move').count(),5,'哑铃课同样平铺当日顺序');
+    await page.locator('.sequence-move',{hasText:'扶凳箱式深蹲'}).click();
     assert.match(await page.locator('#mdMedia').getAttribute('src'),/0291\.(gif|poster\.png)$/,'哑铃课保留原示范');
     await page.click('#moveClose');
   }finally{await other.close();}
@@ -229,11 +239,11 @@ try{
   await page.click('#toastUndo'); await textIs(page,'pToday','25');
 
   await page.click('[data-page="training"]');
-  assert.equal(await page.locator('#bodyweightMoveList').isVisible(),true,'默认徒手动作直接展示');
+  assert.equal(await page.locator('#routineMoves').isVisible(),true,'当日顺序直接展示');
   assert.equal(await page.locator('.sequence-move').count(),6);
-  assert.equal(await page.locator('#moveList').isVisible(),false,'默认徒手不重复显示动作库');
+  assert.equal(await page.locator('#routineMoves .sequence-move').count(),6,'不重复显示动作库');
   await openDetails(page,'trainingOptions'); await page.click('[data-routine="dumbbell"]');
-  await page.waitForFunction(() => document.getElementById('bodyweightPlan').hidden);
+  assert.equal(await page.locator('#routineMoves .sequence-move').count(),5);
   await page.click('[data-preset="starter"]'); await textIs(page,'durHint','12.1 分钟');
   await page.click('#trainingOptions > summary');
   await page.click('#btnPlan'); await textIs(page,'planTotal','12.1');

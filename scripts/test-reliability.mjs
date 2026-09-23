@@ -12,7 +12,7 @@ function app({ls=state(), lsFail=false}={}){
     document:{getElementById:() => null},
     window:{localStorage:{getItem:k=>items.get(k)||null,setItem(k,v){if(lsFail){throw Error('quota');} items.set(k,v);}}},
     showToast(){}, bumpLogIndex(){}, resetWorkout(){}, renderAll(){},
-    routines:{bodyweight:[]}, bodyweightMoves:[]
+    routines:{bodyweight:[]}
   });
   vm.runInContext(part('function $(id)', '/* ---- Toast ---- */') + part('var storageReadOnly = false;', '/* ---- 记录操作 ---- */'), context);
   context.storageInit = Promise.resolve();
@@ -57,7 +57,7 @@ await check('所有课程与档位的列表、预览、播放器时长一致且�
   ctx.session = { steps:[], totalDuration:0 };
   vm.runInContext(fs.readFileSync(new URL('../content.js',import.meta.url),'utf8'),ctx);
   ctx.C = ctx.window.QDK_CONTENT;
-  vm.runInContext(part('var bodyweightMoves = C.bodyweightMoves', 'function imagePath(') + part('function createPlan(', 'function resetSessionStats(') + part('function totalDurationEstimate(', "$('tGo')") + part('function planSummary(', 'function sec2m('),ctx);
+  vm.runInContext(part('var routines = C.routines', 'function imagePath(') + part('function createPlan(', 'function resetSessionStats(') + part('function totalDurationEstimate(', "$('tGo')") + part('function planSummary(', 'function sec2m('),ctx);
   for(const routine of Object.keys(ctx.routines)) for(const preset of Object.keys(ctx.presets)){
     ctx.S.settings={routine,preset}; ctx.moves=ctx.routines[routine]; ctx.buildSteps();
     const summary=ctx.planSummary();
@@ -67,17 +67,23 @@ await check('所有课程与档位的列表、预览、播放器时长一致且�
   ctx.S.settings={routine:'dumbbell',preset:'starter'};ctx.moves=ctx.routines.dumbbell;ctx.buildSteps();
   assert.equal(ctx.session.totalDuration,723);
 });
-await check('徒手课只加展示层文案；坐站分步示意替换持铃示范且不波及其他动作',()=>{
+await check('跟练口令逐条短提示；坐站分步示意替换持铃示范且不波及其他动作',()=>{
   const ctx = vm.createContext({window:{}});
   vm.runInContext(fs.readFileSync(new URL('../content.js',import.meta.url),'utf8'),ctx);
   const content = ctx.window.QDK_CONTENT, moves = content.routines.bodyweight;
   assert.deepEqual(Array.from(moves,m=>m.id),['3013','0276','chair-stand','0659','towel-row','3239']);
-  assert.ok(moves.every(m=>m.shortCue && m.shortCue.length < 40));
   assert.equal(moves[2].frames[0],'chair-stand-steps.svg');
   assert.equal(content.routines.core.find(m=>m.id==='chair-stand').frames.join('|'),'chair-stand-steps.svg');
   assert.equal(content.ASSET_ALIAS['chair-stand'].media,undefined);
   assert.equal(content.routines.dumbbell.find(m=>m.id==='0291').frames,undefined);
-  assert.equal(content.routines.dumbbell[0].shortCue,undefined);
+  // 每一节正式动作都要有一句能一屏读完的口令，且带上主练部位
+  const work = ['bodyweight','dumbbell','core','gym'].flatMap(k=>content.routines[k]);
+  assert.ok(work.every(m=>m.shortCue && m.shortCue.length<=30), '口令过长或缺失');
+  assert.ok(work.every(m=>m.primary && m.steps.length===3), '动作内容不完整');
+  assert.ok(work.every(m=>!/哑铃|器械|机/.test(m.name) || m.equipment), '名称提到器材就要写清器材');
+  // 每节课程都有备物提示，训练页靠它替代旧的按课程分支
+  assert.deepEqual(Object.keys(content.routineGear).sort(),['bodyweight','core','dumbbell','gym','stretch']);
+  assert.ok(Object.keys(content.routineGear).every(k=>content.routineGear[k].length>10));
   assert.equal(content.presets.starter.work,40);
 });
 await check('训练保存失败保留重试入口，重复结束不会重复写入',async()=>{
@@ -116,13 +122,13 @@ await check('训练保存失败保留重试入口，重复结束不会重复写�
   complete(false);await first;
   assert.equal(session.logged,false);assert.equal(session.finishRetryEarly,true);assert.equal(ui('plDoneBtn').textContent,'重试保存');
   const retry=ctx.finishWorkout(session.finishRetryEarly);complete(true);await retry;
-  assert.equal(session.logged,true);assert.equal(session.finishRetryEarly,null);assert.equal(ui('plDoneBtn').textContent,'好的');
+  assert.equal(session.logged,true);assert.equal(session.finishRetryEarly,null);assert.equal(ui('plDoneBtn').textContent,'回到训练');
 });
 await check('撤下的示范在跟练和预载中都不会再显示或下载',()=>{
   let visible=true,removed=false;
   const ctx=vm.createContext({$:()=>({removeAttribute:()=>{removed=true;}}),setDemoVisible:v=>{visible=v;},
     preloadUrl(){throw Error('不应加载示范');},stopFrameAnimation(){},motionOn:()=>true});
-  vm.runInContext(part('function preloadMove(', 'function stopFrameAnimation(') + part('function renderDemo(', 'function primaryType('),ctx);
+  vm.runInContext(part('function preloadMove(', 'function stopFrameAnimation(') + part('function renderDemo(', 'function renderNext('),ctx);
   ctx.preloadMove({noMedia:true},true);ctx.renderDemo({noMedia:true},'示范',true);
   assert.equal(visible,false);assert.equal(removed,true);
 });
