@@ -13,6 +13,8 @@ Files:
   dead-bug-reach.svg
   wall-pushup-start.svg
   wall-pushup-bend.svg
+  towel-row-ready.svg
+  towel-row-pull.svg
   generated/wall-plank-anatomy.png
   bird-dog.gif
   bird-dog-poster.png
@@ -71,6 +73,23 @@ file itself is covered by the release restriction in section 3. Same caveat as
 above: static teaching aids drawn for this app, not filmed or professionally
 validated demonstrations, and no third-party media was used as an input or
 reference for them.
+
+towel-row-ready.svg / towel-row-pull.svg are original, hand-authored vector
+schematics of the seated towel row in the same side-view language, drawn on the
+same square canvas as the floor moves because the body is seated and seen from
+the side: frame 1 is sitting on the chair with the knees at about 90 degrees,
+the towel passed under the forefoot and each hand taking one end in front of the
+knees, frame 2 keeps the chair, hips, knees, soles and the foot end of the towel
+exactly where they were and moves only the arms, with the elbows drawn back
+along the sides of the body and both hands up at the waist and a small arrow in
+front of the hands pointing back toward the body. They replace the 坐姿毛巾划船
+text-only "no demo" screen, which was the last such screen in the default
+bodyweight routine. No dataset GIF stands in for them here: 3165 shows a
+standing row with the towel at hand-rail height, which is not the seated
+position the written cues ask for, and that file had already been removed from
+the tree (see section 3). Same caveat as above: static teaching aids drawn for
+this app, not filmed or professionally validated demonstrations, and no
+third-party media was used as an input or reference for them.
 
 The bird-dog.gif / bird-dog-poster.png pair is a project-original looping
 demonstration generated for this app (four-point kneel to contralateral
@@ -204,10 +223,11 @@ Files still shipped (GIF + first-frame -poster.png, 360x360, white background):
 Added for earlier routine drafts and since deleted from the source tree,
 because no active move references them any more:
   0603 (shoulder press), 0585 (leg extension), 0596 (seated fly / pec deck),
-  0017 (assisted pull-up), 3165 (standing towel row — 坐姿毛巾划船 is
-  deliberately text-only / noMedia), 0658 (wall push-up v.2 — replaced by the
-  project-generated wall-plank still), 1512 (all-fours quad stretch —
-  扶墙股四头拉伸 is deliberately text-only / noMedia)
+  0017 (assisted pull-up), 3165 (standing towel row — never used: it shows the
+  towel at hand-rail height while standing, and 坐姿毛巾划船 now uses the
+  project-authored seated schematics in section 1), 0658 (wall push-up v.2 —
+  replaced by the project-generated wall-plank still), 1512 (all-fours quad
+  stretch — 扶墙股四头拉伸 is deliberately text-only / noMedia)
 
 Source repository and dataset:
   https://github.com/omercotkd/exercises-gifs  (assets/<id>.gif)

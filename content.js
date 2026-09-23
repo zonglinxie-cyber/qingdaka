@@ -111,7 +111,8 @@ var farmerCarryMove = {
 var towelRowMove = {
   id:'towel-row', shortCue:'坐稳再拉，肩膀放松，不要后仰借力。',
   name:'坐姿毛巾划船', area:'背部与上肢拉力', sideMode:'none',
-  equipment:'长毛巾、稳固椅子', noMedia:true,
+  equipment:'长毛巾、稳固椅子',
+  frames:['towel-row-ready.svg','towel-row-pull.svg'], mediaLabel:'分步示意', mediaNote:'毛巾绕脚底 · 肘贴身',
   primary:'背阔肌、菱形肌', secondary:'肱二头肌、后三角肌',
   benefit:'补上肢拉力，改善含胸。',
   steps:['坐在稳固椅子上，毛巾从脚底绕过，两手各抓一头','背部中立，肘贴身体，把毛巾拉向腰侧','停一下，再慢慢放回'],

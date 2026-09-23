@@ -1226,8 +1226,8 @@ function renderStep(){
     $('plRound').textContent = '第 ' + step.round + ' 轮';
     $('plClock').className = 'pl-clock num rest';
     $('plMv').textContent = '休息一下';
-    // 下一个动作没有示范图时，屏幕上摆出来的是文字步骤，口令就不能说「照着示范」
-    $('plCue').textContent = step.next && step.next.noMedia ? '恢复呼吸，照着下面的步骤摆好起始位。' : '恢复呼吸，照着示范摆好起始位。';
+    // 每一节正式动作都有示范（reliability 卡着 work 里不许出现 noMedia），所以休息屏可以说「照着示范」
+    $('plCue').textContent = '恢复呼吸，照着示范摆好起始位。';
     renderDemo(step.next, step.next ? '下一动作 · ' + step.next.name : '下一动作', false);
     preloadMove(step.next, true);
   } else if(step.type === 'break'){
@@ -1683,7 +1683,7 @@ function renderTraining(){
   $('trainingLevel').textContent = isStretch ? '放松' : presetNames[S.settings.preset];
   $('durHint').textContent = Math.round(totalDurationEstimate()/6)/10 + ' 分钟';
   var count = moves.length;
-  $('roundHint').textContent = isStretch ? count + ' 个拉伸动作' : count + ' 个动作 · 含热身与放松';
+  $('roundHint').textContent = isStretch ? count + ' 个拉伸动作' : count + ' 个动作';
   $('routinePlanNote').textContent = isStretch ? '点动作看做法；拉到发紧就停，不弹震、不憋气。' : '点动作看做法；开始后会先热身，最后带你放松。';
   $('readyHint').hidden = getReadiness() === 'green';
   $('readyHint').textContent = getReadiness() === 'yellow' ? '已切到恢复档。轻松一点，不适就停。' : '今天先休息。严重或持续不适，请联系医疗人员。';
