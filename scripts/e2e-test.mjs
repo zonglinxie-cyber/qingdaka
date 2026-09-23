@@ -168,7 +168,21 @@ async function bodyweightFlow(browser, base){
     const page = await missing.newPage();
     await page.route('**/3013.gif', route => route.abort());
     await page.goto(base + '/index.html');
-    await page.click('[data-page="training"]'); await page.click('#btnStart');
+    await page.click('[data-page="training"]');
+    const openMove = name => page.evaluate(n => {
+      [...document.querySelectorAll('.sequence-move')].find(e => e.textContent.indexOf(n) >= 0).click();
+    }, name);
+    await openMove('臀桥');
+    await page.waitForFunction(() => document.getElementById('mdMedia').hidden);
+    assert.equal(await page.textContent('#mdMediaNote'),'示范暂不可用 · 照着下面的文字步骤','示范取不到时详情不留大方框空图');
+    assert.equal(await page.locator('#mdSteps .step').count(),3,'示范不可用时文字步骤仍在同一屏');
+    await page.evaluate(() => document.getElementById('moveClose').click());
+    await openMove('靠墙俯卧撑');
+    await page.waitForFunction(() => document.getElementById('mdMedia').naturalWidth > 0);
+    assert.equal(await page.locator('#mdMedia').isVisible(),true,'换一个有图的动作要恢复示范');
+    assert.equal(await page.locator('#mdMediaNote').isVisible(),false,'上一屏的说明不能残留');
+    await page.evaluate(() => document.getElementById('moveClose').click());
+    await page.click('#btnStart');
     await textIs(page,'plPhase','热身');
     for(let i=0;i<5;i++) await page.click('#plSkip');
     await page.waitForSelector('#plInstructions:not([hidden])');

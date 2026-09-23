@@ -1785,10 +1785,11 @@ var mdLiftMove = null;
 function setDetailMedia(m){
   var wrap = $('mdMediaWrap'), img = $('mdMedia');
   if(!wrap || !img){ return; }
-  if(!m || m.noMedia){ wrap.hidden = true; img.removeAttribute('src'); return; }
+  if(!m || m.noMedia){ wrap.hidden = true; img.hidden = false; img.removeAttribute('src'); return; }
   wrap.hidden = false;
   var src = imagePath(m, motionOn());
   preloadMove(m, true);
+  img.hidden = false;
   img.src = src;
   img.alt = m.name + ' 示范';
   // 示范拍的是另一个变体时，跟练角标已经说过；详情里图是主角，说明必须跟着图。
@@ -1797,6 +1798,13 @@ function setDetailMedia(m){
   var showNote = m && m.mediaLabel && !m.frames;
   if(note){ note.textContent = showNote ? m.mediaLabel : ''; note.hidden = !showNote; }
 }
+/* 示范取不到（离线首装、iOS 回收了缓存）时不能留一个方框大的空图：
+   收掉图，把图注位改成说明，下面的文字步骤本来就在。 */
+$('mdMedia').addEventListener('error', function(){
+  this.hidden = true;
+  var note = $('mdMediaNote');
+  if(note){ note.textContent = '示范暂不可用 · 照着下面的文字步骤'; note.hidden = false; }
+});
 function openMoveDetail(m){
   $('mdName').textContent = m.name;
   $('mdArea').textContent = m.area + (m.equipment ? ' · 器械：' + m.equipment : ' · 无需器械');
