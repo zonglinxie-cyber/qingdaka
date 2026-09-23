@@ -223,6 +223,35 @@ async function bodyweightFlow(browser, base){
     await page.waitForSelector('#plDone.show');
     assert.match(await page.textContent('#plDoneLifts'),/墙面斜板支撑 · 远墙（难）/,'点过的档位要出现在结束屏');
   }finally{await picked.close();}
+  const twice = await browser.newContext({viewport:{width:390,height:844},serviceWorkers:'block'});
+  try{
+    const page = await twice.newPage();
+    await page.clock.install();
+    await page.goto(base + '/index.html');
+    await page.click('[data-page="training"]');
+    await openDetails(page,'trainingOptions');
+    await page.click('[data-routine="core"]');
+    await page.click('[data-preset="standard"]');   // 标准档两轮：同一个动作会出现两次
+    await page.click('#btnStart');
+    await textIs(page,'plPhase','热身');
+    const pick = async want => { await page.locator('#plLogLevels button',{hasText:want}).first().click();
+      await page.clock.fastForward((Number(await page.textContent('#plClock'))+1)*1000); };
+    for(let i=0;i<40;i++){
+      if(await page.locator('#plDone').evaluate(e => e.classList.contains('show'))){ break; }
+      const [phase,mv,round] = await Promise.all([page.textContent('#plPhase'),page.textContent('#plMv'),page.textContent('#plRound')]);
+      if(mv !== '墙面斜板支撑' || phase !== '训练中'){ await page.click('#plSkip'); continue; }
+      if(round.includes('第 1 轮')){ await pick('中距'); }
+      else{
+        assert.equal(await page.locator('#plLogLevels button.on').textContent(),'中距','下一轮该带着上一轮点过的档位进来');
+        await pick('远墙（难）');
+      }
+    }
+    if(!(await page.locator('#plDone').evaluate(e => e.classList.contains('show')))){
+      await page.click('#plEnd'); await page.click('#dlgOk');
+    }
+    await page.waitForSelector('#plDone.show');
+    assert.match(await page.textContent('#plDoneLifts'),/墙面斜板支撑 · 中距、远墙（难）/,'两轮的档位要按做的先后都列出来，不能只报最后那一下');
+  }finally{await twice.close();}
   const full = await browser.newContext({viewport:{width:375,height:667},reducedMotion:'reduce'});
   try{
     const page = await full.newPage();

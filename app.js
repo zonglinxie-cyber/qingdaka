@@ -1424,7 +1424,7 @@ async function finishWorkout(early){
         var nxt = rec ? suggestNextKg(rec.kg, sets, rec.reps || 10) : 0;
         if(nxt && rec && nxt > rec.kg){ lines[lines.length - 1] += ' → 下次 ' + nxt + ' kg'; }
       } else if(sets[0].level){
-        lines.push(mv.name + ' · ' + liftLevelName(kind, sets[sets.length - 1].level));
+        lines.push(mv.name + ' · ' + sets.map(function(s){ return liftLevelName(kind, s.level); }).join('、'));
       }
     });
     liftBox.innerHTML = lines.length ? lines.map(function(t){ return '<div>' + escapeHtml(t) + '</div>'; }).join('') : '';
