@@ -400,6 +400,10 @@ async function bodyweightFlow(browser, base){
     await page.locator('.sequence-move',{hasText:'胸前侧拉伸'}).click();
     assert.match(await page.textContent('#mdArea'),/保持约 28 秒/,'双侧拉伸的详情不写换侧');
     await page.click('#moveClose');
+    await page.locator('.sequence-move',{hasText:'扶墙股四头拉伸'}).click();
+    assert.match(await page.locator('#mdMedia').getAttribute('src'),/quad-stand-ready\.svg$/,'这一节也有自制分步示范了，详情不能再只有文字');
+    assert.equal(await page.textContent('#mdMediaNote'),'屈膝抬脚跟 · 手抓脚背','图注要跟两格示范的顺序对上');
+    await page.click('#moveClose');
     await page.click('#btnStart');
     await textIs(page,'plPhase','拉伸');
     assert.equal(await page.textContent('#plRound'),'全身拉伸 1 / 9','拉伸要显示第几个');
@@ -407,9 +411,18 @@ async function bodyweightFlow(browser, base){
     assert.equal(await page.locator('#plLog').isVisible(),false,'拉伸没有档位，不出记录面板');
     await page.click('#plSkip'); await page.click('#plSkip');
     await textIs(page,'plMv','扶墙股四头拉伸');
-    assert.equal(await page.locator('#plDemoWrap').isVisible(),false,'无示范的拉伸不占位');
-    assert.equal(await page.locator('#plInstructions li').count(),3,'无示范时用分步填住示范区');
-    assert.notEqual((await page.locator('#plInstructions li').first().textContent()).trim(),await page.textContent('#plCue'),'分步不能只是重复单行口令');
+    await page.waitForFunction(() => document.getElementById('plDemo').getAttribute('src')?.endsWith('quad-stand-ready.svg'));
+    assert.equal(await page.locator('#plDemoWrap').isVisible(),true,'扶墙股四头拉伸有示范了，示范区不再空着一块');
+    // 拉伸屏的角标说的是姿势，不跟着 mediaLabel 走：这一节自带「分步示意」也不许把「站姿·扶墙」挤掉
+    await textIs(page,'plBadge','拉伸 · 站姿·扶墙');
+    assert.equal(await page.locator('#plInstructions').isVisible(),false,'有示范的拉伸不再摆文字步骤块');
+    let sawQuadHold = false;
+    for(let i=0;i<8 && !sawQuadHold;i++){
+      await page.clock.fastForward(700);
+      await new Promise(r => setTimeout(r, 200));
+      sawQuadHold = /quad-stand-hold\.svg$/.test(await page.locator('#plDemo').getAttribute('src') || '');
+    }
+    assert.ok(sawQuadHold,'扶墙股四头拉伸两格必须轮换，只给屈膝那一格就看不出脚最后要抬到哪里');
     assert.equal(await page.textContent('#plCue'),'扶墙抓同侧脚背拉向臀部。过半会提示换侧。');
     assert.equal(await page.textContent('#plNext'),'接下来 · 坐姿臀部拉伸');
   }finally{await other.close();}
@@ -468,7 +481,8 @@ async function bodyweightFlow(browser, base){
    DOM 的 contain 几何重算一遍：画出来的图底在哪、角标顶在哪、每张图的墨迹最低一行在哪。 */
 const GUIDE_FRAMES = ['chair-stand-steps.svg','dead-bug-tabletop.svg','dead-bug-reach.svg',
   'hip-bridge-flat.svg','hip-bridge-lift.svg','kneeling-plank-steady.svg','kneeling-plank-tap.svg',
-  'towel-row-ready.svg','towel-row-pull.svg','wall-pushup-start.svg','wall-pushup-bend.svg'];
+  'towel-row-ready.svg','towel-row-pull.svg','wall-pushup-start.svg','wall-pushup-bend.svg',
+  'quad-stand-ready.svg','quad-stand-hold.svg'];
 async function guideInkClearsBadge(page){
   const bad = await page.evaluate(async list => {
     const im = document.getElementById('plDemo'), bd = document.getElementById('plBadge');

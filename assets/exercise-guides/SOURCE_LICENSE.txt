@@ -15,6 +15,8 @@ Files:
   wall-pushup-bend.svg
   towel-row-ready.svg
   towel-row-pull.svg
+  quad-stand-ready.svg
+  quad-stand-hold.svg
   generated/wall-plank-anatomy.png
   bird-dog.gif
   bird-dog-poster.png
@@ -73,6 +75,22 @@ file itself is covered by the release restriction in section 3. Same caveat as
 above: static teaching aids drawn for this app, not filmed or professionally
 validated demonstrations, and no third-party media was used as an input or
 reference for them.
+
+quad-stand-ready.svg / quad-stand-hold.svg are original, hand-authored vector
+drawings made for this project in the same house style as the files above (same
+palette, same simplified side-view vocabulary, no tracing of any third-party
+image, frame or dataset). They are the two frames of the standing quadriceps
+stretch: frame 1 is the start position (one palm on the wall, the near knee
+bent with the foot lifted behind at mid-height, the other hand reaching toward
+the instep but not yet holding it), frame 2 is the target position (that hand
+holding the instep, the heel drawn up toward the glute, an arrow pointing at
+the hip). The wall is drawn running off the left edge of the canvas so it reads
+as a wall rather than a post. Both frames share every static coordinate, so
+only the near leg and the near arm change between them. They replace the
+text-only "no demo" screen for 扶墙股四头拉伸, which was the last move in the
+follow-along flow without a picture. Same caveat as above: these are simplified
+illustrations, not a person demonstrating the movement and not professional or
+medical clearance.
 
 towel-row-ready.svg / towel-row-pull.svg are original, hand-authored vector
 schematics of the seated towel row in the same side-view language, drawn on the

@@ -154,7 +154,7 @@ var warmupMoves = [
 var STRETCH = {
   '1377':{ name:'扶墙小腿拉伸', sec:28, target:'小腿', position:'站姿·扶墙', sideMode:'half', shortCue:'后腿跟贴地、膝伸直，前倾到发紧。', cue:'双手扶墙，一腿在前一腿在后，后脚跟贴地、膝伸直，身体前倾直到小腿后侧有拉伸感，换腿。' },
   '1576':{ name:'仰卧抬腿拉伸', sec:28, target:'大腿后侧', position:'仰卧', sideMode:'half', shortCue:'抱一条腿往胸口靠，膝可微屈。', cue:'平躺，一腿伸直放地，另一腿抬起、双手抱大腿后侧往胸口靠，膝可微屈，换腿。' },
-  'quad-stand':{ name:'扶墙股四头拉伸', sec:28, target:'大腿前侧', position:'站姿·扶墙', noMedia:true, sideMode:'half', shortCue:'扶墙抓同侧脚背拉向臀部。', steps:['扶墙站稳，另一手抓同侧脚背往臀部轻拉','双膝并拢、骨盆别向前顶，拉到大腿前侧发紧','抓不到脚就用毛巾套住脚背，换边重复'], cue:'扶墙站稳，一手抓同侧脚背拉向臀部，双膝并拢。抓不到就用毛巾套住脚背，换边。' },
+  'quad-stand':{ name:'扶墙股四头拉伸', sec:28, target:'大腿前侧', position:'站姿·扶墙', frames:['quad-stand-ready.svg','quad-stand-hold.svg'], mediaLabel:'分步示意', mediaNote:'屈膝抬脚跟 · 手抓脚背', sideMode:'half', shortCue:'扶墙抓同侧脚背拉向臀部。', steps:['扶墙站稳，另一手抓同侧脚背往臀部轻拉','双膝并拢、骨盆别向前顶，拉到大腿前侧发紧','抓不到脚就用毛巾套住脚背，换边重复'], cue:'扶墙站稳，一手抓同侧脚背拉向臀部，双膝并拢。抓不到就用毛巾套住脚背，换边。' },
   '1271':{ name:'胸前侧拉伸', sec:28, target:'胸 / 肩前侧', position:'站姿', sideMode:'none', shortCue:'示范举着短杠；你双手身后交握即可。', cue:'图里用短杠举到脑后；家里双手在身后交握或握毛巾即可，挺胸、肩向后向下沉。' },
   '0643':{ name:'过头三头拉伸', sec:28, target:'上臂后侧', position:'站姿', sideMode:'half', shortCue:'一臂上举屈肘摸背，轻压肘尖。', cue:'一臂上举屈肘、手摸背，另一手轻压肘尖；肋骨别外翻，换边。' },
   '0794':{ name:'站姿侧拉伸', sec:28, target:'侧腰 / 背阔', position:'站姿', sideMode:'half', shortCue:'一臂上举向对侧轻弯，感受侧腰拉伸。', cue:'一臂上举，身体向对侧轻弯，感受侧腰到背的拉伸，换边。' },

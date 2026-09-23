@@ -91,8 +91,10 @@ await check('跟练口令逐条短提示；示范变体的角标与图注写清�
   assert.ok(half.length>=9 && half.every(m=>!/换边|换腿|换脚/.test(m.shortCue)), '单侧动作由播放器过半提示换侧，口令不再重复换边');
   assert.ok([...Object.values(content.STRETCH),...content.warmupMoves].every(m=>m.sideMode), '热身与拉伸都要写明是否单侧');
   // 没有示范图时靠分步填住示范区，否则播放器整屏留白
-  const noMedia=[...work,...oneLine].filter(m=>m.noMedia);
-  assert.ok(noMedia.length>0 && noMedia.every(m=>m.steps && m.steps.length===3), '无示范动作必须给三步文字步骤');
+  // 跟练流程（正式动作 + 热身 + 拉伸）里每一节都必须有示范：文字步骤只是「图取不到」时的退路，
+  // 不再用来充当某一节动作的正常画面。这条取代了旧的「无示范动作必须给三步文字步骤」。
+  const bare=[...work,...oneLine].filter(m=>m.noMedia);
+  assert.ok(bare.length===0, '跟练流程里有动作没有示范：' + bare.map(m=>m.id||m.name).join('、'));
   // 示范拍的是另一个变体（掌心向前/跪凳三点/对侧同伸…）时，必须写在示范角标上；角标不换行，长了顶破宽度
   const variantIds=['0404','0292','2287','bird-dog'].sort();
   const variants=work.filter(m=>variantIds.includes(m.id));
