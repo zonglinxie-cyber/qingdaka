@@ -949,7 +949,7 @@ function emptySession(){
     completedMoveIds:{}, completedStretchIds:{},
     lifts:{}, logged:false, finishRetryEarly:null,
     sideChanged:false, cdSpoken:false, lastLeft:-1,
-    playerOpen:false, plLogMove:null, plLogRound:0, plLogLevel:''
+    playerOpen:false, plLogMove:null, plLogRound:0, plLogLevel:'', plLogTouched:false
   };
 }
 var session = emptySession();
@@ -995,7 +995,7 @@ function resetSessionStats(){
   session.logged = false;
   session.lifts = {};
   session.finishRetryEarly = null;
-  session.plLogMove = null; session.plLogRound = 0; session.plLogLevel = '';
+  session.plLogMove = null; session.plLogRound = 0; session.plLogLevel = ''; session.plLogTouched = false;
 }
 function captureStepProgress(reason){
   var step = session.steps[session.stepIndex];
@@ -1011,6 +1011,11 @@ function captureStepProgress(reason){
   if(step.type === 'work' && reason === 'skip'){ session.skippedWork++; }
   if(step.type === 'work' && (reason === 'natural' || reason === 'stop' || (reason === 'skip' && elapsed >= step.sec * 0.5))){
     commitCurrentLift(step.move, step.round);
+  }
+  /* 休息与轮间页的面板记的是刚才那组：在这儿补点的档位、补填的重量也要在离开时落账，
+     否则屏幕写着「做完自动记下」，那一组却被丢掉。只认你动过的面板，默认值不算。 */
+  if((step.type === 'rest' || step.type === 'break') && session.plLogTouched){
+    commitCurrentLift(session.plLogMove, session.plLogRound);
   }
 }
 function readPlLogSet(){
@@ -1051,14 +1056,26 @@ function bindPlLog(move, round, label){
   }
   session.plLogMove = move;
   session.plLogRound = round || 0;
+  session.plLogTouched = false;
   box.hidden = false;
   var forEl = $('plLogFor');
   if(forEl){ forEl.textContent = (label || '这组') + ' · ' + move.name + ' 第 ' + (round || 1) + ' 轮'; }
   var rec = getLift(move.id);
-  $('plLogLast').textContent = formatLiftLine(move, rec);
+  /* 刚做完的那一组先记在会话里，落库要等一轮微任务；休息屏若只读存档，
+     会在你刚记完之后整段都说「还没记过」，和旁边亮着的档位自相矛盾。 */
+  var justDone = session.lifts[move.id];
+  $('plLogLast').textContent = formatLiftLine(move, (justDone && justDone.length ? justDone[justDone.length - 1] : null) || rec);
   var load = $('plLogLoad');
   var levels = $('plLogLevels');
   if(!load || !levels){ return; }
+  var hintEl = $('plLogHint');
+  if(hintEl){ hintEl.hidden = false; }
+  if(session.lifts[move.id + ':' + session.plLogRound]){
+    /* 这一组已经落账：再摆一排点了也不会变的输入框，只会让人以为还能改 */
+    load.hidden = true; levels.hidden = true;
+    if(hintEl){ hintEl.hidden = true; }
+    return;
+  }
   if(kind === 'load'){
     load.hidden = false;
     levels.hidden = true;
@@ -1083,7 +1100,7 @@ function bindPlLog(move, round, label){
           ? ('稳住了下次可试：' + liftLevelName(kind, nxt))
           : '这一档已是最高难度，做完自动记下');
     };
-    renderLevelChips(levels, kind, session.plLogLevel, function(id){ session.plLogLevel = id; showLevelHint(); });
+    renderLevelChips(levels, kind, session.plLogLevel, function(id){ session.plLogLevel = id; session.plLogTouched = true; showLevelHint(); });
     showLevelHint();
   }
 }
@@ -1103,6 +1120,11 @@ function renderLevelChips(el, kind, selected, onPick){
     el.appendChild(b);
   });
 }
+/* 重量与次数是输入框：程序回填不算你填的，真敲过才算动过这一组 */
+['plKg','plReps'].forEach(function(id){
+  var el = $(id);
+  if(el){ el.addEventListener('input', function(){ session.plLogTouched = true; }); }
+});
 function elapsedBefore(i){ var s=0; for(var k=0;k<i;k++){ s+=session.steps[k].sec; } return s; }
 function updateProgress(){
   var step = session.steps[session.stepIndex];

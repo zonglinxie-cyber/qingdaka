@@ -219,9 +219,24 @@ async function bodyweightFlow(browser, base){
     await page.locator('#plLogLevels button').last().click();
     assert.match(await page.textContent('#plLogHint'),/最高难度/,'点到顶格要说清没有更高一档');
     await page.clock.fastForward((Number(await page.textContent('#plClock'))+1)*1000);   // 做完这一节，不是跳过去
+    assert.equal(await page.textContent('#plLogLast'),'上次：远墙（难）','刚记下的那一组要立刻显示在休息屏，不能还说还没记过');
+    assert.equal(await page.locator('#plLogLevels').isVisible(),false,'这一组已经落账，不能再摆一排点了也不会变的档位');
     await page.click('#plEnd'); await page.click('#dlgOk');
     await page.waitForSelector('#plDone.show');
     assert.match(await page.textContent('#plDoneLifts'),/墙面斜板支撑 · 远墙（难）/,'点过的档位要出现在结束屏');
+    await page.click('#plDoneBtn');
+    await page.click('#btnStart');                       // 第二次：这一节跳掉，在休息屏补记
+    await textIs(page,'plPhase','热身');
+    for(let i=0;i<5;i++) await page.click('#plSkip');
+    await textIs(page,'plMv','墙面斜板支撑');
+    await page.click('#plSkip');
+    await textIs(page,'plMv','休息一下');
+    assert.equal(await page.locator('#plLogLevels').isVisible(),true,'没做完的那一组仍然可以在休息屏补记');
+    await page.locator('#plLogLevels button',{hasText:'中距'}).click();
+    await page.click('#plSkip');
+    await page.click('#plEnd'); await page.click('#dlgOk');
+    await page.waitForSelector('#plDone.show');
+    assert.match(await page.textContent('#plDoneLifts'),/墙面斜板支撑 · 中距/,'休息屏上补点的档位要真的记下来，不能屏幕写着「自动记下」却悄悄丢掉');
   }finally{await picked.close();}
   const twice = await browser.newContext({viewport:{width:390,height:844},serviceWorkers:'block'});
   try{
