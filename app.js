@@ -1188,7 +1188,8 @@ function renderStep(){
     $('plRound').textContent = '第 ' + step.round + ' 轮';
     $('plClock').className = 'pl-clock num rest';
     $('plMv').textContent = '休息一下';
-    $('plCue').textContent = '恢复呼吸，照着示范摆好起始位。';
+    // 下一个动作没有示范图时，屏幕上摆出来的是文字步骤，口令就不能说「照着示范」
+    $('plCue').textContent = step.next && step.next.noMedia ? '恢复呼吸，照着下面的步骤摆好起始位。' : '恢复呼吸，照着示范摆好起始位。';
     renderDemo(step.next, '下一动作', false);
     preloadMove(step.next, true);
   } else if(step.type === 'break'){

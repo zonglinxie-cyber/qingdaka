@@ -125,6 +125,12 @@ async function bodyweightFlow(browser, base){
     await textIs(page,'plMv','坐姿毛巾划船');
     assert.equal(await page.locator('#plInstructions li').count(),3);
     assert.equal(await page.locator('#plDemoWrap').isVisible(),false,'无媒体动作不能残留上一张示范');
+    await page.click('#plPrev');
+    await textIs(page,'plMv','休息一下');
+    assert.equal(await page.textContent('#plCue'),'恢复呼吸，照着下面的步骤摆好起始位。','下一个动作没有示范时不能说「照着示范」');
+    assert.equal(await page.locator('#plInstructions li').count(),3,'休息页也要摆出下一个无媒体动作的文字步骤');
+    await page.click('#plSkip');
+    await textIs(page,'plMv','坐姿毛巾划船');
     await page.click('#plPrev'); await page.click('#plPrev');
     await textIs(page,'plMv','靠墙俯卧撑');
     await page.waitForFunction(() => document.getElementById('plDemo').getAttribute('src')?.endsWith('0659.gif'));
