@@ -237,10 +237,13 @@ async function bodyweightFlow(browser, base){
     await page.click('[data-page="training"]');
     await openDetails(page,'trainingOptions');
     await page.click('[data-routine="core"]');
-    await textIs(page,'routineGear','一张垫子；上下地面困难时用墙面斜板替代跪姿动作。');
+    await textIs(page,'routineGear','备好垫子、靠墙的椅子和两只轻哑铃（或水瓶）；上下地面困难时用墙面斜板替代跪姿。');
     await page.locator('.sequence-move',{hasText:'扶椅坐站'}).click();
     assert.match(await page.locator('#mdMedia').getAttribute('src'),/chair-stand-steps\.svg$/,'腰腹稳定课不能用持铃示范');
     assert.match(await page.textContent('#mdArea'),/无需负重/);
+    await page.click('#moveClose');
+    await page.locator('.sequence-move',{hasText:'轻负重行走'}).click();
+    assert.match(await page.textContent('#mdArea'),/哑铃或水瓶/,'课表里要持重的动作，备物提示里必须已经说过');
     await page.click('#moveClose');
     await page.click('[data-routine="dumbbell"]');
     assert.equal(await page.locator('#routineMoves .sequence-move').count(),5,'哑铃课同样平铺当日顺序');

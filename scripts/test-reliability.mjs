@@ -103,6 +103,22 @@ await check('跟练口令逐条短提示；示范是别的变体时角标写清�
   assert.ok(Object.keys(content.routineGear).every(k=>content.routineGear[k].length>10));
   assert.equal(content.presets.starter.work,40);
 });
+// 备物提示是开练前唯一一处「要准备什么」：课表里动作自己写了器械或要躺下，提示里就得有
+await check('练前备物提示覆盖本节动作要用的家当',()=>{
+  const ctx = vm.createContext({window:{}});
+  vm.runInContext(fs.readFileSync(new URL('../content.js',import.meta.url),'utf8'),ctx);
+  const content = ctx.window.QDK_CONTENT;
+  const HOME=['椅子','哑铃','毛巾','垫子','水瓶'];
+  for(const [k,list] of Object.entries(content.routines)){
+    if(k==='gym'){ continue; }  // 器械课的动作本身就是器械，人在场馆里不用提前备
+    const need=new Set();
+    list.forEach(m=>{
+      (m.equipment||'').split(/[、，（）]/).forEach(t=>HOME.forEach(p=>{ if(t.indexOf(p)>=0) need.add(p); }));
+      if(/仰卧|侧卧/.test(m.position||'')){ need.add('垫子'); }
+    });
+    assert.ok(need.size>0 && [...need].every(p=>content.routineGear[k].indexOf(p)>=0), k+' 课备物提示漏了 '+[...need].join('/'));
+  }
+});
 await check('训练保存失败保留重试入口，重复结束不会重复写入',async()=>{
   const nodes=new Map(), ui=id=>{
     if(!nodes.has(id)){nodes.set(id,{classList:{add(){}},setAttribute(){},textContent:''});}return nodes.get(id);

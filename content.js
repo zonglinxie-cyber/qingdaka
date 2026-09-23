@@ -128,9 +128,9 @@ var routines = {
 var routineGear = {
   bodyweight:'备好稳固椅子、长毛巾和垫子；上下地面困难时不要勉强。',
   dumbbell:'一对轻哑铃和一把靠墙的稳固椅子；地面留开一步宽。',
-  core:'一张垫子；上下地面困难时用墙面斜板替代跪姿动作。',
+  core:'备好垫子、靠墙的椅子和两只轻哑铃（或水瓶）；上下地面困难时用墙面斜板替代跪姿。',
   gym:'先确认座椅和靠背可调；重量宁轻勿重。',
-  stretch:'旁边有可扶的墙或椅背即可，拉到发紧就停。'
+  stretch:'有可扶的墙或椅背，再加一块能躺下的垫子；拉到发紧就停。'
 };
 var routineNames = { bodyweight:'徒手基础', dumbbell:'居家哑铃', core:'腰腹稳定', gym:'健身器械' };
 var presets = {
