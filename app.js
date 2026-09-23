@@ -1159,6 +1159,7 @@ function renderDemo(move, badge, animate){
     swapImage($('plDemo'), src, move.name, function(){
       setDemoVisible(false);
       showTextSteps(move, '示范暂不可用 · 文字步骤');
+      renderNext();  // 角标随图一起没了，休息屏的「接下来」那一行要补回来
     });
   };
   show();
@@ -1168,6 +1169,13 @@ function renderDemo(move, badge, animate){
   $('plBadge').textContent = badge || '示范';
 }
 function renderNext(){
+  var step = session.steps[session.stepIndex];
+  // 休息与轮间屏：示范就是下一个动作，名字跟着图走（角标），不再在屏幕底下多出一行；
+  // 图看不见（无示范、或图取不到）时那一行必须留着，否则整屏没人说出名字。
+  if(step && (step.type === 'rest' || step.type === 'break') && !$('plDemoWrap').hidden){
+    $('plNext').hidden = true; $('plNext').textContent = ''; return;
+  }
+  $('plNext').hidden = false;
   var m = null;
   for(var i = session.stepIndex+1; i < session.steps.length; i++){
     var s = session.steps[i];
@@ -1220,7 +1228,7 @@ function renderStep(){
     $('plMv').textContent = '休息一下';
     // 下一个动作没有示范图时，屏幕上摆出来的是文字步骤，口令就不能说「照着示范」
     $('plCue').textContent = step.next && step.next.noMedia ? '恢复呼吸，照着下面的步骤摆好起始位。' : '恢复呼吸，照着示范摆好起始位。';
-    renderDemo(step.next, '下一动作', false);
+    renderDemo(step.next, step.next ? '下一动作 · ' + step.next.name : '下一动作', false);
     preloadMove(step.next, true);
   } else if(step.type === 'break'){
     phase.textContent = '轮间休息'; phase.className = 'pl-phase rest';
@@ -1228,7 +1236,7 @@ function renderStep(){
     $('plClock').className = 'pl-clock num rest';
     $('plMv').textContent = '轮间休息';
     $('plCue').textContent = '小口补水；若不适，不必继续下一轮。';
-    renderDemo(step.next, '下一轮', false);
+    renderDemo(step.next, step.next ? '下一轮 · ' + step.next.name : '下一轮', false);
     preloadMove(step.next, true);
   } else if(step.type === 'stretch'){
     phase.textContent = '拉伸'; phase.className = 'pl-phase stretch';
@@ -1317,7 +1325,7 @@ function runCountdown(){
   $('plRound').textContent = '先站稳';
   if(first && first.move){ renderDemo(first.move, '准备 · 先摆好位', false); } else { setDemoVisible(false); }
   $('plCue').textContent = '倒数结束就开始；先照着示范把起始位摆好。';
-  $('plNext').textContent = ''; hidePlLog();
+  $('plNext').hidden = false; $('plNext').textContent = ''; hidePlLog();
   unlockVoice();
   cueShort(); speak('3，2，1，开始', { voiceKey: 'countdown-start' });
   session.timer = window.setInterval(function(){

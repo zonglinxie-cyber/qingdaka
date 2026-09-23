@@ -127,7 +127,8 @@ async function bodyweightFlow(browser, base){
     assert.match(await page.textContent('#plLogFor'),/扶椅坐站/);
     await page.click('#plSkip');
     await textIs(page,'plMv','休息一下');
-    assert.match(await page.textContent('#plNext'),/^接下来 · /,'休息时只说一次下一个动作');
+    assert.equal(await page.textContent('#plBadge'),'下一动作 · 靠墙俯卧撑','休息屏的示范就是下一个动作，名字挂在角标上');
+    assert.equal(await page.locator('#plNext').isHidden(),true,'图已经说出下一个动作，底下不能再重复一行');
     await page.click('#plSkip'); await page.click('#plSkip');
     await textIs(page,'plMv','坐姿毛巾划船');
     assert.equal(await page.locator('#plInstructions li').count(),3);
@@ -136,6 +137,8 @@ async function bodyweightFlow(browser, base){
     await textIs(page,'plMv','休息一下');
     assert.equal(await page.textContent('#plCue'),'恢复呼吸，照着下面的步骤摆好起始位。','下一个动作没有示范时不能说「照着示范」');
     assert.equal(await page.locator('#plInstructions li').count(),3,'休息页也要摆出下一个无媒体动作的文字步骤');
+    assert.equal(await page.textContent('#plNext'),'接下来 · 坐姿毛巾划船','图收起时这一行是唯一的报名处');
+    assert.equal(await page.locator('#plNext').isVisible(),true,'没有示范可看时名字不能一起消失');
     await page.click('#plSkip');
     await textIs(page,'plMv','坐姿毛巾划船');
     await page.click('#plPrev'); await page.click('#plPrev');
@@ -385,11 +388,58 @@ async function bodyweightFlow(browser, base){
   console.log('✓ 扶椅坐站在腰腹稳定课也用分步示意，居家哑铃仍用原持铃示范');
   console.log('✓ 热身与拉伸同样是示范优先、一句口令');
 }
+/* 休息屏逐屏走一遍。等待会推进虚拟时间，「第几跳」对不上具体某一屏，所以不假设点击次数：
+   每跳一次读一次状态，只对不变式。两条规则：名字在整屏只说一次（图看得见时挂在角标，
+   图收起时留给「接下来」那一行）；矮屏休息屏要把「记刚才那组」和文字步骤一起放下。 */
+async function restScreenWalk(browser, base, viewport, preset){
+  const context = await browser.newContext({viewport, serviceWorkers:'block'});
+  try{
+    const page = await context.newPage(), errors = [];
+    page.on('pageerror', err => errors.push(err.message));
+    await page.clock.install();
+    await page.goto(base + '/index.html');
+    await page.click('[data-page="training"]');
+    await openDetails(page,'trainingOptions');
+    await page.click('[data-routine="bodyweight"]');
+    if(preset){ await openDetails(page,'trainingOptions'); await page.click(`[data-preset="${preset}"]`); }
+    await page.click('#btnStart');
+    const seen = [];
+    for(let i=0;i<40;i++){
+      const s = await page.evaluate(() => {
+        const g = id => document.getElementById(id), ph = g('plPhase').textContent;
+        return { done: g('plDone').classList.contains('show'), ph,
+          badge: g('plBadge').textContent, demo: !g('plDemoWrap').hidden,
+          nextHidden: g('plNext').hidden, next: (g('plNext').textContent||'').trim() };
+      });
+      if(s.done) break;
+      if(s.ph === '准备开始'){ await page.clock.fastForward(4000); continue; }
+      if(s.ph === '换动作' || s.ph === '轮间休息'){ seen.push(s); await stageFits(page); }
+      await page.click('#plSkip');
+    }
+    const shown = seen.filter(s => s.demo), hidden = seen.filter(s => !s.demo);
+    assert.ok(shown.length >= 1 && hidden.length >= 1,'要既有带示范也有无示范的休息屏：' + JSON.stringify(seen));
+    for(const s of shown){
+      const kind = s.ph === '换动作' ? '下一动作' : '下一轮';
+      assert.ok(s.badge.startsWith(kind + ' · '),'休息屏角标要带上下一个动作的名字：' + JSON.stringify(s));
+      assert.ok(s.badge.length > kind.length + 4, '角标只有前缀没报名字：' + JSON.stringify(s));
+      assert.equal(s.nextHidden, true, '图已经报了名字，底下不能再重复一行：' + JSON.stringify(s));
+    }
+    for(const s of hidden){
+      assert.match(s.next, /^接下来 · \S/, '图收起时这一行是唯一的报名处：' + JSON.stringify(s));
+      assert.equal(s.nextHidden, false, '没有示范可看时名字不能跟着一起消失：' + JSON.stringify(s));
+    }
+    assert.deepEqual(errors, [], '休息屏逐屏走查不能报错');
+    return { rests: seen.length, shown: shown.length, hidden: hidden.length };
+  }finally{await context.close();}
+}
 try{
   const base = (process.env.TEST_BASE_URL || await localServer()).replace(/\/$/,'');
   await verifyServer(base);
   browser = await chromium.launch({channel:process.env.PLAYWRIGHT_CHANNEL || undefined});
   await bodyweightFlow(browser,base);
+  const w390 = await restScreenWalk(browser,base,{width:390,height:844},null);
+  const w320 = await restScreenWalk(browser,base,{width:320,height:667},'standard');
+  console.log(`✓ 休息屏逐屏走查：390 走过 ${w390.rests} 屏（有图 ${w390.shown}／无图 ${w390.hidden}），320 两轮课 ${w320.rests} 屏排版不溢出`);
   const context = await browser.newContext({viewport:{width:390,height:844},acceptDownloads:true});
   context.setDefaultTimeout(15000);
   context.setDefaultNavigationTimeout(30000);
