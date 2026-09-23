@@ -101,7 +101,9 @@ async function bodyweightFlow(browser, base){
     assert.ok(requested.some(u=>/hip-bridge-lift\.svg$/.test(u)),'臀桥第二格也要预加载');
     await page.click('#moveClose');
     await page.locator('.sequence-move',{hasText:'靠墙俯卧撑'}).click();
-    assert.equal(await page.locator('#mdMediaNote').isVisible(),false,'示范与做法一致时不多出一行说明');
+    assert.match(await page.locator('#mdMedia').getAttribute('src'),/wall-pushup-start\.svg$/,'靠墙俯卧撑的示范改成画的就是家里要做的两格，不再是外部动图');
+    assert.equal(await page.textContent('#mdMediaNote'),'手掌按墙 · 身成一线');
+    assert.ok(requested.some(u=>/wall-pushup-bend\.svg$/.test(u)),'靠墙俯卧撑第二格也要预加载');
     await page.click('#moveClose');
     await page.click('#btnStart');
     assert.equal(await page.textContent('#plPhase'),'准备开始');
@@ -171,7 +173,15 @@ async function bodyweightFlow(browser, base){
     await textIs(page,'plMv','坐姿毛巾划船');
     await page.click('#plPrev'); await page.click('#plPrev');
     await textIs(page,'plMv','靠墙俯卧撑');
-    await page.waitForFunction(() => document.getElementById('plDemo').getAttribute('src')?.endsWith('0659.gif'));
+    await page.waitForFunction(() => document.getElementById('plDemo').getAttribute('src')?.endsWith('wall-pushup-start.svg'));
+    await textIs(page,'plBadge','分步示意');
+    let sawBend = false;
+    for(let i=0;i<8 && !sawBend;i++){
+      await page.clock.fastForward(700);
+      await new Promise(r => setTimeout(r, 200));
+      sawBend = /wall-pushup-bend\.svg$/.test(await page.locator('#plDemo').getAttribute('src') || '');
+    }
+    assert.ok(sawBend,'靠墙俯卧撑两格必须轮换，只给撑直的起始位就看不出肘要弯到哪');
     assert.equal(await page.locator('#plInstructions').isVisible(),false,'返回有图动作后隐藏文字步骤');
     await page.click('#plSkip'); await page.click('#plSkip');
     await textIs(page,'plMv','坐姿毛巾划船');
@@ -223,7 +233,7 @@ async function bodyweightFlow(browser, base){
     await openMove('靠墙俯卧撑');
     await page.waitForFunction(() => document.getElementById('mdMedia').naturalWidth > 0);
     assert.equal(await page.locator('#mdMedia').isVisible(),true,'换一个有图的动作要恢复示范');
-    assert.equal(await page.locator('#mdMediaNote').isVisible(),false,'上一屏的说明不能残留');
+    assert.equal(await page.textContent('#mdMediaNote'),'手掌按墙 · 身成一线','上一屏「示范暂不可用」不能残留成这一屏的说明');
     await page.evaluate(() => document.getElementById('moveClose').click());
     await page.click('#btnStart');
     await textIs(page,'plPhase','热身');

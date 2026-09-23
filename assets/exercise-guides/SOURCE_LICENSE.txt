@@ -11,6 +11,8 @@ Files:
   hip-bridge-lift.svg
   dead-bug-tabletop.svg
   dead-bug-reach.svg
+  wall-pushup-start.svg
+  wall-pushup-bend.svg
   generated/wall-plank-anatomy.png
   bird-dog.gif
   bird-dog-poster.png
@@ -53,6 +55,22 @@ like a different app, and the file itself is covered by the release restriction
 in section 3. Same caveat as above: static teaching aids drawn for this app, not
 filmed or professionally validated demonstrations, and no third-party media was
 used as an input or reference for them.
+
+wall-pushup-start.svg / wall-pushup-bend.svg are original, hand-authored vector
+schematics of the wall push-up in the same side-view language, drawn on a
+portrait canvas because a standing figure does not fit the square ones used for
+the floor moves: frame 1 is facing the wall with the palms on it and the arms
+nearly straight, frame 2 keeps the palms and the feet exactly where they were
+and only bends the elbows, with a dashed rule from head to ankle for the body
+staying one straight line. They replace dataset GIF 0659, the last outside GIF
+in the default bodyweight routine. Its motion did match the written cues; it is
+replaced because the GIF draws the whole movement as onion-skinned ghosting,
+i.e. several translucent copies of the same body inside one frame, which reads
+as a smudge at phone size instead of giving a position to copy, and because the
+file itself is covered by the release restriction in section 3. Same caveat as
+above: static teaching aids drawn for this app, not filmed or professionally
+validated demonstrations, and no third-party media was used as an input or
+reference for them.
 
 The bird-dog.gif / bird-dog-poster.png pair is a project-original looping
 demonstration generated for this app (four-point kneel to contralateral
@@ -121,9 +139,11 @@ Deployment scope (2026-09-24):
   kneeling schematics listed in section 1, and 3013 (gif + poster) was deleted
   the same day once 臀桥 switched to the project-authored hip-bridge schematics
   also listed in section 1. 0276 (gif + poster) was deleted the same day once
-  死虫 switched to the project-authored dead-bug schematics listed in section 1.
-  Six legacy GIF/poster pairs from this section remain deployed:
-  0291, 0292, 0404, 0659, 1459, 1677.
+  死虫 switched to the project-authored dead-bug schematics listed in section 1,
+  and 0659 (gif + poster) the same day once 靠墙俯卧撑 switched to the
+  project-authored wall-pushup schematics listed in section 1.
+  Five legacy GIF/poster pairs from this section remain deployed:
+  0291, 0292, 0404, 1459, 1677.
 
 Current host:
   https://github.com/omercotkd/exercises-gifs
@@ -135,7 +155,7 @@ original creators and dataset owner. Therefore the host's MIT file is not a
 complete or reliable chain of title for the media.
 
 Release status:
-  LEGACY / PROTOTYPE-ONLY. Do not describe the remaining seven deployed pairs of
+  LEGACY / PROTOTYPE-ONLY. Do not describe the remaining five deployed pairs of
   this section as copyright-cleared or commercially safe. Replace them with commissioned,
   self-recorded, or otherwise clearly licensed continuous demonstrations
   before treating the application as a public commercial release.

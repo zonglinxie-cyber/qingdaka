@@ -99,12 +99,14 @@ await check('跟练口令逐条短提示；示范变体的角标与图注写清�
   assert.deepEqual([...new Set(variants.map(m=>m.id))].sort(),variantIds,'示范变体动作清单与课表不符');
   assert.ok(variants.every(m=>m.mediaLabel && m.mediaLabel.length<=10),'示范变体没标在角标上，或角标过长');
   // 自制分步示意：画的就是家里要做的姿势，不再靠「示范是另一版」的角标兜底；图必须真在仓库里
-  for(const id of ['0276','3013','chair-stand','3239']){
+  for(const id of ['0276','3013','chair-stand','3239','0659']){
     const m=work.find(x=>x.id===id);
     assert.ok(m&&m.frames&&m.frames.length,id+' 应当用自制的分步示意图，却没有 frames');
     assert.equal(m.mediaLabel,'分步示意',id+' 的角标要说明这是分步示意，而不是某个变体示范');
     m.frames.forEach(f=>assert.ok(fs.existsSync(new URL('../assets/exercise-guides/'+f,import.meta.url)),id+' 指向的示意图文件不在仓库：'+f));
   }
+  // 主人只练默认徒手这一节：整节要么是自制图、要么明确无示范，不再挂任何外部动图
+  assert.ok(moves.every(m=>m.noMedia||m.frames),'默认徒手课里还有外部动图示范');
   // 图的下沿归角标：自制示意图的说明写在 mediaNote、由 DOM 挂在图下，必须一行放得下
   assert.ok(work.every(m=>!(m.mediaNote||'').length || m.mediaNote.length<=12),'图注过长会折行顶破图卡');
   // 每节课程都有备物提示，训练页靠它替代旧的按课程分支
@@ -203,11 +205,11 @@ await check('更新迁移旧版示范缓存并保留已有新图',async()=>{
   const sw=worker(), oldName=sw.ctx.CACHE_PREFIX+'runtime-v41';
   const old=await sw.ctx.caches.open(oldName), current=await sw.ctx.caches.open(sw.ctx.RUNTIME);
   await old.put('./assets/exercise-guides/1459.gif',new Response('saved guide'));
-  await old.put('./assets/exercise-guides/0659.gif',new Response('old guide'));
-  await current.put('./assets/exercise-guides/0659.gif',new Response('new guide'));
+  await old.put('./assets/exercise-guides/1677.gif',new Response('old guide'));
+  await current.put('./assets/exercise-guides/1677.gif',new Response('new guide'));
   await sw.run('activate');
   assert.equal(await (await current.match('./assets/exercise-guides/1459.gif')).text(),'saved guide');
-  assert.equal(await (await current.match('./assets/exercise-guides/0659.gif')).text(),'new guide');
+  assert.equal(await (await current.match('./assets/exercise-guides/1677.gif')).text(),'new guide');
   assert.equal(sw.stores.has(oldName),false);
 });
 await check('测试页面导航不会覆盖首页缓存',async()=>{
