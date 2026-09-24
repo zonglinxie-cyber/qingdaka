@@ -119,6 +119,14 @@ await check('跟练口令逐条短提示；示范变体的角标与图注写清�
     assert.equal(m.mediaLabel,'分步示意',id+' 的角标要说明这是分步示意，而不是某个变体示范');
     m.frames.forEach(f=>assert.ok(fs.existsSync(new URL('../assets/exercise-guides/'+f,import.meta.url)),id+' 指向的示意图文件不在仓库：'+f));
   }
+  // 热身里「静态看不出动」的那一处换成自制两格：脚尖落在地上那一圈上，两格差在脚尖转到圈的哪一侧
+  {
+    const w=content.warmupMoves.find(x=>x.id==='1368');
+    assert.ok(w&&w.frames&&w.frames.length>1,'1368 踝关节绕环应当用自制的两格分步示意');
+    assert.equal(w.mediaLabel,'分步示意','1368 的角标要说明这是分步示意');
+    assert.ok((w.mediaNote||'').length<=12,'1368 的图注会折行顶破图卡');
+    w.frames.forEach(f=>assert.ok(fs.existsSync(new URL('../assets/exercise-guides/'+f,import.meta.url)),'1368 指向的示意图文件不在仓库：'+f));
+  }
   // 休息屏的口令写着「照着示范摆好起始位」：任何一课的正式动作都不许没有示范
   assert.ok(work.every(m=>!m.noMedia),'有正式动作缺示范，休息屏那句「照着示范」就指不到东西');
   // 图的下沿归角标：自制示意图的说明写在 mediaNote、由 DOM 挂在图下，必须一行放得下

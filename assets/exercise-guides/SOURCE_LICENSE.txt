@@ -110,6 +110,21 @@ change between them. Same caveat as above: these are simplified illustrations,
 not a person demonstrating the movement and not professional or medical
 clearance.
 
+ankle-ring-toe-near.svg / ankle-ring-toe-far.svg are original, hand-authored
+vector drawings for the warm-up ankle circle. They break with the house
+composition on purpose: the crop stops below the waist. The move is a toe
+tracing a circle on the floor, and in a full side view that circle flattens to
+a sliver while the toe's travel between the two frames is a few pixels, so the
+picture cannot carry the instruction. Seen from high three-quarter front, the
+ring is a real ellipse, and it carries two arrowheads pointing opposite ways
+because the copy asks for circles both ways round. Frame 1 is the start
+position (weight on the standing foot, the other leg reached forward with the
+knee soft, heel lifted, toe resting on the near side of the dashed ring);
+frame 2 keeps every other coordinate and moves only that ankle, the toe now on
+the far side of the ring and the heel swung out. Same caveat as above: these
+are simplified illustrations, not a person demonstrating the movement and not
+professional or medical clearance.
+
 towel-row-ready.svg / towel-row-pull.svg are original, hand-authored vector
 schematics of the seated towel row in the same side-view language, drawn on the
 same square canvas as the floor moves because the body is seated and seen from
@@ -221,13 +236,14 @@ project-generated media listed in section 1.
 4) Warm-up and post-workout stretch media (added 2026-07-25)
 
 Files (GIF + -poster.png frame still, 360x360, white background):
-  Warm-up:        3221, 1368, 0257, 1428, 1167
+  Warm-up:        3221, 0257, 1428, 1167
   Stretch:        1377, 1576, 0643, 0794, 1365, 0669, 1424, 1403
   (quad-stand never had a file from this set: it shipped as a text-only screen
   until the project-authored quad-stand frames listed in section 1 replaced it.
   1271's gif and poster were deleted on 2026-09-24 once 胸前侧拉伸 switched to
-  the project-authored chest-open frames in section 1, so thirteen pairs from
-  this section remain, not fourteen.)
+  the project-authored chest-open frames in section 1; 1368's pair went the same
+  day, once 踝关节绕环 switched to the project-authored ankle-ring frames. So
+  twelve pairs from this section remain, not fourteen.)
 
 Source repository and dataset:
   https://github.com/omercotkd/exercises-gifs  (assets/<id>.gif)
@@ -235,7 +251,7 @@ Source repository and dataset:
   (edoardoba) — the same source as the legacy strength GIFs in section 3.
   Posters were generated locally from a GIF frame (PIL), with a white
   background to match the dataset's illustration style. Most use the first
-  frame; 1368, 0257 and 1167 use a mid-action frame because the first frame
+  frame; 0257 and 1167 use a mid-action frame because the first frame
   shows the resting stance and would not demonstrate the move for users with
   reduced motion enabled.
 

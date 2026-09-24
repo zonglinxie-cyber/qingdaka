@@ -144,7 +144,7 @@ var presetNames = { recovery:'恢复档', starter:'入门档', standard:'标准�
 
 var warmupMoves = [
   { id:'3221', name:'原地踏步激活', sec:30, target:'全身 / 髋', position:'站姿', sideMode:'none', shortCue:'按自己稳住的高度抬膝，手臂自然摆。', cue:'站直，交替抬膝到舒适高度，手臂自然摆动。图里膝盖抬得偏高，你按自己能稳住的高度即可。' },
-  { id:'1368', name:'踝关节绕环', sec:20, target:'踝', position:'站姿', sideMode:'half', shortCue:'单脚站稳，另一脚脚尖画圈。', cue:'单脚站稳（可扶墙），另一脚脚尖画圈，顺逆各几次后换脚。' },
+  { id:'1368', name:'踝关节绕环', sec:20, target:'踝', position:'站姿', frames:['ankle-ring-toe-near.svg','ankle-ring-toe-far.svg'], mediaLabel:'分步示意', mediaNote:'脚尖贴地 · 顺逆画圈', sideMode:'half', shortCue:'单脚站稳，另一脚脚尖画圈。', cue:'单脚站稳（可扶墙），另一脚脚尖画圈，顺逆各几次后换脚。' },
   { id:'0257', name:'膝关节绕环', sec:20, target:'膝', position:'站姿', sideMode:'none', shortCue:'双膝微屈扶膝轻画圈，幅度小而顺。', cue:'双脚并拢微屈，双手扶膝轻画圈；幅度以舒适为准，不顺滑就缩小范围。' },
   { id:'1428', name:'腕关节绕环', sec:20, target:'腕 / 前臂', position:'站姿', sideMode:'none', shortCue:'抬前臂转手腕画圈，顺逆各几次。', cue:'示范是抬起前臂、单个手腕画圈；也可以双手十指交叉一起转。活动手腕与前臂，顺逆各几次。' },
   { id:'1167', name:'动态扩胸', sec:25, target:'肩 / 胸', position:'站姿', sideMode:'none', shortCue:'双臂向两侧打开再合回，肩胸展开不憋气。', cue:'示范是双臂向两侧打开再合回；也可以前后摆动、画圈。打开肩胸，动作连贯、不憋气。' }

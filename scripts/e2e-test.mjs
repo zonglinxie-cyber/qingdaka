@@ -527,7 +527,8 @@ async function bodyweightFlow(browser, base){
 const GUIDE_FRAMES = ['chair-stand-steps.svg','dead-bug-tabletop.svg','dead-bug-reach.svg',
   'hip-bridge-flat.svg','hip-bridge-lift.svg','kneeling-plank-steady.svg','kneeling-plank-tap.svg',
   'towel-row-ready.svg','towel-row-pull.svg','wall-pushup-start.svg','wall-pushup-bend.svg',
-  'quad-stand-ready.svg','quad-stand-hold.svg','chest-open-ready.svg','chest-open-lift.svg'];
+  'quad-stand-ready.svg','quad-stand-hold.svg','chest-open-ready.svg','chest-open-lift.svg',
+  'ankle-ring-toe-near.svg','ankle-ring-toe-far.svg'];
 async function guideInkClearsBadge(page){
   const bad = await page.evaluate(async list => {
     const im = document.getElementById('plDemo'), bd = document.getElementById('plBadge');
