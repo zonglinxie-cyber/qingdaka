@@ -4,7 +4,9 @@
 // 磁盘文件名与动作 id 不同时，只写 ASSET_ALIAS；无预录的动作写入 SILENT_VOICE。
 
 var ASSET_ALIAS = {
-  'chair-stand': { voice:'0291' },
+  // 扶椅坐站是 0291 箱式深蹲的徒手版，没有自己的录音就借它的；借来的那句念的是原动作名，
+  // voiceName 记下这一点，发布门槛据此区分「故意共用录音」和「改名改到和录音对不上」。
+  'chair-stand': { voice:'0291', voiceName:'扶凳箱式深蹲' },
   'farmer-carry': { media:'2133' }
 };
 var SILENT_VOICE = {
@@ -30,7 +32,7 @@ function voiceKey(prefix, move){
 var hipBridge = { id:'3013', shortCue:'脚跟推地抬髋，顶端夹臀，不要拱腰。', name:'臀桥', frames:['hip-bridge-flat.svg','hip-bridge-lift.svg'], mediaLabel:'分步示意', mediaNote:'脚跟踩稳 · 抬髋成线', area:'臀部与后侧链', sideMode:'none', equipment:'', steps:['仰卧屈膝，双脚与髋同宽','收紧腹部，脚跟推地抬髋','到肩—髋—膝接近直线后慢慢回位'], cue:'肋骨不要外翻；顶端夹臀，不要用腰向上拱。呼吸：抬髋时呼气，下放时吸气。', mistake:'抬得越高越好，导致腰部过伸。' };
 var deadBug = { id:'0276', shortCue:'对侧手脚慢慢伸出，腰背贴稳垫面，左右交替。', name:'死虫', frames:['dead-bug-tabletop.svg','dead-bug-reach.svg'], mediaLabel:'分步示意', mediaNote:'腰背贴垫 · 范围宁短', area:'核心稳定', sideMode:'alternate', equipment:'', steps:['腰背自然贴稳垫面，髋膝约 90°','一侧手臂与对侧腿缓慢远离身体','腰背不离垫，回位后换侧'], cue:'范围由腰背能否保持稳定决定；宁可短一点。呼吸：手脚伸出时呼气，回位时吸气。', mistake:'手脚下放过低，腰背拱起。' };
 var wallPush = { id:'0659', shortCue:'身体保持直线，屈肘靠近墙，再慢慢推回。', name:'靠墙俯卧撑', frames:['wall-pushup-start.svg','wall-pushup-bend.svg'], mediaLabel:'分步示意', mediaNote:'手掌按墙 · 身成一线', area:'胸肩与上肢推力', sideMode:'none', equipment:'', steps:['面对墙站立，双手略宽于肩','身体保持一条直线，屈肘靠近墙','手掌推墙，回到起始位'], cue:'脚离墙越远越难；先选能稳定控制的位置。呼吸：推墙时呼气，靠近时吸气。', mistake:'只移动头部，或塌腰、耸肩。' };
-var kneelingPlank = { id:'3239', shortCue:'先撑稳不塌腰，稳了再抬一只手点肩。', name:'跪姿平板（可点肩）', frames:['kneeling-plank-steady.svg','kneeling-plank-tap.svg'], mediaLabel:'分步示意', mediaNote:'膝盖着地 · 先撑稳', area:'核心与肩稳定', sideMode:'alternate', equipment:'', steps:['膝盖着地、前臂撑地，头到膝保持直线','先稳住跪姿平板，能说话、不塌腰','稳了再轻点对侧肩；一晃就停在平板'], cue:'先撑住：能说话、不塌腰，再考虑点肩。点肩时髋不跟着晃，一晃就退回只撑住。呼吸：全程不憋气。', mistake:'塌腰，或猛地点肩扭腰。' };
+var kneelingPlank = { id:'3239', shortCue:'先撑稳不塌腰，稳了再抬一只手点肩。', name:'跪姿平板点肩', frames:['kneeling-plank-steady.svg','kneeling-plank-tap.svg'], mediaLabel:'分步示意', mediaNote:'膝盖着地 · 先撑稳', area:'核心与肩稳定', sideMode:'alternate', equipment:'', steps:['膝盖着地、前臂撑地，头到膝保持直线','先稳住跪姿平板，能说话、不塌腰','稳了再轻点对侧肩；一晃就停在平板'], cue:'先撑住：能说话、不塌腰，再考虑点肩。点肩时髋不跟着晃，一晃就退回只撑住。呼吸：全程不憋气。', mistake:'塌腰，或猛地点肩扭腰。' };
 
 var boxSquat = { id:'0291', shortCue:'臀部后坐轻触椅面，脚跟推地站起，膝朝脚尖。', name:'扶凳箱式深蹲', area:'大腿前侧与臀部', sideMode:'none', equipment:'哑铃', steps:['身后放一把稳固的椅子，双脚与髋同宽，哑铃垂于体侧（先徒手亦可）','臀部向后坐，像要坐进椅子里，膝盖朝脚尖方向','轻触椅面后脚跟推地站起，顶端夹臀'], cue:'椅子越高越简单；下蹲幅度以膝盖无锐痛为准，全程背部中立。先徒手练熟再加哑铃。呼吸：下坐时吸气，站起时呼气。', mistake:'膝盖内扣、脚跟离地，或下坐时塌腰、上身过度前倾。' };
 var rdl = { id:'1459', shortCue:'髋向后送，背部保持中立，夹臀站起。', name:'哑铃罗马尼亚硬拉', area:'臀部与大腿后侧', sideMode:'none', equipment:'哑铃', steps:['双脚与髋同宽，膝盖微屈，哑铃贴近腿前','髋部向后送，躯干随之向前倾','背部保持中立，到大腿后侧有拉伸感后夹臀站起'], cue:'动作是"髋向后"，不是深蹲；幅度由背部能否保持中立决定，不必让哑铃碰地。呼吸：站起时呼气，前倾时吸气。', mistake:'弓背、哑铃远离身体，或为了下得更低而失去控制。' };
@@ -44,7 +46,7 @@ var gymMoves = [
   { id:'0576', shortCue:'肩胛贴稳靠背，向前上方推至接近伸直再回放。', name:'坐姿推胸机', area:'胸部与上肢推力', sideMode:'none', equipment:'坐姿推胸机', steps:['调好座椅高度，握把与胸同高，背部贴紧靠背','双手握把，肘部略低于肩，核心收紧','沿弧线向前上方推至手臂接近伸直，再缓慢回放至胸侧'], cue:'示范的推起轨迹偏向前上方。重量宁轻勿重；推起时肩胛贴稳靠背、不耸肩。呼吸：推起时呼气，回放时吸气。', mistake:'重量过大导致耸肩、弓背，或回放过快撞击配重。' },
   { id:'0579', shortCue:'肩胛先下沉，再拉向上胸，不靠体重猛拉。', name:'高位下拉机', area:'背部与上肢拉力', sideMode:'none', equipment:'高位下拉机', steps:['坐下固定大腿，握把略宽于肩，躯干微后倾','肩胛先下沉，再把握把拉向上胸','控制回放至手臂伸直，感受背阔拉伸'], cue:'与推胸一推一拉、相互平衡；用背带动手臂，不靠体重猛拉、不耸肩。呼吸：下拉时呼气，回放时吸气。', mistake:'身体大幅后仰借力、耸肩，或拉到颈后。' },
   { id:'0588', shortCue:'挺胸再向后拉，肩胛往中间夹，慢慢放回。', name:'坐姿划船机', area:'上背与上肢拉力', sideMode:'none', equipment:'坐姿划船机', steps:['坐稳，胸口贴住靠垫，双脚踩实踏板','双手握把，背部保持中立不弓背','肘部贴近身体向后拉，肩胛向中间夹，再缓慢放回'], cue:'先挺胸再拉；拉到底时停顿一下。呼吸：后拉时呼气，放回时吸气。', mistake:'弓背、耸肩，或用腰把重量甩回来。' },
-  { id:'0404', shortCue:'掌心相对推到接近伸直，不要后仰顶腰。', name:'坐姿哑铃推举', mediaLabel:'示范为掌心向前', area:'肩部与上肢推力', sideMode:'none', equipment:'哑铃（没有推肩机时用这个）', steps:['坐在有靠背的椅子上，双脚踩稳','掌心相对，哑铃停在肩旁','向上推至手臂接近伸直，再控制回到肩旁'], cue:'没有独立推肩机就用哑铃；图也是哑铃，不是推肩机。示范是掌心向前，你做掌心相对更省肩。不要后仰顶腰。呼吸：上推时呼气，回落时吸气。', mistake:'腰部大幅后弓、耸肩，或在头顶撞击哑铃。' },
+  { id:'0404', shortCue:'掌心相对推到接近伸直，不要后仰顶腰。', name:'坐姿中立握哑铃推举', mediaLabel:'示范为掌心向前', area:'肩部与上肢推力', sideMode:'none', equipment:'哑铃（没有推肩机时用这个）', steps:['坐在有靠背的椅子上，双脚踩稳','掌心相对，哑铃停在肩旁','向上推至手臂接近伸直，再控制回到肩旁'], cue:'没有独立推肩机就用哑铃；图也是哑铃，不是推肩机。示范是掌心向前，你做掌心相对更省肩。不要后仰顶腰。呼吸：上推时呼气，回落时吸气。', mistake:'腰部大幅后弓、耸肩，或在头顶撞击哑铃。' },
   { id:'0599', shortCue:'踝垫向下向后压，骨盆贴着座垫再放回。', name:'坐姿腿弯举机', area:'大腿后侧', sideMode:'none', equipment:'坐姿腿弯举机', steps:['调好靠背与踝垫，踝垫位于跟腱上方','双手扶稳把手，大腿贴紧座垫','屈膝把踝垫向下向后压，再缓慢放回'], cue:'练大腿后侧，和腿举前后平衡。动作慢而稳，骨盆不离开座垫。呼吸：下压时呼气，回放时吸气。', mistake:'借惯性猛压、骨盆弹起，或回放过快。' }
 ];
 var MOVE_META = {

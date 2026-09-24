@@ -90,6 +90,10 @@ function addMedia(move) {
 
 const groups = Object.entries(content.routines).map(([name, moves]) => [name === 'stretch' ? 'stretch-' : 'work-', moves]);
 groups.push(['warmup-', content.warmupMoves], ...Object.values(content.stretchSets).map((moves) => ['stretch-', moves]));
+// 预录语音念的就是动作名（mmx 没登录就不能重录），所以名字一旦改得和录音不一致，
+// 跟练时耳朵听到的和屏幕上读到的就是两个动作。这里把「名字必须出现在录音稿里」变成硬门槛。
+const spokenText = new Map(voiceManifest.map((entry) => [entry.key, entry.text || '']));
+const renamed = [];
 for (const [prefix, moves] of groups) {
   for (const move of moves) {
     addMedia(move);
@@ -97,8 +101,16 @@ for (const [prefix, moves] of groups) {
     if (!key) continue;
     liveVoice.add(key);
     if (!manifestKeys.includes(key)) missing.push(key);
+    const spoken = spokenText.get(key);
+    const asr = content.ASSET_ALIAS[move.id];
+    const spokenName = (asr && asr.voiceName) || move.name;
+    if (spoken && !spoken.includes(spokenName)) {
+      renamed.push(key + ' 屏幕上是「' + move.name + '」，录音里是「' + spoken.slice(0, 24) + '」');
+    }
   }
 }
+
+assert.deepEqual(renamed, [], '动作名与预录语音对不上：' + renamed.join('；'));
 
 assert.deepEqual(missing.sort(), [], '活课程缺预录语音，且未标 SILENT_VOICE：' + missing.join(', '));
 for (const key of liveVoice) {

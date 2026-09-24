@@ -194,7 +194,7 @@ async function bodyweightFlow(browser, base){
     await page.click('#plSkip'); await page.click('#plSkip');
     await textIs(page,'plMv','坐姿毛巾划船');
     await page.click('#plSkip'); await page.click('#plSkip');
-    await textIs(page,'plMv','跪姿平板（可点肩）');
+    await textIs(page,'plMv','跪姿平板点肩');
     await page.waitForFunction(() => document.getElementById('plDemo').getAttribute('src')?.endsWith('kneeling-plank-steady.svg'));
     // 两格自制示意每 1.3s 轮换：先撑稳、再点肩。等待要推进虚拟时间，图片落地要真时间，两者都给。
     let sawTap = false;
