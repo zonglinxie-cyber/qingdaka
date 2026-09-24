@@ -90,6 +90,9 @@ await check('跟练口令逐条短提示；示范变体的角标与图注写清�
   const half=[...work,...oneLine].filter(m=>m.sideMode==='half');
   assert.ok(half.length>=9 && half.every(m=>!/换边|换腿|换脚/.test(m.shortCue)), '单侧动作由播放器过半提示换侧，口令不再重复换边');
   assert.ok([...Object.values(content.STRETCH),...content.warmupMoves].every(m=>m.sideMode), '热身与拉伸都要写明是否单侧');
+  // 详情弹层的红框自带「常见错误」标题，正文再复述一遍就是同一屏两行重复字
+  const echoed=[...work,...oneLine].filter(m=>m.mistake && /^(常见错误|要领)[：:]/.test(m.mistake));
+  assert.ok(echoed.length===0, '常见错误正文重复了框标题：' + echoed.map(m=>m.name).join('、'));
   // 没有示范图时靠分步填住示范区，否则播放器整屏留白
   // 跟练流程（正式动作 + 热身 + 拉伸）里每一节都必须有示范：文字步骤只是「图取不到」时的退路，
   // 不再用来充当某一节动作的正常画面。这条取代了旧的「无示范动作必须给三步文字步骤」。
