@@ -1692,7 +1692,12 @@ function renderTraining(){
   $('roundHint').textContent = isStretch ? count + ' 个拉伸动作' : count + ' 个动作';
   $('routinePlanNote').textContent = isStretch ? '点动作看做法；拉到发紧就停，不弹震、不憋气。' : '点动作看做法；开始后会先热身，最后带你放松。';
   $('readyHint').hidden = getReadiness() === 'green';
-  $('readyHint').textContent = getReadiness() === 'yellow' ? '已切到恢复档。轻松一点，不适就停。' : '今天先休息。严重或持续不适，请联系医疗人员。';
+  // 状态一般时会自动切到恢复档，但人可以再手动改回去（确认框里选「仍要切换」）。
+  // 这句不能写死成「已切到恢复档」，否则档位是标准档时它说的是一句假话。
+  $('readyHint').textContent = getReadiness() === 'yellow'
+    ? (S.settings.preset === 'recovery' ? '已切到恢复档。轻松一点，不适就停。'
+      : '你当前是 ' + (presetNames[S.settings.preset] || S.settings.preset) + '；状态一般时建议回到恢复档。')
+    : '今天先休息。严重或持续不适，请联系医疗人员。';
   $('readyHint').classList.toggle('danger-text',getReadiness() === 'red');
   $('btnStart').disabled = getReadiness() === 'red' && !isStretch;
   $('btnStart').textContent = active ? '继续跟练' : (isStretch ? '开始拉伸' : '开始跟练');
@@ -1737,7 +1742,7 @@ $('presetSeg').addEventListener('click', async function(e){
   if(!btn || !canChangePlan()){ return; }
   if(getReadiness() === 'yellow' && btn.dataset.preset !== 'recovery'){
     var preset = btn.dataset.preset;
-    showConfirm('你今天状态一般，恢复档更安全。确定要切换到 ' + preset + ' 档吗？', async function(){
+    showConfirm('你今天状态一般，恢复档更安全。确定要切换到 ' + (presetNames[preset] || preset) + ' 吗？', async function(){
       if(!await mutateState(function(){ S.settings.preset = preset; })){ return; }
       resetWorkout(); renderTraining(); renderToday();
     }, { title:'切换档位', okText:'仍要切换' });

@@ -367,6 +367,36 @@ async function bodyweightFlow(browser, base){
     assert.equal((await page.textContent('#plDoneLifts')).match(/下次/g).length, 5, '五个动作都该给下一次的建议重量');
     await page.click('#plDoneBtn');
   }finally{await lifts.close();}
+  const ready = await browser.newContext({viewport:{width:390,height:844},serviceWorkers:'block'});
+  try{
+    const page = await ready.newPage();
+    await page.clock.install();
+    await page.goto(base + '/index.html');
+    await page.click('[data-page="training"]');
+    await openDetails(page,'trainingOptions');
+    assert.equal(await page.textContent('#trainingLevel'), '入门档', '默认档位');
+    assert.equal(await page.locator('#readyHint').isVisible(), false, '状态「不错」时不该有提示行');
+    await page.click('[data-ready="yellow"]');
+    await textIs(page,'trainingLevel','恢复档');
+    await textIs(page,'readyHint','已切到恢复档。轻松一点，不适就停。');
+    // 状态一般时改档位要先确认：确认框必须念中文档名，不能把内部键 standard 摊给人看
+    await page.click('[data-preset="standard"]');
+    await page.waitForSelector('#dlgOk');
+    const dlg = await page.textContent('#dlgMsg');
+    assert.ok(dlg.includes('标准档') && !dlg.includes('standard'), '切换档位的确认框念的是内部键：' + dlg);
+    // 人坚持要练标准档：提示行得跟着说实话，不能再写「已切到恢复档」
+    await page.click('#dlgOk');
+    await textIs(page,'trainingLevel','标准档');
+    const hint = await page.textContent('#readyHint');
+    assert.ok(hint.includes('标准档') && !hint.includes('已切到恢复档'), '手动改回标准档后提示行还在说恢复档：' + hint);
+    await page.click('[data-ready="red"]');
+    assert.ok((await page.textContent('#readyHint')).includes('今天先休息'), '不适时没说先休息');
+    assert.equal(await page.locator('#btnStart').isDisabled(), true, '身体不适时「开始跟练」必须点不动');
+    await page.click('[data-routine="stretch"]');
+    assert.equal(await page.locator('#btnStart').isDisabled(), false, '不适时仍然可以只做放松拉伸');
+    assert.equal(await page.locator('#presetSection').isVisible(), false, '放松拉伸没有档位可言，强度选择要收起来');
+    assert.equal(await page.locator('#readySection').isVisible(), false, '放松拉伸不问今天感觉怎么样');
+  }finally{await ready.close();}
   const full = await browser.newContext({viewport:{width:375,height:667},reducedMotion:'reduce'});
   try{
     const page = await full.newPage();
