@@ -460,6 +460,16 @@ async function bodyweightFlow(browser, base){
     const page = await tight.newPage();
     await page.goto(base + '/index.html');
     await page.click('[data-page="training"]');
+    // 计划弹层是按下开始前的最后一屏：主按钮不许被折叠线切掉。
+    // 320×667 上默认这份安排有 650px 高、弹层只有 614（92dvh），不粘底就打不开「开始」。
+    await page.click('#btnPlan');
+    await page.waitForFunction(() => document.getElementById('planModal').classList.contains('open'));
+    assert.equal(await page.evaluate(() => {
+      const pr = document.querySelector('#planModal .panel').getBoundingClientRect();
+      const go = document.getElementById('planGo').getBoundingClientRect();
+      return go.bottom <= pr.bottom + 0.5 && go.top >= pr.top - 0.5;
+    }), true, '窄屏计划弹层的「开始」被折叠线切掉了，打开还得先滚一下才点得到');
+    await page.click('#planCancel');
     await openDetails(page,'trainingOptions');
     await page.click('[data-routine="core"]');
     await page.click('#btnStart');

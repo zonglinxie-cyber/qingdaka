@@ -377,7 +377,11 @@ summary small{float:right;margin-left:8px;font-size:12px;color:var(--muted);font
 .plan-sec .body .h{font-size:14px;font-weight:800}
 .plan-sec .body .h .num{color:var(--persimmon)}
 .plan-sec .body .list{font-size:12px;color:var(--muted);margin-top:4px;line-height:1.6}
-.plan-actions{display:flex;gap:10px;margin-top:18px}
+/* 主按钮不许落在折叠线以下：320 宽时这份安排有 650px 高、弹层只有 614（92dvh），
+   不粘住底部的话打开弹层看不到「开始」，短屏（560）上整条按钮差 111px。
+   底部留白从弹层挪到这条上，粘住和落回原位两种状态下都保留同样的下边距。 */
+#planModal .panel{padding-bottom:0}
+.plan-actions{display:flex;gap:10px;margin-top:18px;position:sticky;bottom:0;background:var(--paper);padding-bottom:calc(24px + env(safe-area-inset-bottom))}
 .plan-actions .go{flex:1;background:var(--forest);color:#fff;border-radius:13px;padding:15px;font-size:15.5px;font-weight:800;box-shadow:0 6px 16px rgba(63,107,79,.35)}
 .plan-actions .go:active{transform:scale(.97)}
 .plan-actions .cancel{border:1px solid var(--line-2);border-radius:13px;padding:15px 18px;font-size:14px;font-weight:800;color:var(--muted);background:var(--card)}
