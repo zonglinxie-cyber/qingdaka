@@ -335,6 +335,38 @@ async function bodyweightFlow(browser, base){
     await page.waitForSelector('#plDone.show');
     assert.match(await page.textContent('#plDoneLifts'),/墙面斜板支撑 · 中距、远墙（难）/,'两轮的档位要按做的先后都列出来，不能只报最后那一下');
   }finally{await twice.close();}
+  /* 结束屏的记重清单要按「刚才怎么练的」排。数据集 id 里有 1459、1677 这种纯数字，
+     它们在 JS 对象里是整数索引键，Object.keys 会把它们提到最前按数字升序排，
+     于是清单第 1 个动作跑到中间去——上一轮只能人工量出来，这里钉住。 */
+  const lifts = await browser.newContext({viewport:{width:390,height:844},serviceWorkers:'block',reducedMotion:'reduce'});
+  try{
+    const page = await lifts.newPage();
+    await page.clock.install();
+    await page.goto(base + '/index.html');
+    await page.click('[data-page="training"]');
+    await openDetails(page,'trainingOptions');
+    await page.click('[data-routine="dumbbell"]');
+    await page.click('[data-preset="standard"]');   // 5 个动作 × 2 轮，含两个纯数字 id
+    await page.click('#btnStart');
+    await textIs(page,'plPhase','热身');
+    let kg = 0;
+    for(let i=0;i<90;i++){
+      if(await page.locator('#plDone').evaluate(e => e.classList.contains('show'))){ break; }
+      const st = await page.evaluate(() => ({ ph:document.getElementById('plPhase').textContent,
+        log:!document.getElementById('plLog').hidden, left:Number(document.getElementById('plClock').textContent)||0 }));
+      if(st.ph === '训练中' && st.log){
+        kg += 2.5;
+        await page.fill('#plKg', String(kg)); await page.fill('#plReps','8');
+        await page.clock.fastForward((st.left+1)*1000);
+      } else { await page.click('#plSkip'); await page.clock.fastForward(1200); }
+    }
+    await page.waitForSelector('#plDone.show');
+    const names = await page.evaluate(() => [...document.querySelectorAll('#plDoneLifts > div')].map(e => e.textContent.split(' · ')[0]));
+    assert.deepEqual(names, ['扶凳箱式深蹲','哑铃罗马尼亚硬拉','扶椅单臂哑铃划船','坐姿中立握哑铃推举','坐姿哑铃弯举'],
+      '结束屏的记重清单要按练的顺序列，不能按 Object.keys 的键序跳');
+    assert.equal((await page.textContent('#plDoneLifts')).match(/下次/g).length, 5, '五个动作都该给下一次的建议重量');
+    await page.click('#plDoneBtn');
+  }finally{await lifts.close();}
   const full = await browser.newContext({viewport:{width:375,height:667},reducedMotion:'reduce'});
   try{
     const page = await full.newPage();

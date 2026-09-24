@@ -1442,8 +1442,14 @@ async function finishWorkout(early){
   var liftBox = $('plDoneLifts');
   if(liftBox){
     var lines = [];
-    Object.keys(session.lifts).forEach(function(k){
-      if(k.indexOf(':') >= 0){ return; }
+    // 按做过的顺序列，不能遍历 Object.keys(session.lifts)：数据集 id 里 '1459'、'1677'
+    // 这种是「整数索引键」，JS 会把它们提到前面并按数字升序排，结束屏就会把第一个动作排到中间去。
+    var doneIds = [];
+    session.steps.forEach(function(st){
+      var id = st.move && st.move.id;
+      if(id && session.lifts[id] && doneIds.indexOf(id) < 0){ doneIds.push(id); }
+    });
+    doneIds.forEach(function(k){
       var mv = moveById(k);
       var sets = session.lifts[k] || [];
       if(!mv || !sets.length){ return; }
