@@ -1,7 +1,7 @@
 {
-  "name": "轻打卡 · 蛋白与跟练",
+  "name": "轻打卡 · 动起来",
   "short_name": "轻打卡",
-  "description": "记录蛋白质 · 低冲击力量跟练 · 本地保存",
+  "description": "从 1 分钟开始，轻松动起来 · 自制动作示范 · 本地记录 · 离线可用",
   "lang": "zh-CN",
   "dir": "ltr",
   "start_url": "./index.html",
@@ -10,8 +10,8 @@
   "display": "standalone",
   "display_override": ["standalone", "minimal-ui"],
   "orientation": "portrait-primary",
-  "background_color": "#faf7f0",
-  "theme_color": "#faf7f0",
+  "background_color": "#f5f4ee",
+  "theme_color": "#203f36",
   "categories": ["health", "fitness", "lifestyle"],
   "icons": [
     { "src": "./icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },

@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="480" viewBox="0 0 720 480" role="img" aria-labelledby="title desc" xml:lang="zh-CN">
+  <title id="title">站姿放松肩膀：轻向后下，再回自然位</title>
+  <desc id="desc">原创正视两格身体示意。第一格双脚自然分开，站稳且无痛，手臂下垂。第二格双脚与躯干位置不变，仅肩膀轻轻向后下移动一点，再回到自然位。没有耸高肩、绕肩或挺腰。站立不稳或不适就停止。分步示意，非专业视频。</desc>
+  <rect width="720" height="480" rx="24" fill="#f6faf8"/>
+  <g font-family="system-ui, sans-serif" fill="#1f3f46" text-anchor="middle">
+    <text x="360" y="44" font-size="30" font-weight="700">站姿放松肩膀</text>
+    <rect x="24" y="66" width="324" height="338" rx="18" fill="#e7efec"/>
+    <rect x="372" y="66" width="324" height="338" rx="18" fill="#e7efec"/>
+    <text x="186" y="108" font-size="26">1 无痛站稳</text>
+    <text x="534" y="108" font-size="26">2 肩轻向后下</text>
+    <text x="186" y="380" font-size="24">手臂垂下，双脚不动</text>
+    <text x="534" y="380" font-size="24">再回自然位，不用力压</text>
+    <text x="360" y="440" font-size="25">分步示意 · 非专业视频</text>
+    <text x="360" y="470" font-size="22">不耸高、不绕肩；不适就停止</text>
+  </g>
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M68 336H310 M416 336H658" stroke="#91a5a0" stroke-width="4"/>
+    <circle cx="186" cy="163" r="22" fill="#f6faf8" stroke="#1f3f46" stroke-width="8"/>
+    <path d="M186 190V260 M163 207H209 M163 207L154 250 M209 207L218 250 M186 260L165 328H150 M186 260L207 328H222" stroke="#1f3f46" stroke-width="13"/>
+    <circle cx="534" cy="163" r="22" fill="#f6faf8" stroke="#1f3f46" stroke-width="8"/>
+    <path d="M534 190V260 M534 260L513 328H498 M534 260L555 328H570" stroke="#1f3f46" stroke-width="13"/>
+    <path d="M510 212Q534 205 558 212 M510 212L502 253 M558 212L566 253" stroke="#147a68" stroke-width="13"/>
+    <path d="M483 184v23m-6-6 6 6 6-6 M585 184v23m-6-6 6 6 6-6" stroke="#a35d22" stroke-width="4"/>
+  </g>
+</svg>

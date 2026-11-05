@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="480" viewBox="0 0 720 480" role="img" aria-labelledby="title desc" xml:lang="zh-CN">
+  <title id="title">坐姿休息与收尾：停下，自然呼吸</title>
+  <desc id="desc">原创侧视两格身体示意。两格均为稳定无轮椅上的舒适坐姿，双脚平放、手放腿上。先停止动作，再保持自然呼吸，没有额外活动、屏息或呼吸节拍。需要时延长休息或结束。分步示意，非专业视频。</desc>
+  <rect width="720" height="480" rx="24" fill="#f6faf8"/>
+  <g font-family="system-ui, sans-serif" fill="#1f3f46" text-anchor="middle">
+    <text x="360" y="44" font-size="30" font-weight="700">停下，坐稳休息</text>
+    <rect x="24" y="66" width="324" height="338" rx="18" fill="#e7efec"/>
+    <rect x="372" y="66" width="324" height="338" rx="18" fill="#e7efec"/>
+    <text x="186" y="108" font-size="26">1 停止动作</text>
+    <text x="534" y="108" font-size="26">2 自然呼吸</text>
+    <text x="186" y="380" font-size="24">手放松，双脚平放</text>
+    <text x="534" y="380" font-size="24">可以延长休息或结束</text>
+    <text x="360" y="440" font-size="25">分步示意 · 非专业视频</text>
+    <text x="360" y="470" font-size="22">不憋气，不补次数；不适就结束</text>
+  </g>
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M68 336H310 M416 336H658" stroke="#91a5a0" stroke-width="4"/>
+    <path d="M112 212V276H250 M122 276V332 M238 276V332 M460 212V276H598 M470 276V332 M586 276V332" stroke="#647e79" stroke-width="9"/>
+    <circle cx="157" cy="165" r="23" fill="#f6faf8" stroke="#1f3f46" stroke-width="8"/>
+    <path d="M157 192V263L217 265V328H241 M157 212L178 244L210 250" stroke="#1f3f46" stroke-width="14"/>
+    <path d="M158 265L198 274V326H216 M184 166h-7" stroke="#587770" stroke-width="7"/>
+    <circle cx="505" cy="165" r="23" fill="#f6faf8" stroke="#1f3f46" stroke-width="8"/>
+    <path d="M505 192V263L565 265V328H589 M505 212L526 244L558 250" stroke="#1f3f46" stroke-width="14"/>
+    <path d="M506 265L546 274V326H564 M532 166h-7" stroke="#587770" stroke-width="7"/>
+    <path d="M273 148v27 M288 148v27 M621 148v27 M636 148v27" stroke="#147a68" stroke-width="7"/>
+  </g>
+</svg>

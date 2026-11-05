@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="480" viewBox="0 0 720 480" role="img" aria-labelledby="title desc" xml:lang="zh-CN">
+  <title id="title">坐姿温和转头：小幅看向一侧，回正再换边</title>
+  <desc id="desc">原创正视两格身体示意。第一格坐稳，肩放松，头朝前。第二格仅头缓慢看向一侧，眼睛和鼻子方向略改变，肩、躯干及双脚仍朝前。舒适时停约五秒，再回正和换边，不用手扳头，不绕颈。分步示意，非专业视频，不表示精确转动角度。</desc>
+  <rect width="720" height="480" rx="24" fill="#f6faf8"/>
+  <g font-family="system-ui, sans-serif" fill="#1f3f46" text-anchor="middle">
+    <text x="360" y="44" font-size="30" font-weight="700">坐姿温和转头</text>
+    <rect x="24" y="66" width="324" height="338" rx="18" fill="#e7efec"/>
+    <rect x="372" y="66" width="324" height="338" rx="18" fill="#e7efec"/>
+    <text x="186" y="108" font-size="26">1 看前方，肩放松</text>
+    <text x="534" y="108" font-size="26">2 头小幅转向一侧</text>
+    <text x="186" y="380" font-size="24">坐稳，双脚平放</text>
+    <text x="534" y="380" font-size="24">身体不转，回正再换边</text>
+    <text x="360" y="440" font-size="25">分步示意 · 非专业视频</text>
+    <text x="360" y="470" font-size="22">不扳头、不绕颈；痛或晕就停</text>
+  </g>
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M68 336H310 M416 336H658" stroke="#91a5a0" stroke-width="4"/>
+    <path d="M136 225V276H236V225 M142 276V332 M230 276V332 M484 225V276H584V225 M490 276V332 M578 276V332" stroke="#647e79" stroke-width="8"/>
+    <circle cx="186" cy="165" r="23" fill="#f6faf8" stroke="#1f3f46" stroke-width="8"/>
+    <path d="M186 192V264 M162 209H210 M162 209L154 239L158 262 M210 209L218 239L214 262 M186 264L163 283V328H146 M186 264L209 283V328H226" stroke="#1f3f46" stroke-width="13"/>
+    <circle cx="179" cy="163" r="2" fill="#1f3f46"/>
+    <circle cx="193" cy="163" r="2" fill="#1f3f46"/>
+    <path d="M186 169v6" stroke="#1f3f46" stroke-width="3"/>
+    <circle cx="534" cy="165" r="23" fill="#f6faf8" stroke="#147a68" stroke-width="8"/>
+    <path d="M534 192V264 M510 209H558 M510 209L502 239L506 262 M558 209L566 239L562 262 M534 264L511 283V328H494 M534 264L557 283V328H574" stroke="#1f3f46" stroke-width="13"/>
+    <circle cx="544" cy="162" r="2" fill="#147a68"/>
+    <path d="M551 166l8 5-8 3" stroke="#147a68" stroke-width="3"/>
+    <path d="M578 164h24m-7-6 7 6-7 6" stroke="#a35d22" stroke-width="4"/>
+  </g>
+</svg>
