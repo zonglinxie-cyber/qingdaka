@@ -1,180 +1,173 @@
-// 轻打卡 · Service Worker（离线可用 / 安装到主屏幕）
-// 仅在被通过 https:// 或 http://localhost 访问时生效；file:// 打开时浏览器不会注册 SW。
-var VERSION = 'v44-shell-sync';
-var CACHE_PREFIX = 'workbuddy:' + encodeURIComponent(self.registration.scope) + ':';
-var SHELL = CACHE_PREFIX + 'shell-' + VERSION;
-var RUNTIME = CACHE_PREFIX + 'runtime-media';
-// 动图/海报按需进运行时缓存（约 70 张示范图），给足余量避免刚练完就被裁掉
-var RUNTIME_MAX = 120;
+'use strict';
 
-var APP_FILES = [
-  './',
+// 构建会替换这四组标记，自动纳入目录内所有 SVG 并绑定内容 hash。
+// 源码默认清单同步当前课程；新增素材时需同步此处，test-sw 会检查遗漏。
+var VERSION = /* BUILD_VERSION_START */ 'habits-dev-2' /* BUILD_VERSION_END */;
+var CORE = /* BUILD_PRECACHE_START */ [
   './index.html',
   './styles.css',
   './app.js',
   './content.js',
+  './store.js',
+  './session.js',
   './manifest.webmanifest',
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/icon-512-maskable.png',
   './icons/apple-touch-icon-180.png',
-  './voice-scripts.json'
-];
-var VOICE_MANIFEST = './voice-scripts.json';
+  './assets/habit-guides/seated-arms.svg',
+  './assets/habit-guides/seated-chest.svg',
+  './assets/habit-guides/seated-knee.svg',
+  './assets/habit-guides/seated-neck.svg',
+  './assets/habit-guides/seated-pause.svg',
+  './assets/habit-guides/seated-ready.svg',
+  './assets/habit-guides/standing-pause.svg',
+  './assets/habit-guides/standing-ready.svg',
+  './assets/habit-guides/standing-shoulders.svg',
+  './assets/habit-guides/standing-walk.svg'
+] /* BUILD_PRECACHE_END */;
+var COMPLETE_RELEASE = /* BUILD_COMPLETE_START */ false /* BUILD_COMPLETE_END */;
+var RELEASE_HASHES = /* BUILD_HASHES_START */ {} /* BUILD_HASHES_END */;
 
-function cacheFiles(cache, files){
-  return Promise.all(files.map(async function(url){
-    var response = await fetch(url, { cache:'reload' });
-    if(!response.ok){ throw new Error('offline-file-unavailable: ' + url); }
-    await cache.put(url, response);
-  }));
+var SCOPE = new URL(self.registration.scope);
+var CACHE_PREFIX = 'qingdaka-habits:' + encodeURIComponent(SCOPE.href) + ':';
+var LEGACY_PREFIX = 'workbuddy:' + encodeURIComponent(SCOPE.href) + ':';
+var CACHE_NAME = CACHE_PREFIX + VERSION;
+var FILES = new Map(CORE.map(function (file) {
+  return [new URL(file, SCOPE).href, file];
+}));
+var installation;
+
+async function checkedFetch(url, file) {
+  // 文件名不带 hash，不能相信 HTTP 长缓存，也不能把新发布的文件补进旧缓存。
+  var response = await fetch(url, { cache: 'no-store', credentials: 'same-origin', redirect: 'error' });
+  if (!response || response.status !== 200 || response.redirected || response.type === 'opaque') {
+    throw new Error('offline-file-unavailable: ' + file);
+  }
+  var expected = RELEASE_HASHES[file];
+  if (COMPLETE_RELEASE && !expected) { throw new Error('offline-integrity-missing: ' + file); }
+  if (expected) {
+    var digest = await crypto.subtle.digest('SHA-256', await response.clone().arrayBuffer());
+    var actual = Array.from(new Uint8Array(digest), function (byte) {
+      return byte.toString(16).padStart(2, '0');
+    }).join('');
+    if (actual !== expected) { throw new Error('offline-version-mismatch: ' + file); }
+  }
+  return response;
 }
-async function voiceUrls(cache){
-  var manifest = await cache.match(VOICE_MANIFEST);
-  var entries = manifest && await manifest.json();
-  if(!Array.isArray(entries) || !entries.length){ throw new Error('voice-manifest-unavailable'); }
-  return entries.map(function(entry){
-    if(!entry || !/^[a-z0-9-]+$/i.test(entry.key)){ throw new Error('invalid-voice-key'); }
-    return './assets/voice/' + entry.key + '.m4a';
-  });
-}
-self.addEventListener('install', function(e){
-  e.waitUntil((async function(){
-    var cache = await caches.open(SHELL);
-    await cacheFiles(cache, APP_FILES);
-    await cacheFiles(cache, await voiceUrls(cache));
-    // 壳文件已换成可热更新；本版必须立即接管，避免旧缓存继续拼错 app.js / content.js。
-    await self.skipWaiting();
-  })());
-});
-self.addEventListener('activate', function(e){
-  e.waitUntil((async function(){
-    var keys = await caches.keys();
-    var media = await caches.open(RUNTIME);
-    for(var name of keys.filter(function(k){ return k.indexOf(CACHE_PREFIX + 'runtime-') === 0 && k !== RUNTIME; })){
-      try{
-        var old = await caches.open(name), requests = await old.keys();
-        for(var request of requests){
-          if(!await media.match(request)){ await media.put(request, await old.match(request)); }
-        }
-        await caches.delete(name);
-      }catch(err){ /* 空间不足时保留旧示范缓存，读取时仍可回退。 */ }
+
+async function offlineStatus() {
+  try {
+    if (!(await caches.keys()).includes(CACHE_NAME)) {
+      return { ready: false, version: VERSION, courseReady: false };
     }
-    await trimRuntimeCache(media);
-    await Promise.all(keys.filter(function(k){
-      // 示范图沿用同一运行时缓存，不因更新而失去已下载的课程。
-      return k.indexOf(CACHE_PREFIX + 'shell-') === 0 && k !== SHELL;
-    }).map(function(k){ return caches.delete(k); }));
+    var cache = await caches.open(CACHE_NAME);
+    var hits = await Promise.all(CORE.map(function (file) {
+      return cache.match(new URL(file, SCOPE).href);
+    }));
+    var ready = hits.length > 0 && hits.every(function (response) { return response && response.status === 200; });
+    return {
+      ready: ready,
+      version: VERSION,
+      courseReady: ready && CORE.some(function (file) {
+        return file.indexOf('./assets/habit-guides/') === 0;
+      })
+    };
+  } catch (error) {
+    return { ready: false, version: VERSION, courseReady: false };
+  }
+}
+
+async function installRelease() {
+  var existed = (await caches.keys()).includes(CACHE_NAME);
+  try {
+    // 先完整下载并校验，再写缓存；失败的更新不能污染仍在运行的旧版本。
+    var responses = await Promise.all(CORE.map(function (file) {
+      return checkedFetch(new URL(file, SCOPE).href, file);
+    }));
+    var cache = await caches.open(CACHE_NAME);
+    // 等待所有写入结束后才清理失败包，避免晚到的 put 重新创建半成品。
+    var writes = await Promise.allSettled(CORE.map(function (file, index) {
+      return cache.put(new URL(file, SCOPE).href, responses[index]);
+    }));
+    var failed = writes.find(function (result) { return result.status === 'rejected'; });
+    if (failed) { throw failed.reason; }
+    if (!(await offlineStatus()).ready) { throw new Error('offline-release-incomplete'); }
+  } catch (error) {
+    // 同版本缓存可能属于现有 active（尤其源码调试），不能误删它。
+    if (!existed) { await caches.delete(CACHE_NAME); }
+    throw error;
+  }
+}
+
+self.addEventListener('install', function (event) {
+  installation = installRelease();
+  event.waitUntil(installation);
+  // 首装由浏览器自然激活；已有 active 时必须等待用户明确接受更新。
+});
+
+self.addEventListener('activate', function (event) {
+  event.waitUntil((async function () {
+    if (!(await offlineStatus()).ready) { throw new Error('offline-release-incomplete'); }
+    var keys = await caches.keys();
+    await Promise.all(keys.filter(function (key) {
+      // 不删除无 scope 的历史缓存：同 origin 的其他站点可能仍在使用它。
+      return key !== CACHE_NAME && (key.indexOf(CACHE_PREFIX) === 0 || key.indexOf(LEGACY_PREFIX) === 0);
+    }).map(function (key) { return caches.delete(key); }));
     await self.clients.claim();
+    // 页面是否 reload 由应用决定，SW 不 navigate 客户端。
   })());
 });
-self.addEventListener('message', function(e){
-  if(e.data && e.data.type === 'ACTIVATE_UPDATE'){ self.skipWaiting(); }
-  if(e.data && e.data.type === 'OFFLINE_STATUS' && e.ports[0]){
-    e.waitUntil((async function(){
-      try{
-        var cache = await caches.open(SHELL), files = APP_FILES.concat(await voiceUrls(cache));
-        var hits = await Promise.all(files.map(function(url){ return cache.match(url); }));
-        e.ports[0].postMessage({ ready:hits.every(Boolean), version:VERSION });
-      }catch(err){ e.ports[0].postMessage({ ready:false }); }
+
+self.addEventListener('message', function (event) {
+  if (!event.data) { return; }
+  if (event.data.type === 'ACTIVATE_UPDATE') {
+    event.waitUntil((async function () {
+      if (installation) { await installation; }
+      if ((await offlineStatus()).ready) { await self.skipWaiting(); }
     })());
   }
+  if (event.data.type === 'OFFLINE_STATUS' && event.ports && event.ports[0]) {
+    event.waitUntil(offlineStatus().then(function (status) { event.ports[0].postMessage(status); }));
+  }
 });
-async function trimRuntimeCache(cache){
-  var keys = await cache.keys();
-  await Promise.all(keys.slice(0, Math.max(0, keys.length - RUNTIME_MAX)).map(function(req){ return cache.delete(req); }));
-}
 
-function rangeResponse(response, rangeHeader){
-  return response.arrayBuffer().then(function(buffer){
-    var match = /^bytes=(\d*)-(\d*)$/i.exec(String(rangeHeader || '').trim());
-    var size = buffer.byteLength;
-    var start, end;
-    if(!match || (!match[1] && !match[2])){
-      return new Response(null, { status:416, headers:{ 'Content-Range':'bytes */' + size } });
-    }
-    if(!match[1]){
-      var suffixLength = Number(match[2]);
-      if(!Number.isFinite(suffixLength) || suffixLength <= 0){
-        return new Response(null, { status:416, headers:{ 'Content-Range':'bytes */' + size } });
-      }
-      start = Math.max(0, size - suffixLength);
-      end = size - 1;
-    } else {
-      start = Number(match[1]);
-      end = match[2] ? Math.min(Number(match[2]), size - 1) : size - 1;
-    }
-    if(!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || start >= size || end < start){
-      return new Response(null, { status:416, headers:{ 'Content-Range':'bytes */' + size } });
-    }
-    var headers = new Headers(response.headers);
-    headers.set('Accept-Ranges', 'bytes');
-    headers.set('Content-Range', 'bytes ' + start + '-' + end + '/' + size);
-    headers.set('Content-Length', String(end - start + 1));
-    return new Response(buffer.slice(start, end + 1), { status:206, statusText:'Partial Content', headers:headers });
-  });
-}
-
-function voiceResponse(req, url){
-  var range = req.headers.get('Range');
-  return caches.open(SHELL).then(function(c){ return c.match(url.href); }).then(function(hit){
-    if(hit){ return range ? rangeResponse(hit, range) : hit; }
-    // 首次 Range 请求也拉取完整 m4a 后再切片：缓存可用于后续离线播放，且
-    // 返回的仍是符合媒体元素预期的 206，而不是会触发 iOS 错误的整包 200。
-    return fetch(url.href, { cache:'no-store' }).then(function(res){
-      if(!res || !res.ok){ return res; }
-      return caches.open(SHELL).then(function(cache){
-        return cache.put(url.href, res.clone()).catch(function(){});
-      }).then(function(){ return range ? rangeResponse(res, range) : res; });
+async function cacheFirst(url, file) {
+  var cache;
+  try {
+    cache = await caches.open(CACHE_NAME);
+    var hit = await cache.match(url);
+    if (hit) { return hit; }
+  } catch (error) { /* 存储不可用时仍尝试获取经过版本校验的网络响应。 */ }
+  try {
+    var response = await checkedFetch(url, file);
+    // 缓存空间不足时仍可在线使用；OFFLINE_STATUS 会如实反映缺失文件。
+    try { if (cache) { await cache.put(url, response.clone()); } } catch (error) { /* 保留完整的网络响应。 */ }
+    return response;
+  } catch (error) {
+    return new Response('This release is unavailable offline. Reconnect and accept the complete update.', {
+      status: 503,
+      headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' }
     });
-  });
+  }
 }
 
-self.addEventListener('fetch', function(e){
-  var req = e.request;
-  if(req.method !== 'GET'){ return; }
-  var url = new URL(req.url), root = new URL(self.registration.scope);
-  if(url.origin !== root.origin || url.pathname.indexOf(root.pathname) !== 0){ return; }
-  var entryPage = url.pathname === root.pathname || url.pathname === root.pathname + 'index.html';
-  var shellFile = APP_FILES.some(function(file){ return new URL(file, root).pathname === url.pathname; });
-  // 页面与代码来自同一版本；其他页面（如测试页）绝不覆盖首页缓存。
-  if(entryPage || shellFile){
-    e.respondWith(caches.open(SHELL).then(async function(cache){
-      var key = entryPage ? './index.html' : url.origin + url.pathname;
-      var hit = await cache.match(key) || await cache.match(url.href);
-      try{
-        var res = await fetch(req);
-        if(res && res.ok){ cache.put(key, res.clone()).catch(function(){}); return res; }
-      }catch(err){}
-      return hit || new Response('', { status:504 });
-    }));
-    return;
+self.addEventListener('fetch', function (event) {
+  var request = event.request;
+  if (request.method !== 'GET') { return; }
+  var url = new URL(request.url);
+  if (url.origin !== SCOPE.origin || url.pathname.indexOf(SCOPE.pathname) !== 0) { return; }
+  url.search = '';
+  url.hash = '';
+  if (url.pathname === SCOPE.pathname) { url = new URL('./index.html', SCOPE); }
+  var file = FILES.get(url.href);
+  if (!file && !COMPLETE_RELEASE) {
+    var relative = url.pathname.slice(SCOPE.pathname.length);
+    // 源码开发允许按需预览新 SVG；生产只接受构建时固定的完整清单。
+    if (/^assets\/habit-guides\/(?:[a-zA-Z0-9_-]+\/)*[a-zA-Z0-9_-]+\.svg$/.test(relative)) {
+      file = './' + relative;
+    }
   }
-  if(req.mode === 'navigate'){ return; }
-  if(url.pathname.indexOf(root.pathname + 'assets/voice/') === 0){
-    e.respondWith(voiceResponse(req, url));
-    return;
-  }
-  if(url.pathname.indexOf(root.pathname + 'assets/exercise-guides/') === 0){
-    var cached = caches.open(RUNTIME).then(async function(cache){
-      var hit = await cache.match(req);
-      if(!hit){
-        for(var name of await caches.keys()){
-          if(name !== RUNTIME && name.indexOf(CACHE_PREFIX + 'runtime-') === 0){
-            hit = await (await caches.open(name)).match(req);
-            if(hit){ break; }
-          }
-        }
-      }
-      var update = fetch(req).then(async function(res){
-        if(res.ok && res.type === 'basic'){
-          await cache.put(req, res.clone()); await trimRuntimeCache(cache);
-        }
-        return res;
-      }).catch(function(){ return hit || new Response('', {status:503}); });
-      return {hit:hit, update:update};
-    });
-    e.respondWith(cached.then(function(result){ return result.hit || result.update; }));
-    e.waitUntil(cached.then(function(result){ return result.update; }));
-  }
+  if (!file) { return; }
+  event.respondWith(cacheFirst(url.href, file));
 });

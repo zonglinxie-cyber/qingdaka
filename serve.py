@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+
 """轻打卡 · 本地开发服务器（静态文件服务）"""
 from __future__ import annotations
 
@@ -10,26 +10,20 @@ from pathlib import Path
 
 
 class Handler(SimpleHTTPRequestHandler):
-    # Python mimetypes 默认把 .m4a 标成 audio/mp4a-latm，微信/iOS 需要 audio/mp4
-    extensions_map = {
-        **SimpleHTTPRequestHandler.extensions_map,
-        ".m4a": "audio/mp4",
-        ".mp3": "audio/mpeg",
-        ".aac": "audio/aac",
-    }
 
-    def log_message(self, fmt, *args):
+    def log_message(self, format, *args):
         pass
 
     def handle_one_request(self):
-        # 跟练会预载动图、换节时浏览器会掐断没传完的请求，这是正常使用不是故障
+        # 页面切换可能取消尚未完成的静态资源请求。
         try:
             super().handle_one_request()
         except (BrokenPipeError, ConnectionResetError):
             self.close_connection = True
 
-    def do_GET(self):
-        return SimpleHTTPRequestHandler.do_GET(self)
+    def end_headers(self):
+        self.send_header("Cache-Control", "no-cache")
+        super().end_headers()
 
 
 def guess_lan_ip() -> str | None:
@@ -50,14 +44,7 @@ def print_mobile_qr_hint(port: int) -> None:
         return
     url = f"http://{ip}:{port}/index.html"
     print(f"手机同 Wi-Fi 打开 → {url}")
-    png = Path("mobile-qr.png")
-    try:
-        import qrcode
-
-        qrcode.make(url).save(png)
-        print(f"扫码图已生成 → {png.resolve()}（扫此图或 AirDrop 到手机）")
-    except ImportError:
-        print("生成扫码图: pip install 'qrcode[pil]' 后重新 --lan，或运行 python3 scripts/mobile_qr.py")
+    print("局域网 HTTP 仅用于布局预览；完整跟练、主屏安装和离线测试请使用 HTTPS。")
 
 
 def main():

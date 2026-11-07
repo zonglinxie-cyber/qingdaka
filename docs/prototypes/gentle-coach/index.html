@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f6f5ee">
+  <title>轻打卡 · 单动作展示样例</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="./prototype.css">
+  <script src="./prototype.js" defer></script>
+</head>
+<body>
+  <main class="coach" id="coach" data-mode="learn" data-playing="false">
+    <header class="topbar">
+      <a class="wordmark" href="#about" aria-label="轻打卡，查看样例说明"><span class="brand-mark" aria-hidden="true">轻</span><span>轻打卡<span class="wordmark-sub">慢一点，也很好</span></span></a>
+      <button class="sound-button" id="soundButton" type="button" aria-pressed="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4V5Z"/><path class="sound-off" d="m16 9 6 6m0-6-6 6"/><path class="sound-on" d="M15 8c3 2 3 6 0 8m3-11c5 4 5 10 0 14"/></svg>
+        <span id="soundLabel">口令关</span>
+      </button>
+    </header>
+
+    <div class="intro-row"><span class="eyebrow" id="eyebrow">动作学习 <span>／ 01</span></span><span class="sample-label">展示样例 · 不记录</span></div>
+    <section class="title-row" aria-labelledby="moveTitle">
+      <div><h1 id="moveTitle">坐姿轻抬膝</h1><p id="subtitle">先看明白，再慢慢开始。</p></div>
+      <div class="time-block" id="timeBlock" hidden><span class="time-number" id="timeNumber">05</span><span class="time-caption" id="timeCaption">准备 · 秒</span></div>
+      <span class="level-tag" id="levelTag">坐姿 · 小幅</span>
+    </section>
+
+    <div class="round-track" id="roundTrack" hidden aria-label="预览阶段"><span data-stage="prepare">准备</span><span data-stage="move">演示</span><span data-stage="rest">休息</span></div>
+
+    <section class="stage" aria-label="动作展示">
+      <div class="stage-top"><span class="stage-kicker"><i aria-hidden="true"></i><span id="stageLabel">起始姿势</span></span><span class="stage-note">原创人物示意</span></div>
+      <svg class="figure" id="figure" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 460" role="img" aria-labelledby="figureTitle figureDescription">
+        <title id="figureTitle">坐姿轻抬膝：准备姿势</title>
+        <desc id="figureDescription">有身体轮廓与衣着的侧向人物，坐在稳定无轮椅子上，双手轻扶座面，双脚平放。动画交替展示一脚稍离地、放稳再换侧。仅为展示设计，未经过专业动作审核，不代表精确关节角度或规定速度。</desc>
+        <defs>
+          <linearGradient id="shirt" x1="0" y1="0" x2="1" y2="0"><stop stop-color="#294e42"/><stop offset=".5" stop-color="#47745d"/><stop offset="1" stop-color="#355c4d"/></linearGradient>
+          <linearGradient id="sleeve" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#527d64"/><stop offset="1" stop-color="#345a49"/></linearGradient>
+          <linearGradient id="pants" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#485958"/><stop offset="1" stop-color="#293c3c"/></linearGradient>
+          <linearGradient id="skin" x1="0" y1="0" x2="1" y2=".4"><stop stop-color="#c89070"/><stop offset=".5" stop-color="#e2b08b"/><stop offset="1" stop-color="#edc29b"/></linearGradient>
+          <linearGradient id="chairWood" x1="0" y1="0" x2="1" y2="0"><stop stop-color="#c2ac8a"/><stop offset="1" stop-color="#e1ceb0"/></linearGradient>
+          <radialGradient id="wallGlow"><stop stop-color="#f4f5e8"/><stop offset="1" stop-color="#e9eddf"/></radialGradient>
+        </defs>
+        <path d="M67 398V175C67 94 121 45 198 45s135 49 135 130v223Z" fill="url(#wallGlow)"/>
+        <path d="M43 426h314" stroke="#cbd4c1" stroke-width="1.3"/>
+        <ellipse cx="208" cy="426" rx="120" ry="9" fill="#657a59" opacity=".09"/>
+        <ellipse id="farShadow" cx="269" cy="419" rx="28" ry="4" fill="#35463b" opacity=".13"/>
+        <ellipse id="nearShadow" cx="298" cy="425" rx="31" ry="4" fill="#35463b" opacity=".15"/>
+
+        <g stroke-linejoin="round" stroke-linecap="round">
+          <path d="m135 284-5 130m74-130 12 130" stroke="#ad9879" stroke-width="10"/>
+          <path d="M130 354h82" stroke="#b9a383" stroke-width="6"/>
+          <path d="m112 175 10 242m73-129 13 129" stroke="url(#chairWood)" stroke-width="12"/>
+          <path d="m120 355 84 1" stroke="#d6c3a5" stroke-width="7"/>
+          <path d="M104 171q20-9 43 0l4 80q-20 8-43 1Z" fill="url(#chairWood)"/>
+          <path d="m111 179 4 64" stroke="#eadbc2" stroke-width="3" opacity=".6"/>
+          <path d="M116 276h106q7 1 7 8v9H114q-7-8 2-17Z" fill="#a89070"/>
+          <path d="M113 274h106q10 0 10 8H112q-4-4 1-8Z" fill="#dfcfb3"/>
+
+          <path d="M190 169q15 10 15 33l-1 43 9 24-10 7-17-29-6-48Z" fill="#bf8d70"/>
+          <path d="m201 263 10 1q8 3 9 10l-2 5-19-2-3-6Z" fill="#d4a181"/>
+          <path d="M188 157q20 6 24 29l-21 14-18-25Z" fill="#345947"/>
+
+          <g id="farThigh">
+            <path d="M164 253q31-4 74 11 17 6 16 23l-30 9-63-11q-21-4-21-19 1-10 24-13Z" fill="#354746"/>
+            <g id="farShin">
+              <path d="M226 277q17-10 29 1l7 54-2 57-21 1-9-52Z" fill="#354746"/>
+              <path d="m241 381 18-1 2 19-19 2Z" fill="#dedfd2"/>
+              <path d="m239 395 23-1q7 6 18 8 10 1 12 9l-1 6h-56q-4-10 4-22Z" fill="#c4cabc"/>
+              <path d="M235 412h56v6h-56Z" fill="#faf9ed"/>
+              <path d="m266 402-8 3m15 0-8 3" stroke="#f7f7eb" stroke-width="2"/>
+            </g>
+          </g>
+
+          <g id="nearThigh">
+            <path d="M166 259q26-1 57 9l40 8q19 5 18 22-4 15-24 15l-61-9-36-9q-22-7-19-23 2-10 25-13Z" fill="url(#pants)"/>
+            <path d="M170 267q33 0 78 17" stroke="#74817b" stroke-width="2" opacity=".5"/>
+            <g id="nearShin">
+              <path d="M254 286q16-7 27 5l9 50-3 54-24 2-6-53-8-40Z" fill="url(#pants)"/>
+              <path d="m277 314 5 32-2 42" stroke="#6a7b73" stroke-width="2" opacity=".5"/>
+              <path d="m265 389 21-1 2 17-21 4Z" fill="#f0eee0"/>
+              <path d="m264 402 23-3q8 9 23 11 12 1 14 9l-1 5h-61q-3-11 2-22Z" fill="#e6e8db"/>
+              <path d="m265 406 11 2 9-4 9 9-13 5-18-3Z" fill="#c2caba"/>
+              <path d="M262 419h62l-1 6h-61Z" fill="#fffdf3"/>
+              <path d="m291 409-9 3m15 0-9 3" stroke="#fbfcf2" stroke-width="2"/>
+              <path d="M263 425h59" stroke="#8c9b88" stroke-width="1.5"/>
+            </g>
+          </g>
+
+          <path d="m164 122-3 30q14 14 30 0l-8-28Z" fill="url(#skin)"/>
+          <path d="m166 131 17 1 4 12q-14 1-22-5Z" fill="#bd8364" opacity=".55"/>
+          <path d="M158 145q12 12 32 3 21 14 24 47l5 51q3 17-7 28-31 12-67-1-9-14-7-34l-3-54q-1-29 23-40Z" fill="url(#shirt)"/>
+          <path d="M158 147q13 15 32 3" fill="none" stroke="#244738" stroke-width="5"/>
+          <path d="M194 173q14 24 12 54" fill="none" stroke="#7b9a79" stroke-width="2" opacity=".36"/>
+          <path d="M153 262q31 10 59 0m-55-10 20 4" fill="none" stroke="#223e33" stroke-width="2" opacity=".4"/>
+          <path d="M176 183q-3 28-20 52l-3 29-14-1-5-31 8-43Z" fill="url(#skin)"/>
+          <path d="M151 161q18-1 25 15l-6 31q-18 3-31-8l1-19q1-13 11-19Z" fill="url(#sleeve)"/>
+          <path d="m141 196 29 7" stroke="#779274" stroke-width="2" opacity=".7"/>
+          <path d="M139 259q7-4 14 3l2 8 11 2q6 1 5 6l-23 2q-12-2-12-9Z" fill="url(#skin)"/>
+          <path d="m147 274 15 1m-18-6 9 2" stroke="#b47b60" stroke-width="1.4" fill="none"/>
+
+          <path d="M147 84q3-23 28-23 29 1 30 30l-1 13 7 9q1 4-6 5l-1 14q-4 12-19 11-18-1-26-20l-7-19Z" fill="url(#skin)"/>
+          <path d="M147 101q-7-24 6-37 13-14 34-9 20 6 20 28-10 2-21-9-2 16-20 17l-1 20-10-4Z" fill="#343f36"/>
+          <path d="M152 73q7-11 22-12" stroke="#687162" stroke-width="3" fill="none" opacity=".7"/>
+          <path d="M167 103q-9-9-12 0-2 9 8 12" fill="#daa17c"/>
+          <path d="m159 104 3 4" stroke="#b5785d" stroke-width="1.5"/>
+          <path d="m190 99 9 1" stroke="#5f4e3f" stroke-width="2"/>
+          <path d="m194 104 4 1" stroke="#4c4d3e" stroke-width="2.5"/>
+          <path d="m194 126 9-1" stroke="#9f7059" stroke-width="1.5"/>
+          <path d="M175 130q12 13 24 5" fill="none" stroke="#c58d6b" stroke-width="3" opacity=".7"/>
+        </g>
+      </svg>
+      <button class="motion-button" id="motionButton" type="button" aria-pressed="false"><span id="motionIcon" aria-hidden="true">▶</span><span id="motionLabel">播放完整动作</span></button>
+      <div class="rest-overlay" id="restOverlay" hidden><span class="rest-symbol" aria-hidden="true">✓</span><strong id="restTitle">现在，停一停</strong><span id="restNote">不用补次数，也不用赶时间。</span></div>
+    </section>
+
+    <div class="keyframes" id="keyframes" role="group" aria-label="静态动作分步"><button type="button" data-frame="0" aria-pressed="true"><span>01</span> 坐稳</button><button type="button" data-frame="1" aria-pressed="false"><span>02</span> 轻抬</button><button type="button" data-frame="2" aria-pressed="false"><span>03</span> 放回</button></div>
+    <section class="cue-panel" aria-label="当前口令"><p class="cue" id="cue">坐稳，双脚平放。</p><p class="cue-detail" id="cueDetail">双手轻扶座面，上身自然立起。</p></section>
+    <p class="status" id="status" role="status" aria-live="polite">先只看示范；不要求抬高或凑次数。</p>
+
+    <div class="actions"><button class="primary-button" id="primaryButton" type="button"><span id="primaryLabel">预览一个轻回合</span><span aria-hidden="true" id="primaryArrow">↗</span></button><button class="end-button" id="endButton" type="button" hidden>结束预览</button></div>
+    <p class="safety-line">出现疼痛或不适，立即停止。</p>
+
+    <details class="about" id="about"><summary>样例说明与动作注意事项 <span aria-hidden="true">＋</span></summary><div class="about-content"><p><strong>这是界面与动画样例，请先只看，不跟做。</strong>原创示意尚未经过专业动作校对，不是真人或 3D 示范。动画速度、幅度不是训练目标。</p><p>没有计次、热量估算或数据保存，不会改动正式课程。预览流程为准备 5 秒、演示 20 秒、休息 10 秒，仅用于体验界面。</p><p>长期没有运动，或有痛风等病史，开始活动前先与医生或相关健康专业人员讨论适合的活动。痛风发作或疑似发作时不开始或继续，不自动改做坐姿活动。</p><p>椅子须无轮、无旋转、稳定且承重适合，放在平整防滑地面。双脚平放、坐稳，不坐椅沿；有脚踝、膝、髋、腰或手腕不适就停止，不靠手硬撑。</p><p>开启口令时优先使用浏览器报告为本机的中文语音；没有可用语音则保留文字，不调用第三方语音服务。声音和离线可用性仍需在 iPhone 真机验证。</p><p id="motionPreference">支持系统“减少动态效果”；开启时默认使用静态分步，可主动播放。</p></div></details>
+    <footer class="prototype-footer">轻打卡 · 展示研究 01<span>不接入正式课程 · 不上传数据</span></footer>
+    <noscript><p class="no-script">JavaScript 未启用，当前仅展示起始姿势与文字说明。</p></noscript>
+  </main>
+</body>
+</html>

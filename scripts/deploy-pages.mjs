@@ -5,25 +5,33 @@ import { join, resolve } from 'node:path';
 
 const projectRoot = process.cwd();
 const distDir = resolve(projectRoot, 'dist');
+const childOptions = {
+  timeout: 120000,
+  env: { ...process.env, GIT_EDITOR: 'true', GIT_TERMINAL_PROMPT: '0', GH_PROMPT_DISABLED: '1' }
+};
+
+function requireSuccess(result, description) {
+  if (result.error || result.status !== 0) {
+    throw Error(`${description}：${result.error?.message || `退出码 ${result.status}，信号 ${result.signal || '无'}`}`);
+  }
+}
 
 function run(cmd, args, opts = {}) {
-  const result = spawnSync(cmd, args, { stdio: 'inherit', cwd: projectRoot, ...opts });
-  // 抛错而不是 process.exit：调用方 run() 在 try 里，抛错才会走到 finally 清理临时目录。
-  if (result.status) throw Error(`${cmd} ${args[0] || ''} 失败，退出码 ${result.status}`);
+  const result = spawnSync(cmd, args, { ...childOptions, stdio: 'inherit', cwd: projectRoot, ...opts });
+  // 抛错才能执行 finally；超时或信号终止的 null 状态也必须按失败处理。
+  requireSuccess(result, `${cmd} ${args[0] || ''} 失败`);
 }
 
 function capture(cmd, args) {
-  const result = spawnSync(cmd, args, { encoding: 'utf8', cwd: projectRoot });
-  if (result.status) {
-    throw new Error((result.stderr || result.stdout || `${cmd} failed`).trim());
-  }
+  const result = spawnSync(cmd, args, { ...childOptions, encoding: 'utf8', cwd: projectRoot });
+  requireSuccess(result, (result.stderr || `${cmd} failed`).trim());
   return (result.stdout || '').trim();
 }
 
 run('npm', ['run', 'build']);
 run('npm', ['run', 'check:dist']);
 
-const origin = capture('git', ['remote', 'get-url', 'origin']);
+const origin = capture('git', ['--no-pager', 'remote', 'get-url', 'origin']);
 const slugMatch = origin.match(/github\.com[:/]([^/]+)\/([^/.]+)/);
 if (!slugMatch) throw new Error(`origin 不是 GitHub 仓库: ${origin}`);
 const repoSlug = `${slugMatch[1]}/${slugMatch[2]}`;
@@ -33,12 +41,10 @@ try {
   const cloned = spawnSync(
     'git',
     ['clone', '--branch', 'gh-pages', '--single-branch', '--depth', '1', origin, workDir],
-    { cwd: projectRoot, stdio: 'inherit' }
+    { ...childOptions, cwd: projectRoot, stdio: 'inherit' }
   );
-  if (cloned.status !== 0) {
-    run('git', ['init', '-b', 'gh-pages'], { cwd: workDir });
-    run('git', ['remote', 'add', 'origin', origin], { cwd: workDir });
-  }
+  // 网络或检出失败时不能改为创建孤立分支，否则会丢失发布历史并产生错误推送。
+  requireSuccess(cloned, '无法完整克隆 gh-pages，发布已停止；未改动远端，请检查网络后重试');
 
   for (const name of readdirSync(workDir)) {
     if (name === '.git') continue;
@@ -49,7 +55,10 @@ try {
   }
 
   run('git', ['add', '-A'], { cwd: workDir });
-  const clean = spawnSync('git', ['diff', '--cached', '--quiet'], { cwd: workDir });
+  const clean = spawnSync('git', ['--no-pager', 'diff', '--cached', '--quiet'], { ...childOptions, cwd: workDir });
+  if (clean.error || (clean.status !== 0 && clean.status !== 1)) {
+    throw Error('无法确认发布差异，停止推送');
+  }
   if (clean.status === 0) {
     console.log('gh-pages already matches dist/');
   } else {
@@ -63,12 +72,10 @@ try {
 }
 
 const pages = spawnSync('gh', ['api', '-X', 'PUT', `repos/${repoSlug}/pages`, '--input', '-'], {
+  ...childOptions,
   cwd: projectRoot,
   encoding: 'utf8',
   input: JSON.stringify({ source: { branch: 'gh-pages', path: '/' } })
 });
-if (pages.status) {
-  process.stderr.write(pages.stderr || pages.stdout || 'failed to set Pages source\n');
-  process.exit(pages.status);
-}
+requireSuccess(pages, pages.stderr || '配置 GitHub Pages source 失败');
 console.log(`GitHub Pages source → gh-pages /  (${repoSlug})`);

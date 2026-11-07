@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f6f5ee">
+  <title>轻打卡 · 肌肉人物方向样例</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="./prototype.css">
+  <script src="./prototype.js" defer></script>
+</head>
+<body>
+  <main class="coach" id="coach" data-mode="learn" data-playing="false">
+    <header class="topbar">
+      <a class="wordmark" href="#about" aria-label="轻打卡，查看样例说明"><span class="brand-mark" aria-hidden="true">轻</span><span>轻打卡<span class="wordmark-sub">慢一点，也很好</span></span></a>
+      <button class="sound-button" id="soundButton" type="button" aria-pressed="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4V5Z"/><path class="sound-off" d="m16 9 6 6m0-6-6 6"/><path class="sound-on" d="M15 8c3 2 3 6 0 8m3-11c5 4 5 10 0 14"/></svg>
+        <span id="soundLabel">口令关</span>
+      </button>
+    </header>
+
+    <div class="intro-row"><span class="eyebrow" id="eyebrow">动作学习 <span>／ 02</span></span><span class="sample-label">展示样例 · 不记录</span></div>
+    <section class="title-row" aria-labelledby="moveTitle">
+      <div><h1 id="moveTitle">坐姿轻抬膝</h1><p id="subtitle">先看明白，再慢慢开始。</p></div>
+      <div class="time-block" id="timeBlock" hidden><span class="time-number" id="timeNumber">05</span><span class="time-caption" id="timeCaption">准备 · 秒</span></div>
+      <span class="level-tag" id="levelTag">坐姿 · 小幅</span>
+    </section>
+
+    <div class="round-track" id="roundTrack" hidden aria-label="预览阶段"><span data-stage="prepare">准备</span><span data-stage="move">演示</span><span data-stage="rest">休息</span></div>
+
+    <section class="stage" aria-label="动作展示">
+      <div class="stage-top"><span class="stage-kicker"><i aria-hidden="true"></i><span id="stageLabel">起始姿势</span></span><span class="stage-note">原创解剖示意</span></div>
+      <svg class="figure" id="figure" xmlns="http://www.w3.org/2000/svg" viewBox="20 30 320 316" role="img" aria-labelledby="figureTitle figureDescription">
+        <title id="figureTitle">坐姿轻抬膝：准备姿势</title>
+        <desc id="figureDescription">冷灰石膏质感的原创解剖人形，黑色短裤、赤脚，侧向坐在矮凳上，大腿股四头肌以半透明暖红标出。动画展示一侧膝抬起、脚离地，放稳再换侧。仅为风格样例，未经过专业动作审核。</desc>
+        <defs>
+          <linearGradient id="plaster" x1="0" y1="0" x2=".8" y2="1">
+            <stop stop-color="#f7f8f5"/><stop offset=".34" stop-color="#dcdfda"/>
+            <stop offset=".7" stop-color="#b4b8b2"/><stop offset="1" stop-color="#8e928c"/>
+          </linearGradient>
+          <linearGradient id="plasterFar" x1="0" y1="0" x2=".8" y2="1">
+            <stop stop-color="#d4d7d1"/><stop offset=".55" stop-color="#b0b4ae"/><stop offset="1" stop-color="#878b85"/>
+          </linearGradient>
+          <linearGradient id="shortsFabric" x1="0" y1="0" x2=".7" y2="1">
+            <stop stop-color="#33373d"/><stop offset=".5" stop-color="#1d1f23"/><stop offset="1" stop-color="#121417"/>
+          </linearGradient>
+          <linearGradient id="metal" x1="0" y1="0" x2="1" y2="0">
+            <stop stop-color="#d6d9d6"/><stop offset=".45" stop-color="#b3b9b4"/><stop offset="1" stop-color="#8b938d"/>
+          </linearGradient>
+          <radialGradient id="padSheen" cx=".4" cy=".1" r=".9">
+            <stop stop-color="#3b4046"/><stop offset="1" stop-color="#17191c"/>
+          </radialGradient>
+          <filter id="soft" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="6"/></filter>
+          <filter id="soft2" x="-45%" y="-45%" width="190%" height="190%"><feGaussianBlur stdDeviation="2.4"/></filter>
+        </defs>
+
+        <ellipse id="farShadow" cx="118" cy="338" rx="30" ry="4.5" fill="#3b3a35" opacity=".12"/>
+        <ellipse id="nearShadow" cx="90" cy="339" rx="32" ry="5" fill="#3b3a35" opacity=".17"/>
+
+        <g id="bench">
+          <ellipse cx="224" cy="340" rx="96" ry="6" fill="#3b3a35" opacity=".07"/>
+          <rect x="158" y="250" width="10" height="89" rx="5" fill="url(#metal)"/>
+          <rect x="290" y="250" width="10" height="89" rx="5" fill="url(#metal)"/>
+          <rect x="163" y="296" width="132" height="7" rx="3.5" fill="url(#metal)" opacity=".9"/>
+          <rect x="156" y="334" width="14" height="6" rx="3" fill="#7c837e"/>
+          <rect x="288" y="334" width="14" height="6" rx="3" fill="#7c837e"/>
+          <rect x="138" y="232" width="182" height="19" rx="9" fill="url(#padSheen)"/>
+          <path d="M147 235h164" stroke="#585f66" stroke-width="2.2" opacity=".5" stroke-linecap="round"/>
+          <ellipse cx="184" cy="235" rx="38" ry="6.5" fill="#0f1113" opacity=".45" filter="url(#soft2)"/>
+        </g>
+
+        <g id="farThigh" stroke="none">
+          <path d="M216 186C190 182 154 188 132 196 118 201 110 208 110 218 110 230 120 236 136 234 160 231 190 230 208 228 218 226 222 212 220 198Z" fill="url(#plasterFar)"/>
+          <g id="farShin">
+            <path d="M112 226C104 240 102 260 104 276 105 286 108 292 114 296L132 296C136 282 136 256 132 236 129 226 120 222 112 226Z" fill="url(#plasterFar)"/>
+            <path d="M134 297C140 303 142 311 141 319 140 326 135 330 129 330L94 330C85 330 78 332 73 334 68 336 69 339 75 339L126 339C135 337 140 331 139 324L136 299Z" fill="#a9ada7"/>
+            <path d="M131 329C124 325 114 324 106 326" stroke="#9c9f99" stroke-width="1.4" fill="none"/>
+            <ellipse cx="79" cy="335" rx="5.6" ry="3.4" fill="#9ea29c"/>
+            <ellipse cx="90" cy="336" rx="4.6" ry="3" fill="#9ea29c"/>
+            <ellipse cx="100" cy="336" rx="4.2" ry="2.8" fill="#9ea29c"/>
+            <path d="M84 332v6M94 331v7M103 331v7" stroke="#93968f" stroke-width="1" opacity=".7"/>
+          </g>
+        </g>
+
+        <g id="farArm" stroke="none">
+          <path d="M192 128C186 138 180 156 178 172 176 182 178 188 182 192L198 190C202 176 204 156 204 140Z" fill="url(#plasterFar)"/>
+          <path d="M182 192C180 202 180 212 182 220 183 224 186 226 190 226L200 224C201 214 200 202 198 194Z" fill="url(#plasterFar)"/>
+          <path d="M184 224C179 228 178 232 180 235 183 238 190 238 196 235 200 233 200 229 197 226Z" fill="#a9ada7"/>
+        </g>
+
+        <g id="torso" stroke="none">
+          <path d="M152 216C142 202 138 184 138 166C138 150 144 136 154 130C164 124 180 122 190 128C199 134 204 148 205 166C206 184 208 200 210 211C212 222 208 228 200 230L160 230C152 230 148 226 150 218Z" fill="url(#plaster)"/>
+          <g filter="url(#soft)" opacity=".55">
+            <ellipse cx="166" cy="170" rx="20" ry="7" fill="#6c706a" transform="rotate(-6 166 170)"/>
+            <ellipse cx="196" cy="204" rx="15" ry="9" fill="#6c706a"/>
+            <ellipse cx="146" cy="200" rx="9" ry="12" fill="#6c706a"/>
+          </g>
+          <path d="M174 112C182 116 192 122 198 130 194 134 186 132 180 128 176 124 172 118 174 112Z" fill="#e9ebe6"/>
+          <path d="M146 148C154 140 168 137 180 141 188 144 190 154 184 160 174 168 158 166 148 158Z" fill="#f2f3ef" opacity=".9"/>
+          <path d="M148 158C158 166 174 168 184 160" stroke="#8b8f89" stroke-width="2" opacity=".6" fill="none"/>
+          <path d="M150 152C160 156 172 157 181 153" stroke="#a4a8a2" stroke-width="1.2" opacity=".55" fill="none"/>
+          <path d="M144 170C152 174 162 175 170 172" stroke="#8b8f89" stroke-width="1.6" opacity=".45" fill="none"/>
+          <path d="M146 178h26M147 188h24M149 198h21M152 208h17" stroke="#8b8f89" stroke-width="1.5" opacity=".5" stroke-linecap="round"/>
+          <path d="M159 174v38" stroke="#969a94" stroke-width="1.3" opacity=".45"/>
+          <path d="M172 172C180 180 184 192 184 206M176 170C185 178 189 190 189 202" stroke="#858983" stroke-width="1.2" opacity=".4" fill="none"/>
+          <path d="M144 176l5 5m-4 6 5 5m-3 5 5 5" stroke="#858983" stroke-width="1.3" opacity=".4" stroke-linecap="round"/>
+          <path d="M192 136C200 148 204 168 203 188 202 202 204 212 206 218" stroke="#82867f" stroke-width="1.5" opacity=".5" fill="none"/>
+          <path d="M198 140C205 154 207 174 206 192" stroke="#a8aca6" stroke-width="1.3" opacity=".4" fill="none"/>
+          <path d="M156 128C166 133 178 133 188 129" stroke="#a8aca6" stroke-width="2" opacity=".5" fill="none"/>
+        </g>
+
+        <g id="nearThigh" stroke="none">
+          <path d="M202 186C176 182 140 188 118 196 104 201 96 208 96 218 96 230 106 236 122 234 146 231 176 230 194 228 204 226 208 212 206 198Z" fill="url(#plaster)"/>
+          <path d="M188 194C170 194 146 200 128 207 119 211 115 218 118 224 126 228 142 225 154 221 170 214 182 206 190 200Z" fill="none"/>
+          <path d="M174 194C158 195 138 201 124 210 116 215 111 220 110 225 114 229 122 227 130 223 146 215 164 205 176 198 179 197 178 194 174 194Z" fill="#c4533f" opacity=".3"/>
+          <path d="M174 194C158 195 138 201 124 210 116 215 111 220 110 225" stroke="#8c3a2c" stroke-width="1" opacity=".45" fill="none"/>
+          <path d="M170 197C155 199 138 205 126 212M164 201C150 204 136 209 126 215M158 205C146 208 134 212 126 217" stroke="#a83a2b" stroke-width="1.1" opacity=".4" fill="none"/>
+          <path d="M178 195C162 197 144 203 128 212" stroke="#f1f2ee" stroke-width="1.8" opacity=".5" fill="none"/>
+          <path d="M110 225C106 228 103 230 101 232" stroke="#f1f2ee" stroke-width="1.6" opacity=".45" fill="none"/>
+          <path d="M196 226C176 226 146 228 126 231" stroke="#8b8f89" stroke-width="1.6" opacity=".5" fill="none"/>
+          <path d="M190 214C172 215 152 218 136 221" stroke="#a4a8a2" stroke-width="1.2" opacity=".35" fill="none"/>
+          <ellipse cx="104" cy="218" rx="8" ry="11" fill="#e2e4df"/>
+          <ellipse cx="103" cy="217" rx="5.5" ry="8" fill="#f0f1ed" opacity=".85"/>
+          <g id="nearShin">
+            <path d="M98 226C90 240 88 260 90 276 91 286 94 292 100 296L118 296C122 282 122 256 118 236 115 226 106 222 98 226Z" fill="url(#plaster)"/>
+            <path d="M106 232C100 246 99 264 101 280" stroke="#9a9e98" stroke-width="1.4" opacity=".45" fill="none"/>
+            <path d="M116 234C120 250 121 272 119 288" stroke="#8b8f89" stroke-width="1.2" opacity=".4" fill="none"/>
+            <path d="M110 250C107 262 108 276 110 288" stroke="#a8aca6" stroke-width="1.1" opacity=".3" fill="none"/>
+            <path d="M120 298C126 304 128 312 127 320 126 327 121 331 115 331L80 331C71 331 64 333 59 335 54 337 55 340 61 340L112 340C121 338 126 332 125 325L122 300Z" fill="#eef0eb"/>
+            <path d="M120 300C124 306 126 314 125 322" stroke="#b7bbb5" stroke-width="1.4" opacity=".7" fill="none"/>
+            <path d="M117 330C110 326 100 325 92 327" stroke="#c8cbc5" stroke-width="1.6" fill="none"/>
+            <ellipse cx="65" cy="336" rx="6" ry="3.6" fill="#e4e7e2"/>
+            <ellipse cx="76" cy="337" rx="5" ry="3.2" fill="#e4e7e2"/>
+            <ellipse cx="86" cy="337" rx="4.6" ry="3" fill="#dfe2dd"/>
+            <ellipse cx="95" cy="337" rx="4.2" ry="2.8" fill="#dfe2dd"/>
+            <path d="M70 333v6M80 332v7M89 332v7" stroke="#c9ccc6" stroke-width="1" opacity=".7"/>
+            <circle cx="99" cy="294" r="3.6" fill="#e6e8e3"/>
+            <circle cx="119" cy="295" r="3.2" fill="#d9dcd6"/>
+          </g>
+        </g>
+
+        <g id="shorts" stroke="none">
+          <path d="M206 190C212 198 214 208 213 218 212 226 208 232 200 233L160 233C150 232 146 226 148 218 150 208 156 200 166 194Z" fill="url(#shortsFabric)"/>
+          <path d="M150 220C162 224 180 224 194 222" stroke="#43484f" stroke-width="1.6" opacity=".7" fill="none"/>
+          <path d="M200 196C204 204 205 214 203 224" stroke="#43484f" stroke-width="1.4" opacity=".6" fill="none"/>
+          <path d="M166 194C162 202 158 212 157 222" stroke="#3a3f45" stroke-width="1.4" opacity=".5" fill="none"/>
+        </g>
+
+        <g id="nearArm" stroke="none">
+          <path d="M150 134C140 142 134 158 132 172 131 180 132 186 136 190L156 188C160 174 163 154 164 138Z" fill="url(#plaster)"/>
+          <path d="M136 190C133 200 132 210 134 218 135 222 138 224 142 224L156 222C158 212 157 200 155 192Z" fill="url(#plaster)"/>
+          <path d="M158 140C164 146 167 154 166 162" stroke="#a4a8a2" stroke-width="3" opacity=".45" fill="none"/>
+          <path d="M140 156C144 166 146 178 146 186" stroke="#8b8f89" stroke-width="1.3" opacity=".4" fill="none"/>
+          <path d="M138 198C141 206 143 214 143 220" stroke="#a4a8a2" stroke-width="1.2" opacity=".35" fill="none"/>
+          <path d="M134 222C128 226 126 230 129 233 132 236 140 236 146 233 150 231 150 227 147 224Z" fill="#f0f1ec"/>
+          <path d="M132 229h14m-15 4h13" stroke="#bcc0ba" stroke-width="1.1" opacity=".85"/>
+        </g>
+
+        <g id="headGroup" stroke="none">
+          <path d="M168 108C170 100 178 96 186 98L196 104C198 114 196 124 191 130L174 128Z" fill="url(#plaster)"/>
+          <path d="M176 100C180 108 182 118 182 128" stroke="#9fa39d" stroke-width="1.8" opacity=".4" fill="none"/>
+          <path d="M156 94C153 83 158 68 169 63 179 59 188 65 191 76 193 86 192 95 189 102 186 108 181 111 175 110 169 109 164 106 161 101L157 98C155 96 156 96 156 94Z" fill="url(#plaster)"/>
+          <path d="M157 86C153 88 152 91 155 93" fill="#e2e5df"/>
+          <path d="M155 92C157 94 159 94 161 93" stroke="#a9ada7" stroke-width="1.1" opacity=".6" fill="none"/>
+          <g filter="url(#soft2)" opacity=".45">
+            <ellipse cx="173" cy="86" rx="9" ry="6" fill="#8f938d"/>
+            <ellipse cx="164" cy="99" rx="7" ry="4" fill="#8f938d"/>
+          </g>
+          <path d="M161 97C165 102 170 104 176 104" stroke="#9ca09a" stroke-width="1.2" opacity=".45" fill="none"/>
+          <path d="M186 78C190 76 193 79 192 83 191 87 187 88 185 86" fill="#e6e8e3"/>
+          <path d="M188 81C190 80 191 82 190 83" stroke="#a9ada7" stroke-width="1.2" fill="none"/>
+          <path d="M155 82C157 66 168 57 178 58 187 59 193 68 193 78 186 72 176 71 167 75 161 74 156 77 155 82Z" fill="#3b3a35"/>
+          <path d="M180 61C187 65 191 71 192 78" stroke="#55534c" stroke-width="1.4" opacity=".55" fill="none"/>
+        </g>
+      </svg>
+      <button class="motion-button" id="motionButton" type="button" aria-pressed="false"><span id="motionIcon" aria-hidden="true">▶</span><span id="motionLabel">播放完整动作</span></button>
+      <div class="rest-overlay" id="restOverlay" hidden><span class="rest-symbol" aria-hidden="true">✓</span><strong id="restTitle">现在，停一停</strong><span id="restNote">不用补次数，也不用赶时间。</span></div>
+    </section>
+
+    <div class="keyframes" id="keyframes" role="group" aria-label="静态动作分步"><button type="button" data-frame="0" aria-pressed="true"><span>01</span> 坐稳</button><button type="button" data-frame="1" aria-pressed="false"><span>02</span> 轻抬</button><button type="button" data-frame="2" aria-pressed="false"><span>03</span> 放回</button></div>
+    <section class="cue-panel" aria-label="当前口令"><p class="cue" id="cue">坐稳，双脚平放。</p><p class="cue-detail" id="cueDetail">双手轻扶座面，上身自然立起。</p></section>
+    <p class="status" id="status" role="status" aria-live="polite">先只看示范；不要求抬高或凑次数。</p>
+
+    <div class="actions"><button class="primary-button" id="primaryButton" type="button"><span id="primaryLabel">预览一个轻回合</span><span aria-hidden="true" id="primaryArrow">↗</span></button><button class="end-button" id="endButton" type="button" hidden>结束预览</button></div>
+    <p class="safety-line">出现疼痛或不适，立即停止。</p>
+
+    <details class="about" id="about"><summary>样例说明与动作注意事项 <span aria-hidden="true">＋</span></summary><div class="about-content"><p><strong>这是画风与交互样例，请先只看，不跟做。</strong>人物是手写的 2D 解剖示意，不是真人、也不是 3D 渲染，目标是接近旧版灰白人体 + 暖红目标肌的观感。</p><p>没有计次、热量估算或数据保存，不会改动正式课程。预览流程为准备 5 秒、演示 20 秒、休息 10 秒，仅用于体验界面。</p><p>长期没有运动，或有痛风等病史，开始活动前先与医生或相关健康专业人员讨论适合的活动。痛风发作或疑似发作时不开始或继续，不自动改做坐姿活动。</p><p>椅子须无轮、无旋转、稳定且承重适合，放在平整防滑地面。双脚平放、坐稳，不坐椅沿；有脚踝、膝、髋、腰或手腕不适就停止，不靠手硬撑。</p><p>开启口令时优先使用浏览器报告为本机的中文语音；没有可用语音则保留文字，不调用第三方语音服务。声音和离线可用性仍需在 iPhone 真机验证。</p><p>支持系统“减少动态效果”；开启时默认使用静态分步，可主动播放。</p></div></details>
+    <footer class="prototype-footer">轻打卡 · 展示研究 02 · 解剖人形方向<span>不接入正式课程 · 不上传数据</span></footer>
+    <noscript><p class="no-script">JavaScript 未启用，当前仅展示起始姿势与文字说明。</p></noscript>
+  </main>
+</body>
+</html>

@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="480" viewBox="0 0 720 480" role="img" aria-labelledby="title desc" xml:lang="zh-CN">
+  <title id="title">坐姿准备：检查椅子，再坐稳</title>
+  <desc id="desc">原创侧视两格身体示意。第一格检查无轮、无旋转、承重适合的稳固椅子。第二格坐稳，双脚平放地面，膝自然弯曲，双手放在腿上。坐姿不表示人人安全。分步示意，非专业视频，不表示精确角度。</desc>
+  <rect width="720" height="480" rx="24" fill="#f6faf8"/>
+  <g font-family="system-ui, sans-serif" fill="#1f3f46" text-anchor="middle">
+    <text x="360" y="44" font-size="30" font-weight="700">坐稳再开始</text>
+    <rect x="24" y="66" width="324" height="338" rx="18" fill="#e7efec"/>
+    <rect x="372" y="66" width="324" height="338" rx="18" fill="#e7efec"/>
+    <text x="186" y="108" font-size="26">1 检查椅子</text>
+    <text x="534" y="108" font-size="26">2 坐稳，脚放平</text>
+    <text x="186" y="380" font-size="24">无轮 · 稳固 · 承重适合</text>
+    <text x="534" y="380" font-size="24">不坐椅沿，不赶时间</text>
+    <text x="360" y="440" font-size="25">分步示意 · 非专业视频</text>
+    <text x="360" y="470" font-size="22">准备不足就暂停；不适就不开始</text>
+  </g>
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M68 336H310 M416 336H658" stroke="#91a5a0" stroke-width="4"/>
+    <path d="M112 176V276H250 M122 276V332 M238 276V332 M460 212V276H598 M470 276V332 M586 276V332" stroke="#647e79" stroke-width="9"/>
+    <path d="M188 166l13 13 28-31" stroke="#147a68" stroke-width="8"/>
+    <circle cx="505" cy="165" r="23" fill="#f6faf8" stroke="#1f3f46" stroke-width="8"/>
+    <path d="M505 192V263L565 265V328H589 M505 212L526 244L558 250" stroke="#1f3f46" stroke-width="14"/>
+    <path d="M506 265L546 274V326H564" stroke="#587770" stroke-width="9"/>
+    <path d="M532 166h-7" stroke="#1f3f46" stroke-width="5"/>
+    <path d="M566 346H591" stroke="#147a68" stroke-width="6"/>
+  </g>
+</svg>

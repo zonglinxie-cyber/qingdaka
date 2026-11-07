@@ -1,140 +1,139 @@
-# 轻打卡 · 部署与运行说明
+# 轻打卡 · 动一点，慢慢来
 
-纯静态网页（PWA），数据全部存在手机浏览器本地，无账号、无后端。
+纯静态、本地保存的轻活动习惯与作息工具。无需账号、无业务后端、无云同步，帮助把一点活动和晚间收尾放回日常生活，而不是考核自律。
+
+> 更新：2026-11-05。**新版已获用户授权并发布**，版本 `habits-202a71d31ae99825ed2f`，发布提交 `4f18421`。本地回归与线上流程检查通过；iPhone 真机验证、专业内容审核仍未完成，见 [验收记录](docs/VALIDATION.md)。
+>
+> 生产地址：**https://zonglinxie-cyber.github.io/qingdaka/**。用 iPhone Safari 打开后，通过分享菜单添加到主屏幕。
+
+## 新版做什么
+
+- **今天**：从一个小行动开始，可选择轻活动或晚间收尾为首页重点；记录活动间隙、休息，以及活动后的感受。
+- **动一点**：先看图与文字学习，再主动选择 **1／3／5 分钟**、坐姿或站姿。时长包含准备、活动、休息和收尾，不随打卡自动加时、加速或加重。
+- **作息**：设置现实的起床锚点、开始收尾的计划时间；手填实际起床时间，标记是否做过晚间收尾，允许补记和更正。不计算睡眠分数，也不推算睡眠时长。
+- **回顾**：展示已记录的事实、实际计入的活动秒数和感受；未记录不等于没做到，休息不是失败，不设连胜或补课欠账。
+
+首页活动入口当前选择 1 分钟坐姿；内容模块的无参计划默认值为 3 分钟坐姿。三个时长都是自主选项，不是必须逐级完成的目标。
+
+当前声音功能只有可关闭的**回合切换提示音**，没有语音指导。动作图是项目自制 SVG 示意，不是专业教学视频或经审核的动作处方。
+
+新版从零开始，不提供旧数据迁移或旧数据导出；保留新版自身的备份、恢复和损坏原文导出。产品不设置蛋白／饮水目标，不收集体重或个人病史。
+
+## 安全与能力边界
+
+这不是医疗诊断、康复、运动处方或失眠治疗，也不承诺减重或改善疾病。
+
+- 长期缺少活动、存在关节或平衡问题、容易气短，或不确定是否适合时，先咨询合适的健康专业人员。坐姿不代表人人安全，开始前的勾选不等于通过健康评估。
+- 胸痛、严重呼吸困难、晕厥或接近晕厥：立即停止并寻求当地急救帮助，不等待保存记录。
+- 痛风发作、疑似发作或疼痛不适：先停止、休息并按医疗建议处理，不自动换成坐姿继续。突发关节肿痛加重，或伴发热、寒战、恶心等，需要及时医疗评估。
+- 活动计时仅累计前台可信运行期间的 `move` 段。准备、休息、收尾、暂停、跳过的剩余时间均不计为活动；这不是传感器测得的运动量，也不自动折算为中等强度运动达标时间。
+- 切后台会暂停；重新打开只从最近成功保存的 checkpoint 恢复，未完成回合先处于 `paused`，需要主动继续。不会补算离开期间的时间，也不保证系统强制关闭前的最后几秒已落盘。
+- iPhone 起床闹钟和收尾提醒请自行在「时钟」「提醒事项」中设置。网页保存的是计划，不会代建系统闹钟，不承诺锁屏后的准点通知或后台持续计时。
+
+研究依据、原文适用范围与产品推导的区别见 [docs/RESEARCH.md](docs/RESEARCH.md)。
 
 ## 本地运行
 
-### 方式一：`serve.py`（推荐，默认 8899）
-
-```bash
-python3 serve.py        # http://127.0.0.1:8899/index.html（仅本机）
-python3 serve.py --lan  # 0.0.0.0，手机同 Wi‑Fi 可访问
-./scripts/dev.sh        # 同上，等价 python3 serve.py
-```
-
-多线程静态文件服务，仅此而已。
-
-### 方式二：`npx serve`
-
-不要用裸 `python -m http.server`（没有 `serve.json` 的缓存/压缩配置）。
-
-```bash
-npx serve .
-```
-
-默认 http://localhost:3000。
-
-### 手机同 Wi-Fi 扫码打开（无账号，不是登录）
-
-1. 电脑在项目目录执行：`python3 serve.py --lan`（默认端口 **8899**，不是 8080）。
-2. 终端会打印 `http://192.168.x.x:8899/index.html`；若已 `pip install 'qrcode[pil]'`，会额外生成 **`mobile-qr.png`**，用微信/相机扫这个图即可。
-3. 也可手动运行：`python3 scripts/mobile_qr.py 8899`
-4. 手机必须与电脑 **同一 Wi-Fi**；电脑休眠或关服务后手机打不开。
-5. 数据仍在 **手机浏览器本机**，与电脑不自动同步；换机请用「我的 → 导出备份」。
-
-旧二维码若写的是 `:8080` 或别的 IP，需要按当前 IP 和 **8899** 重新生成。
-
-### 手机与电脑不在同一 Wi‑Fi（4G / 公司网 / 外出）
-
-局域网二维码 **无效**。用 **HTTPS 公网地址**（电脑可关机）：
-
-- 生产站点：**https://zonglinxie-cyber.github.io/qingdaka/**
-- 手机浏览器打开后 → **添加到主屏幕**。
-- 更新代码后运行 `npm run deploy`；构建自动按代码和素材生成缓存版本（只 `git push` main 不会更新生产站）。已安装用户在「我的」确认更新。
-
-临时方案（电脑必须开着）：`cloudflared tunnel --url http://127.0.0.1:8899`，用手机打开终端里出现的 `https://….trycloudflare.com`（每次链接可能变）。
-
-### 单元测试
-
-浏览器打开 `test.html`（须通过 HTTP，不能 `file://`）：
-
-```
-http://localhost:8899/test.html
-```
-
-无头跑：
+使用 Node.js／npm 和 Python 3；自动化浏览器测试还需要 Playwright 与浏览器。本次模块测试使用 Node.js 22。
 
 ```bash
 npm ci
-npx playwright install chromium
-npm run test:e2e
-npm run test:reliability
+python3 serve.py
 ```
 
-`test:e2e` 自动启动随机端口的本机服务和临时浏览器，结束后清理；不读取日常浏览器记录。也可用 `TEST_BASE_URL=http://127.0.0.1:8951` 指定服务，测试会先确认是本项目。本机没装 Playwright 自带浏览器时，用 `PLAYWRIGHT_CHANNEL=chrome npm run test:e2e` 走系统 Chrome。
+打开 `http://127.0.0.1:8899/index.html`，不要直接以 `file://` 打开页面。
 
-发布产物构建到 `dist/`，只含运行时前端文件、`assets/`、`icons/` 与 `voice-scripts.json`。交接文档、测试和本地脚本不会进公开站点：
+手机布局联调可运行：
 
 ```bash
+python3 serve.py --lan
+```
+
+手机与电脑需在同一 Wi-Fi，使用终端实际打印的局域网地址。此模式会向同网段开放静态目录，仅在可信网络使用。电脑停止服务或休眠后无法继续访问；手机上的记录不会自动同步到电脑。
+
+**局域网 HTTP 不等于完整 PWA 环境**：Service Worker、安全锁等能力可能不可用，计时可能被安全门槛阻止。完整 iPhone 离线、主屏安装和恢复验证需要受控 HTTPS 测试环境，不应为测试擅自覆盖生产站点。
+
+## 测试与构建
+
+新版统一验收命令约定如下，列出命令不表示已经全部通过：
+
+```bash
+npm run test:reliability
+PLAYWRIGHT_CHANNEL=chrome npm run test:e2e
 npm run build
 npm run check:dist
-TEST_UNIT_PAGE=0 npm run test:e2e
+PLAYWRIGHT_CHANNEL=chrome TEST_UNIT_PAGE=0 npm run test:e2e
 ```
 
-## 生产部署
+`npm run test:reliability` 通过 Node.js 测试运行器执行以下三个 unit 文件：
 
-**唯一生产：GitHub Pages** —— https://zonglinxie-cyber.github.io/qingdaka/
+| 文件 | 职责 |
+| --- | --- |
+| `scripts/test-session.mjs` | 计时、暂停、跳过、结束、快照恢复与不补算后台时间 |
+| `scripts/test-store.mjs` | 数据校验、并发写入、失败保护、新版备份与恢复 |
+| `scripts/test-sw.mjs` | 离线完整性、更新隔离、发布白名单与构建校验 |
 
-站点发的是 `gh-pages` 分支上的 `dist/`，不是 `main` 仓库根目录。本机 GitHub token 没有 `workflow` 权限，所以没有 Actions 代构建。发布命令：
+需要直接运行三个模块时，也可使用：
 
 ```bash
-npm run deploy
+node --test scripts/test-session.mjs scripts/test-store.mjs scripts/test-sw.mjs
 ```
 
-- **只 `git push` main 不会更新生产站。**
-- `build` 按发布文件的 SHA-256 生成 SW 版本，无需手动加版本号。应用核心文件和预录语音全部下载成功后才提供更新；正在跟练时先结束记录。
-- 仓库仍公开，源码在 GitHub 上可读；Pages 上不再挂 `HANDOVER.md` / `serve.py` / `test.html`。别往仓库里放任何密钥。
-- `serve.json` 只作用于本地 `npx serve`，生产用 Pages 自己的 `max-age=600`。
-
-`serve.json` 的缓存策略：
-- `sw.js` / `index.html` / `app.js` / `content.js` / `styles.css` → `no-cache`
-- `assets/**` 和 `icons/**` → `immutable` 一年（动图/图标不变，长期缓存省流量）
-
-## 文件结构
-
-```
-index.html            页面结构（无内联脚本/样式）
-styles.css            全部样式（含暗色模式、reduced-motion）
-app.js                页面、记录、训练、存储逻辑（IIFE）
-content.js            动作、课程、档位、热身与拉伸内容
-sw.js                 Service Worker（离线缓存 + 运行时缓存裁剪）
-serve.py              本地静态文件服务器
-manifest.webmanifest  PWA 清单
-test.html             单元测试页
-serve.json            npx serve 的缓存/压缩配置
-mobile-qr.png         --lan 时可选生成（pip install qrcode[pil]）
-scripts/              构建、校验、发布（deploy-pages）、开发辅助脚本
-assets/               动作示范动图、姿势图、语音 m4a
-icons/                应用图标
-```
-
-## 记录与离线更新
-
-当前页面按日常操作重排：
-
-- 「今天」默认只展示蛋白、喝水、跟练；体重、走路、饮食习惯在「更多记录」。
-- 「记蛋白」默认只填克数；食物名、餐次可选，常用食物也从这个弹层记入。
-- 「跟练」先显示当前课程、备物提示与开始按钮，直接开始；课程/强度收在「换课程或强度」里按需展开，完整安排点「查看安排」单独看。
-- 每节课程都在训练页平铺今天的动作顺序（编号 + 名称 + 主练部位），下面一句剂量提示；拉伸课同一套清单，副行换成部位与姿势。
-- 跟练界面对所有课程一致：以示范为主，倒计时缩到一角，只留一句短口令、下一个动作和文字按钮；没有示范图就退回文字步骤。
-- 负重/难度面板写明是给哪个动作的第几轮记；休息页记的是刚才那组，难度档位没点过就不会自动生成记录。
-- 「回顾」默认三个指标与蛋白图，其余历史分组展开；「我的」默认两个每日目标，其余设置按需展开。
-
-- 写入操作排队，只写一份 `localStorage` JSON；失败保留原状态并提示，不假装成功。
-- 日志不再有 3,000 条上限，体重记录不再静默截断。数据页可按月查看、翻页、导出；月度文件用于查阅，完整迁移仍用「我的 → 导出备份」。浏览器可用空间仍有限，需定期把备份保存在浏览器外。
-- 导入先显示记录数量和日期范围，确认后覆盖；不完整或含无效记录的文件会被拒绝。旧 v4/v5 备份与历史拍照记录继续兼容。
-- 「7天日均已记录蛋白」按 7 天计算，另列有记录天数，未记录不表示未摄入。
-- 应用和当前课程预录音频完整下载后显示离线就绪；示范图按联网浏览缓存。更新保留已缓存示范，确认后才切换版本。
-
-## 内容与语音维护
-
-动作说明集中在 `content.js`。扶椅坐站在所有课程都用项目自制的分步示意图（`chair-stand-steps.svg`），持铃示范只留给居家哑铃课；跪姿平板同样换成自制的两格示意（`kneeling-plank-steady.svg` 撑稳、`kneeling-plank-tap.svg` 点肩，跟练时轮换），原先腿伸直的动图已无人引用、随之下线；臀桥换成自制的两格（`hip-bridge-flat.svg` 仰卧屈膝踩稳、`hip-bridge-lift.svg` 抬髋成一条线），只画得出顶端姿势的解剖动图与其海报一起下线；死虫换成自制的两格（`dead-bug-tabletop.svg` 髋膝约 90° 抬起、`dead-bug-reach.svg` 对侧手脚伸出、腰背贴垫），它那张外部解剖动图与海报同样下线；靠墙俯卧撑换成自制的两格（`wall-pushup-start.svg` 手掌按墙、手臂撑直，`wall-pushup-bend.svg` 手脚不动只屈肘，虚线标出头到脚踝一条线；站立的人放不下方形画布，这两张用的是竖版画布），把整段动作画成重影叠画的那张外部动图与海报同样下线，默认徒手课到此不再有任何外部动图；坐姿毛巾划船补上自制的两格（`towel-row-ready.svg` 坐稳、毛巾从脚底绕过、两手在膝前各抓一头，`towel-row-pull.svg` 肘沿身体向后收、两手拉到腰侧，箭头指着拉的方向；两格只有胳膊在动，椅子、臀、膝、脚掌和毛巾压在脚底的那头全部对齐不动），默认徒手课六节到此每一节都有示范；墙面斜板支撑使用静态图；扶墙股四头拉伸撤下不匹配示范，保留文字指导。毛巾划船、墙面斜板、农夫行走、鸟狗式没有预录，跟练时静音。
-
-生成新语音需本机 MiniMax CLI 登录与 ffmpeg；运行时没有 API Key 或外部模型请求。过期交接文档在 `docs/archive/`，不要当作当前规格。
+`session` 脚本的内部断言单独输出，不应与 Node 测试摘要混为同一计数。模块单测不代表整页可用。只做构建预检、不写入 `dist/`：
 
 ```bash
-npm run voice:prepare   # 对照实际课程生成 voice-pending.json
-npm run voice:generate  # 已登录 mmx 时生成 female-yujie，试听后再发布
+node scripts/build-dist.mjs --check
 ```
 
-生成脚本仅在四段全部生成成功后更新清单，替换四段已退出课程的旧语音；`check:dist` 校验课程素材、语音映射和明确登记的缺口。命令准备完成不代表录音已生成或试听通过。
+E2E 运行器默认启动随机端口的本机服务并使用临时浏览器数据，不覆盖或读取日常浏览器中的个人记录。默认浏览器为已安装的系统 Chrome，等价于 `PLAYWRIGHT_CHANNEL=chrome`。若使用 Playwright 下载的 Chromium，必须显式选择：
+
+```bash
+npx playwright install chromium
+PLAYWRIGHT_CHANNEL=chromium npm run test:e2e
+```
+
+默认 E2E 测试源码目录；`TEST_UNIT_PAGE=0` **仅将服务目录切换到 `dist/`**，不控制单元测试页面，也不会自动构建，应在成功构建后运行。使用下载的 Chromium 验证产物时，命令为 `PLAYWRIGHT_CHANNEL=chromium TEST_UNIT_PAGE=0 npm run test:e2e`。
+
+模块单测、源码 E2E、构建校验和产物 E2E 的结果应在最终验收时按同一代码／产物版本统一记录，明确通过、失败和未运行项；不以某一项通过推定全部通过。iPhone Safari／主屏 PWA 真机验证、专业内容校对及实际使用验证仍需单独完成。
+
+## 数据与备份
+
+新版记录只保存在当前浏览器存储空间的 `localStorage['qingdaka-habits-v1']` 中，不上传记录、无分析追踪。不同网址、浏览器、设备或主屏实例不应假定共享记录。
+
+- 「回顾 → 备份与恢复」导出新版完整 JSON，格式标识为 `qingdaka-habits`。请确认文件已保存到浏览器之外；备份含私人作息与活动记录，不要公开上传。
+- 导入前核对数量、先备份现有记录，明确确认后覆盖，不合并。只接受有效的新版完整备份，上限为 20 MiB；无效文件不修改当前数据。
+- 便携备份不携带未完成回合：导出副本的 `activeSession` 为 `null`，本机 checkpoint 不因此删除。导入和清空前先处理未完成活动。
+- 写入失败不显示成功；读取到损坏数据时保留原文、进入保护状态。可先导出新版原文，再选择有效备份恢复或明确清空。
+- 浏览器可能回收或清理本地数据，离线缓存也不是记录备份。没有账号可供云端找回。
+
+## 离线、产物与发布
+
+首次联网并确认「核心页面与全部轻活动示意已离线就绪」后，再验证离线使用。资源缺失时应如实显示未就绪；浏览器回收缓存后仍可能需要重新联网。
+
+`npm run build` 先校验内存中的完整发布包，通过后重建 `dist/`。发布白名单仅含：
+
+- `index.html`、`styles.css`、`app.js`、`content.js`、`store.js`、`session.js`、`sw.js`、`manifest.webmanifest`、`.nojekyll`；
+- `icons/` 中允许的图标；
+- `assets/habit-guides/` 中的自包含 SVG。
+
+其他资源不随包发布，重建会移除 `dist/` 中白名单外的旧资源；不会因此删除源码目录文件。文档、测试、开发脚本、依赖目录及语音素材均不进入发布包。
+
+构建根据包内容生成版本和 SHA-256 清单。Service Worker 下载并校验完整核心资源与示意图后才提供更新；用户明确确认后切换，未处理的活动和打开的表单会阻止更新。缓存按站点 scope 隔离。
+
+生产使用 GitHub Pages 的 `gh-pages` 分支，内容来自 `dist/`。**`npm run deploy` 会构建、推送并配置 Pages，是公开发布操作，不是本地预览。** 仅在确认发布内容且用户授权后执行。本次已发布并验证公网全部文件与产物一致；重复执行发布命令也确认没有产生重复发布提交。源码分支未随本次发布提交或推送，单独推送 `main` 也不等于发布产物。克隆失败、命令超时或远端冲突时停止，禁止改建孤立分支或强制推送。
+
+## 文件与文档
+
+| 路径 | 作用 |
+| --- | --- |
+| `index.html` / `styles.css` | 四个页面、弹层与移动端样式 |
+| `content.js` | `QDK_CONTENT`：课程、步骤、示意、安全与作息内容 |
+| `session.js` | `QDK_SESSION`：独立计时状态机，不读写存储 |
+| `store.js` | `QDK_STORE`：校验、事务与新版备份契约 |
+| `app.js` | 页面交互、安全入口、checkpoint、记录与离线状态 |
+| `sw.js` / `manifest.webmanifest` | 离线缓存、完整更新与 PWA 配置 |
+| `assets/habit-guides/` | 新版自制动作示意 |
+| `scripts/` | 单测、E2E、构建校验与需授权的发布操作 |
+| [SPEC.md](SPEC.md) | 产品原则、模块 API、数据契约与验收条件 |
+| [BACKLOG.md](BACKLOG.md) | 真机、专业校对、实际使用验证及可选语音 |
+| [docs/RESEARCH.md](docs/RESEARCH.md) | 官方来源、产品推导与证据局限 |

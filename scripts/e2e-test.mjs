@@ -1,758 +1,1285 @@
 #!/usr/bin/env node
-// 每次使用临时浏览器数据；默认自动启动仅本机、随机端口的静态服务。
+// 只测试新版公开 UI/API。所有状态、下载和 SW 均位于临时 context；不使用个人 profile。
+// TEST_UNIT_PAGE 仅保留为服务目录开关，不再打开旧单元测试页面，也不自动构建 dist。
 import assert from 'node:assert/strict';
-import http from 'node:http';
 import { spawn } from 'node:child_process';
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
+import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { setTimeout as delay } from 'node:timers/promises';
 import { chromium } from 'playwright';
 
-const RUN_UNIT_PAGE = process.env.TEST_UNIT_PAGE !== '0';
-let server, browser;
-async function localServer(){
-  server = spawn('python3', ['-u', 'serve.py', '0', '--directory', RUN_UNIT_PAGE ? '.' : 'dist'], {stdio:['ignore','pipe','pipe']});
-  return new Promise((resolve,reject) => {
-    const timer = setTimeout(() => reject(Error('本地服务启动超时')), 15000);
-    const fail = err => {clearTimeout(timer); reject(err);};
-    server.on('error', fail);
-    server.on('exit', code => fail(Error('本地服务退出：' + code)));
+const ROOT = fileURLToPath(new URL('../', import.meta.url));
+const DIRECTORY = process.env.TEST_UNIT_PAGE === '0' ? 'dist' : '.';
+const CHANNEL = process.env.PLAYWRIGHT_CHANNEL?.trim() || 'chrome';
+const KEY = 'qingdaka-habits-v1';
+const WRITE_LOCK = KEY + ':write';
+const SESSION_LOCK = 'qingdaka-habits:active-session';
+const NOW = new Date('2026-11-05T04:00:00Z');
+const TODAY = '2026-11-05';
+const YESTERDAY = '2026-11-04';
+const SETTINGS = { onboarded: true, focus: 'move', anchor: 'work', wakeTime: '07:40', windDownTime: '22:30', sound: false, motion: true };
+const results = [];
+const contexts = new Set();
+let server, browser, base, serverOutput = '', lastAction = '', stopping = false, cleanupPromise;
+
+async function localServer() {
+  // 让操作系统分配端口，避免先探测后绑定的竞争；始终只监听 loopback。
+  server = spawn('python3', ['-u', 'serve.py', '0', '--host', '127.0.0.1', '--directory', DIRECTORY], {
+    cwd: ROOT, stdio: ['ignore', 'pipe', 'pipe']
+  });
+  return new Promise((resolveServer, reject) => {
+    let settled = false;
+    const finish = (error, url) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      if (error) reject(error); else resolveServer(url);
+    };
+    const timer = setTimeout(() => finish(new Error('serve.py 启动超时：' + serverOutput)), 15000);
+    server.once('error', error => finish(error));
+    server.once('exit', (code, signal) => finish(new Error(`serve.py 提前退出 (${code ?? signal})：${serverOutput}`)));
+    server.stderr.on('data', chunk => { serverOutput += String(chunk); });
     server.stdout.on('data', chunk => {
-      const match = String(chunk).match(/http:\/\/127\.0\.0\.1:\d+/);
-      if(match){ clearTimeout(timer); resolve(match[0]); }
+      serverOutput += String(chunk);
+      const match = serverOutput.match(/http:\/\/127\.0\.0\.1:\d+/);
+      if (match) finish(null, match[0]);
     });
-    server.stderr.on('data', chunk => process.stderr.write(chunk));
   });
 }
-async function verifyServer(base){
-  const response = await new Promise((resolve,reject) => {
-    const req = http.get(base + '/index.html', res => {
-      let body = ''; res.setEncoding('utf8'); res.on('data', chunk => body += chunk);
-      res.on('end', () => resolve({status:res.statusCode,body}));
-    });
-    req.on('error',reject); req.setTimeout(10000, () => req.destroy(Error('服务响应超时')));
+
+async function stopServer() {
+  if (!server || server.exitCode !== null || server.signalCode !== null) return;
+  const exited = new Promise(resolveExit => server.once('exit', resolveExit));
+  server.kill('SIGINT');
+  const force = setTimeout(() => server.kill('SIGKILL'), 3000);
+  try { await exited; } finally { clearTimeout(force); }
+}
+
+function cleanup() {
+  cleanupPromise ??= (async () => {
+    try {
+      await Promise.allSettled([...contexts].map(context => context.close()));
+      if (browser) await browser.close();
+    } finally { await stopServer(); }
+  })();
+  return cleanupPromise;
+}
+
+function stop(reason, code = 1) {
+  if (stopping) return;
+  stopping = true;
+  process.exitCode = code;
+  console.error('\n' + reason);
+  void cleanup().catch(error => console.error('清理失败：', error.message));
+}
+const onInterrupt = () => stop('收到 SIGINT，关闭临时浏览器和 serve.py。', 130);
+const onTerminate = () => stop('收到 SIGTERM，关闭临时浏览器和 serve.py。', 143);
+process.once('SIGINT', onInterrupt);
+process.once('SIGTERM', onTerminate);
+// 为外层 180 秒超时预留清理时间；关闭浏览器会中止仍在等待的 Playwright 操作。
+const watchdog = setTimeout(() => stop('E2E 超过 165 秒，已中止；未完成的检查不算通过。'), 165000);
+
+async function until(label, read, predicate = Boolean, timeout = 7000) {
+  const end = Date.now() + timeout;
+  let value;
+  do {
+    if (stopping) throw new Error('测试已中止：' + label);
+    value = await read();
+    if (predicate(value)) return value;
+    // 用 Node 实时时钟轮询异步存储；页面计时被冻结时，不依赖页面的 setTimeout/rAF。
+    await delay(25);
+  } while (Date.now() < end);
+  assert.fail(`${label}：等待超时，最后结果 ${JSON.stringify(value)}`);
+}
+const rawState = page => page.evaluate(key => localStorage.getItem(key), KEY);
+const state = page => page.evaluate(key => JSON.parse(localStorage.getItem(key)), KEY);
+const stateWhen = (page, label, predicate) => until(label, () => state(page), value => value && predicate(value));
+const text = (page, selector) => page.locator(selector).innerText();
+const textIs = (page, selector, expected) => until(`${selector} 应为 ${expected}`, () => text(page, selector), value => value === expected);
+const visible = (page, selector) => page.locator(selector).waitFor({ state: 'visible' });
+const hidden = (page, selector) => page.locator(selector).waitFor({ state: 'hidden' });
+function near(actual, expected, label) {
+  assert.ok(Number.isFinite(actual) && Math.abs(actual - expected) < 0.01, `${label}：期望 ${expected}，实际 ${actual}`);
+}
+async function click(page, selector) {
+  lastAction = `点击 ${selector}`;
+  await page.locator(selector).click();
+}
+async function nav(page, name) {
+  await click(page, `.bottom-nav [data-page="${name}"]`);
+  await visible(page, `#page-${name}`);
+}
+async function closeDialog(page, id) {
+  await click(page, `[data-close="${id}"]`);
+  await hidden(page, '#' + id);
+}
+async function openDetails(details) {
+  if (await details.getAttribute('open') === null) await details.locator(':scope > summary').click();
+}
+async function imageLoaded(page, selector) {
+  await visible(page, selector);
+  await until(`${selector} 应完成解码而非破图`, () => page.locator(selector).evaluate(image => ({
+    src: image.getAttribute('src'), complete: image.complete, width: image.naturalWidth, height: image.naturalHeight
+  })), value => value.complete && value.width > 0 && value.height > 0);
+}
+
+function observe(page, evidence) {
+  page.on('pageerror', error => evidence.pageErrors.push(error.stack || error.message));
+  page.on('console', message => {
+    if (message.type() === 'error') evidence.consoleErrors.push(message.text());
   });
-  assert.ok(response.status === 200 && response.body.includes('<title>轻打卡'), base + ' 上不是本项目，请检查 TEST_BASE_URL');
-}
-async function textIs(page, id, expected){
-  await page.waitForFunction(({id,expected}) => document.getElementById(id)?.textContent === expected, {id,expected});
-}
-/* 窄屏播放器要整屏放得下：内容重叠、被裁切或偷偷滚动都算回归 */
-async function stageFits(page){
-  const r = await page.evaluate(() => {
-    const st = document.querySelector('.pl-stage'), sr = st.getBoundingClientRect();
-    const vis = [...st.children].filter(e => !e.hidden && e.offsetParent !== null)
-      .map(e => { const b = e.getBoundingClientRect(); return [e.id, b.top, b.bottom]; });
-    let overlap = false;
-    for(let i=0;i<vis.length;i++) for(let j=i+1;j<vis.length;j++){
-      const pair = [vis[i][0],vis[j][0]].sort().join('|');
-      if(pair === 'plClock|plMv') continue;
-      if(vis[i][1] < vis[j][2]-1 && vis[j][1] < vis[i][2]-1) overlap = true;
-    }
-    return { overlap, scrolls: st.scrollHeight > st.clientHeight+1,
-      clipped: vis.some(v => v[1] < sr.top-1 || v[2] > sr.bottom+1) };
+  page.on('response', response => {
+    if (response.status() >= 400) evidence.httpErrors.push(`${response.status()} ${response.url()}`);
   });
-  assert.deepEqual(r, {overlap:false, scrolls:false, clipped:false}, '窄屏播放器排版溢出');
+  page.on('requestfailed', request => evidence.requestsFailed.push(`${request.url()} ${request.failure()?.errorText}`));
 }
-async function download(page, selector){
-  if(selector === '#btnExport'){ await openDetails(page,'backupDetails'); }
-  if(selector === '#btnArchiveExport'){ await openDetails(page,'archiveDetails'); }
-  const ready = page.waitForEvent('download'); await page.click(selector);
-  return readFile(await (await ready).path(), 'utf8');
-}
-async function openDetails(page,id){
-  if(await page.locator('#'+id).getAttribute('open') === null){ await page.click('#'+id+' > summary'); }
-}
-async function importBackup(page, data){
-  await openDetails(page,'backupDetails');
-  await page.setInputFiles('#importFile', {name:'fixture.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(data))});
-  await textIs(page,'dlgTitle','核对备份内容');
-  await page.click('#dlgOk'); await textIs(page,'toastText','备份已导入并保存');
-}
-async function unitPage(context, base){
-  const page = await context.newPage();
-  try{
-    await page.goto(base + '/test.html');
-    await page.waitForFunction(() => /全部通过|有失败|无法/.test(document.getElementById('summary')?.textContent || ''));
-    const summary = await page.textContent('#summary');
-    assert.ok(summary.includes('全部通过'), summary + '\n' + await page.locator('.t.bad').allTextContents());
-    return summary.trim();
-  }finally{await page.close();}
-}
-async function bodyweightFlow(browser, base){
-  const context = await browser.newContext({viewport:{width:390,height:844},serviceWorkers:'block'});
-  try{
-    const page = await context.newPage(), errors = [], requested = [];
-    page.on('pageerror', err => errors.push(err.message));
-    page.on('request', r => requested.push(r.url()));
-    await page.clock.install();
-    await page.goto(base + '/index.html');
-    await page.click('[data-page="training"]');
-    await page.locator('.sequence-move').nth(2).click();
-    assert.match(await page.locator('#mdMedia').getAttribute('src'), /chair-stand-steps\.svg$/);
-    assert.equal(await page.textContent('#mdMediaNote'),'空手练习 · 椅子靠墙','分步示意图的说明挂在图下，不再烤进图里');
-    await page.click('#moveClose');
-    await page.locator('.sequence-move',{hasText:'跪姿平板'}).click();
-    assert.match(await page.locator('#mdMedia').getAttribute('src'),/kneeling-plank-steady\.svg$/,'详情里的示范就是家里要做的跪姿，不再是腿伸直那张图');
-    assert.equal(await page.textContent('#mdMediaNote'),'膝盖着地 · 先撑稳');
-    assert.ok(requested.some(u=>/kneeling-plank-tap\.svg$/.test(u)),'两格示意都要预加载，跟练时轮换才不会空一帧');
-    await page.click('#moveClose');
-    await page.locator('.sequence-move',{hasText:'臀桥'}).click();
-    assert.match(await page.locator('#mdMedia').getAttribute('src'),/hip-bridge-flat\.svg$/,'臀桥的示范改成画的就是家里要做的两格，不再是仰卧的解剖图');
-    assert.equal(await page.textContent('#mdMediaNote'),'脚跟踩稳 · 抬髋成线');
-    assert.ok(requested.some(u=>/hip-bridge-lift\.svg$/.test(u)),'臀桥第二格也要预加载');
-    await page.click('#moveClose');
-    await page.locator('.sequence-move',{hasText:'靠墙俯卧撑'}).click();
-    assert.match(await page.locator('#mdMedia').getAttribute('src'),/wall-pushup-start\.svg$/,'靠墙俯卧撑的示范改成画的就是家里要做的两格，不再是外部动图');
-    assert.equal(await page.textContent('#mdMediaNote'),'手掌按墙 · 身成一线');
-    assert.ok(requested.some(u=>/wall-pushup-bend\.svg$/.test(u)),'靠墙俯卧撑第二格也要预加载');
-    await page.click('#moveClose');
-    await page.click('#btnStart');
-    assert.equal(await page.textContent('#plPhase'),'准备开始');
-    assert.equal(await page.textContent('#plMv'),'原地踏步激活','倒数时就该看到第一个动作');
-    assert.equal(await page.locator('#plDemoWrap').isHidden(),false,'倒数时示范不能空着');
-    await textIs(page,'plPhase','热身');
-    assert.equal(await page.textContent('#plRound'),'1 / 5','热身要显示第几个');
-    assert.equal(await page.textContent('#plCue'),'按自己稳住的高度抬膝，手臂自然摆。','热身也是一句口令');
-    for(let i=0;i<5;i++) await page.click('#plSkip');
-    await textIs(page,'plMv','臀桥');
-    assert.equal(await page.locator('#plNext').textContent(),'接下来 · 死虫');
-    assert.equal(await page.locator('#plLog').isVisible(),false);
-    assert.equal(await page.locator('#plPause').textContent(),'暂停');
-    assert.equal(await page.locator('#plCue').textContent(),'脚跟推地抬髋，顶端夹臀，不要拱腰。');
-    await page.waitForFunction(() => document.getElementById('plDemo').getAttribute('src')?.endsWith('hip-bridge-flat.svg'));
-    await textIs(page,'plBadge','分步示意');
-    // 两格按 1.3s 轮换：躺下屈膝 → 抬髋成线，正好是这一节的动作节奏。
-    let sawLift = false;
-    for(let i=0;i<8 && !sawLift;i++){
-      await page.clock.fastForward(700);
-      await new Promise(r => setTimeout(r, 200));
-      sawLift = /hip-bridge-lift\.svg$/.test(await page.locator('#plDemo').getAttribute('src') || '');
-    }
-    assert.ok(sawLift,'臀桥两格必须轮换，只给躺着的起始位就看不出抬到哪');
-    await page.clock.fastForward(21000);
-    await page.click('#plPause');
-    const paused = await page.textContent('#plClock');
-    await page.clock.fastForward(5000);
-    assert.equal(await page.textContent('#plClock'),paused,'暂停时计时停止');
-    await page.click('#plPause');
-    await textIs(page,'plPhase','训练中');
-    await page.click('#plSkip'); await page.click('#plSkip');
-    await textIs(page,'plMv','死虫');
-    assert.equal(await page.textContent('#plCue'),'对侧手脚慢慢伸出，腰背贴稳垫面，左右交替。','一句口令不能重复换边提示');
-    await page.waitForFunction(() => document.getElementById('plDemo').getAttribute('src')?.endsWith('dead-bug-tabletop.svg'));
-    await textIs(page,'plBadge','分步示意');
-    // 死虫的定格只能是起始位：伸出那一格靠轮换讲清「远离身体」是往哪走、走多远
-    let sawReach = false;
-    for(let i=0;i<8 && !sawReach;i++){
-      await page.clock.fastForward(700);
-      await new Promise(r => setTimeout(r, 200));
-      sawReach = /dead-bug-reach\.svg$/.test(await page.locator('#plDemo').getAttribute('src') || '');
-    }
-    assert.ok(sawReach,'死虫两格必须轮换，只给抬起位就看不出对侧手脚怎么伸');
-    await page.click('#plSkip'); await page.click('#plSkip');
-    await textIs(page,'plMv','扶椅坐站（先徒手）');
-    await page.waitForFunction(() => document.getElementById('plDemo').getAttribute('src')?.endsWith('chair-stand-steps.svg'));
-    await textIs(page,'plBadge','分步示意');
-    assert.equal(await page.locator('#plLog').isVisible(),true,'可记档位的动作要能记');
-    assert.equal(await page.locator('#plLogLevels button.on').count(),0,'没点过的难度不能默认选中');
-    assert.match(await page.textContent('#plLogFor'),/扶椅坐站/);
-    await page.click('#plSkip');
-    await textIs(page,'plMv','休息一下');
-    assert.equal(await page.textContent('#plBadge'),'下一动作 · 靠墙俯卧撑','休息屏的示范就是下一个动作，名字挂在角标上');
-    assert.equal(await page.locator('#plNext').isHidden(),true,'图已经说出下一个动作，底下不能再重复一行');
-    await page.click('#plSkip'); await page.click('#plSkip');
-    await textIs(page,'plMv','坐姿毛巾划船');
-    await page.waitForFunction(() => document.getElementById('plDemo').getAttribute('src')?.endsWith('towel-row-ready.svg'));
-    await textIs(page,'plBadge','分步示意');
-    assert.equal(await page.locator('#plInstructions').isVisible(),false,'有示范的动作不再摆文字步骤块');
-    let sawPull = false;
-    for(let i=0;i<8 && !sawPull;i++){
-      await page.clock.fastForward(700);
-      await new Promise(r => setTimeout(r, 200));
-      sawPull = /towel-row-pull\.svg$/.test(await page.locator('#plDemo').getAttribute('src') || '');
-    }
-    assert.ok(sawPull,'毛巾划船两格必须轮换，只给伸手那一格就看不出肘要收到哪里');
-    await page.click('#plPrev');
-    await textIs(page,'plMv','休息一下');
-    assert.equal(await page.textContent('#plCue'),'恢复呼吸，照着示范摆好起始位。','下一动作有示范时不该说「照着下面的步骤」');
-    assert.equal(await page.textContent('#plBadge'),'下一动作 · 坐姿毛巾划船','休息屏的定格必须是毛巾划船的起始位');
-    await page.waitForFunction(() => document.getElementById('plDemo').getAttribute('src')?.endsWith('towel-row-ready.svg'));
-    await guideInkClearsBadge(page);
-    await page.click('#plSkip');
-    await textIs(page,'plMv','坐姿毛巾划船');
-    await page.click('#plPrev'); await page.click('#plPrev');
-    await textIs(page,'plMv','靠墙俯卧撑');
-    await page.waitForFunction(() => document.getElementById('plDemo').getAttribute('src')?.endsWith('wall-pushup-start.svg'));
-    await textIs(page,'plBadge','分步示意');
-    let sawBend = false;
-    for(let i=0;i<8 && !sawBend;i++){
-      await page.clock.fastForward(700);
-      await new Promise(r => setTimeout(r, 200));
-      sawBend = /wall-pushup-bend\.svg$/.test(await page.locator('#plDemo').getAttribute('src') || '');
-    }
-    assert.ok(sawBend,'靠墙俯卧撑两格必须轮换，只给撑直的起始位就看不出肘要弯到哪');
-    assert.equal(await page.locator('#plInstructions').isVisible(),false,'返回有图动作后隐藏文字步骤');
-    await page.click('#plSkip'); await page.click('#plSkip');
-    await textIs(page,'plMv','坐姿毛巾划船');
-    await page.click('#plSkip'); await page.click('#plSkip');
-    await textIs(page,'plMv','跪姿平板点肩');
-    await page.waitForFunction(() => document.getElementById('plDemo').getAttribute('src')?.endsWith('kneeling-plank-steady.svg'));
-    // 两格自制示意每 1.3s 轮换：先撑稳、再点肩。等待要推进虚拟时间，图片落地要真时间，两者都给。
-    let sawTap = false;
-    for(let i=0;i<8 && !sawTap;i++){
-      await page.clock.fastForward(700);
-      await new Promise(r => setTimeout(r, 200));
-      sawTap = /kneeling-plank-tap\.svg$/.test(await page.locator('#plDemo').getAttribute('src') || '');
-    }
-    assert.ok(sawTap,'两格分步示意必须轮换，停在第一格就看不出「稳了再点肩」');
-    await page.click('#plExit');
-    await textIs(page,'btnStart','继续跟练');
-    await page.click('#btnStart');
-    await page.click('#plEnd'); await page.click('#dlgOk');
-    await page.waitForSelector('#plDone.show');
-    const recorded = await page.evaluate(() => JSON.parse(localStorage.getItem('workbuddy-v5')).logs.filter(l => l.type === 'training'));
-    assert.equal(recorded.length,1);
-    assert.equal(recorded[0].routine,'bodyweight');
-    assert.ok(recorded[0].workSeconds >= 20 && recorded[0].workSeconds < recorded[0].plannedSeconds);
-    assert.equal(recorded[0].completedMoves,1);
-    assert.equal(recorded[0].lifts,undefined,'隐藏的难度选择不能自动生成训练重量记录');
-    await page.click('#plDoneBtn');
-    await page.click('[data-ready="yellow"]');
-    await textIs(page,'routineDose','每个 20 秒 · 1 轮');
-    assert.match(await page.textContent('#routineGear'),/稳固椅子/);
-    await page.click('[data-ready="red"]');
-    await page.waitForFunction(() => document.getElementById('btnStart').disabled);
-    assert.equal(await page.locator('#readyHint').isVisible(),true);
-    assert.deepEqual(errors,[]);
-  }finally{await context.close();}
-  const missing = await browser.newContext({viewport:{width:320,height:667},serviceWorkers:'block'});
-  try{
-    const page = await missing.newPage();
-    await page.route('**/hip-bridge-flat.svg', route => route.abort());
-    // 每一节正式动作都有示范，所以休息屏只剩这一种可能看不见图：图取不到。名字要靠「接下来」那一行补回来。
-    await page.route('**/chair-stand-steps.svg', route => route.abort());
-    await page.goto(base + '/index.html');
-    await page.click('[data-page="training"]');
-    const openMove = name => page.evaluate(n => {
-      [...document.querySelectorAll('.sequence-move')].find(e => e.textContent.indexOf(n) >= 0).click();
-    }, name);
-    await openMove('臀桥');
-    await page.waitForFunction(() => document.getElementById('mdMedia').hidden);
-    assert.equal(await page.textContent('#mdMediaNote'),'示范暂不可用 · 照着下面的文字步骤','示范取不到时详情不留大方框空图');
-    assert.equal(await page.locator('#mdSteps .step').count(),3,'示范不可用时文字步骤仍在同一屏');
-    await page.evaluate(() => document.getElementById('moveClose').click());
-    await openMove('靠墙俯卧撑');
-    await page.waitForFunction(() => document.getElementById('mdMedia').naturalWidth > 0);
-    assert.equal(await page.locator('#mdMedia').isVisible(),true,'换一个有图的动作要恢复示范');
-    assert.equal(await page.textContent('#mdMediaNote'),'手掌按墙 · 身成一线','上一屏「示范暂不可用」不能残留成这一屏的说明');
-    await page.evaluate(() => document.getElementById('moveClose').click());
-    await page.click('#btnStart');
-    await textIs(page,'plPhase','热身');
-    for(let i=0;i<5;i++) await page.click('#plSkip');
-    await page.waitForSelector('#plInstructions:not([hidden])');
-    assert.match(await page.locator('#plInstructions').textContent(),/示范暂不可用/);
-    assert.equal(await page.locator('#plInstructions li').count(),3);
-    assert.equal(await page.locator('#plDemoWrap').isVisible(),false);
-    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth),false);
-    const pause = await page.locator('#plPause').boundingBox();
-    assert.ok(pause.y >= 0 && pause.y + pause.height <= 667,'小屏幕暂停按钮应始终可见');
-    await stageFits(page);
-    await page.click('#plSkip'); await page.click('#plSkip');
-    await page.click('#plSkip'); await page.click('#plSkip');
-    await textIs(page,'plMv','扶椅坐站（先徒手）');
-    assert.equal(await page.locator('#plLog').isVisible(),true,'这一屏要同时容下难度面板');
-    await stageFits(page);
-    await page.click('#plPrev');
-    await textIs(page,'plPhase','换动作');
-    await textIs(page,'plNext','接下来 · 扶椅坐站（先徒手）');
-    assert.equal(await page.locator('#plDemoWrap').isVisible(),false,'下一动作的图取不到时示范区要收起');
-    await stageFits(page);
-  }finally{await missing.close();}
-  const picked = await browser.newContext({viewport:{width:390,height:844},serviceWorkers:'block'});
-  try{
-    const page = await picked.newPage();
-    await page.clock.install();
-    await page.goto(base + '/index.html');
-    await page.click('[data-page="training"]');
-    await openDetails(page,'trainingOptions');
-    await page.click('[data-routine="core"]');   // 第一节就是有三档坡度的墙面斜板支撑
-    await page.click('#btnStart');
-    await textIs(page,'plPhase','热身');
-    for(let i=0;i<5;i++) await page.click('#plSkip');
-    await textIs(page,'plMv','墙面斜板支撑');
-    assert.match(await page.textContent('#plLogHint'),/没点就不记/,'没点档位时要说明不会记');
-    await page.locator('#plLogLevels button').first().click();
-    assert.equal(await page.locator('#plLogLevels button.on').count(),1,'点完要看到选中的档位');
-    assert.doesNotMatch(await page.textContent('#plLogHint'),/没点就不记/,'点完档位，提示不能还停在「没点就不记」');
-    assert.match(await page.textContent('#plLogHint'),/下次可试/,'点了低档要给出下一档');
-    await page.locator('#plLogLevels button').last().click();
-    assert.match(await page.textContent('#plLogHint'),/最高难度/,'点到顶格要说清没有更高一档');
-    await page.clock.fastForward((Number(await page.textContent('#plClock'))+1)*1000);   // 做完这一节，不是跳过去
-    assert.equal(await page.textContent('#plLogLast'),'上次：远墙（难）','刚记下的那一组要立刻显示在休息屏，不能还说还没记过');
-    assert.equal(await page.locator('#plLogLevels').isVisible(),false,'这一组已经落账，不能再摆一排点了也不会变的档位');
-    await page.click('#plEnd'); await page.click('#dlgOk');
-    await page.waitForSelector('#plDone.show');
-    assert.match(await page.textContent('#plDoneLifts'),/墙面斜板支撑 · 远墙（难）/,'点过的档位要出现在结束屏');
-    await page.click('#plDoneBtn');
-    await page.click('#btnStart');                       // 第二次：这一节跳掉，在休息屏补记
-    await textIs(page,'plPhase','热身');
-    for(let i=0;i<5;i++) await page.click('#plSkip');
-    await textIs(page,'plMv','墙面斜板支撑');
-    await page.click('#plSkip');
-    await textIs(page,'plMv','休息一下');
-    assert.equal(await page.locator('#plLogLevels').isVisible(),true,'没做完的那一组仍然可以在休息屏补记');
-    await page.locator('#plLogLevels button',{hasText:'中距'}).click();
-    await page.click('#plSkip');
-    await page.click('#plEnd'); await page.click('#dlgOk');
-    await page.waitForSelector('#plDone.show');
-    assert.match(await page.textContent('#plDoneLifts'),/墙面斜板支撑 · 中距/,'休息屏上补点的档位要真的记下来，不能屏幕写着「自动记下」却悄悄丢掉');
-  }finally{await picked.close();}
-  const twice = await browser.newContext({viewport:{width:390,height:844},serviceWorkers:'block'});
-  try{
-    const page = await twice.newPage();
-    await page.clock.install();
-    await page.goto(base + '/index.html');
-    await page.click('[data-page="training"]');
-    await openDetails(page,'trainingOptions');
-    await page.click('[data-routine="core"]');
-    await page.click('[data-preset="standard"]');   // 标准档两轮：同一个动作会出现两次
-    await page.click('#btnStart');
-    await textIs(page,'plPhase','热身');
-    const pick = async want => { await page.locator('#plLogLevels button',{hasText:want}).first().click();
-      await page.clock.fastForward((Number(await page.textContent('#plClock'))+1)*1000); };
-    for(let i=0;i<40;i++){
-      if(await page.locator('#plDone').evaluate(e => e.classList.contains('show'))){ break; }
-      const [phase,mv,round] = await Promise.all([page.textContent('#plPhase'),page.textContent('#plMv'),page.textContent('#plRound')]);
-      if(mv !== '墙面斜板支撑' || phase !== '训练中'){ await page.click('#plSkip'); continue; }
-      if(round.includes('第 1 轮')){ await pick('中距'); }
-      else{
-        assert.equal(await page.locator('#plLogLevels button.on').textContent(),'中距','下一轮该带着上一轮点过的档位进来');
-        await pick('远墙（难）');
-      }
-    }
-    if(!(await page.locator('#plDone').evaluate(e => e.classList.contains('show')))){
-      await page.click('#plEnd'); await page.click('#dlgOk');
-    }
-    await page.waitForSelector('#plDone.show');
-    assert.match(await page.textContent('#plDoneLifts'),/墙面斜板支撑 · 中距、远墙（难）/,'两轮的档位要按做的先后都列出来，不能只报最后那一下');
-  }finally{await twice.close();}
-  /* 结束屏的记重清单要按「刚才怎么练的」排。数据集 id 里有 1459、1677 这种纯数字，
-     它们在 JS 对象里是整数索引键，Object.keys 会把它们提到最前按数字升序排，
-     于是清单第 1 个动作跑到中间去——上一轮只能人工量出来，这里钉住。 */
-  const lifts = await browser.newContext({viewport:{width:390,height:844},serviceWorkers:'block',reducedMotion:'reduce'});
-  try{
-    const page = await lifts.newPage();
-    await page.clock.install();
-    await page.goto(base + '/index.html');
-    await page.click('[data-page="training"]');
-    await openDetails(page,'trainingOptions');
-    await page.click('[data-routine="dumbbell"]');
-    await page.click('[data-preset="standard"]');   // 5 个动作 × 2 轮，含两个纯数字 id
-    await page.click('#btnStart');
-    await textIs(page,'plPhase','热身');
-    let kg = 0;
-    for(let i=0;i<90;i++){
-      if(await page.locator('#plDone').evaluate(e => e.classList.contains('show'))){ break; }
-      const st = await page.evaluate(() => ({ ph:document.getElementById('plPhase').textContent,
-        log:!document.getElementById('plLog').hidden, left:Number(document.getElementById('plClock').textContent)||0 }));
-      if(st.ph === '训练中' && st.log){
-        kg += 2.5;
-        await page.fill('#plKg', String(kg)); await page.fill('#plReps','8');
-        await page.clock.fastForward((st.left+1)*1000);
-      } else { await page.click('#plSkip'); await page.clock.fastForward(1200); }
-    }
-    await page.waitForSelector('#plDone.show');
-    const names = await page.evaluate(() => [...document.querySelectorAll('#plDoneLifts > div')].map(e => e.textContent.split(' · ')[0]));
-    assert.deepEqual(names, ['扶凳箱式深蹲','哑铃罗马尼亚硬拉','扶椅单臂哑铃划船','坐姿中立握哑铃推举','坐姿哑铃弯举'],
-      '结束屏的记重清单要按练的顺序列，不能按 Object.keys 的键序跳');
-    assert.equal((await page.textContent('#plDoneLifts')).match(/下次/g).length, 5, '五个动作都该给下一次的建议重量');
-    await page.click('#plDoneBtn');
-  }finally{await lifts.close();}
-  const ready = await browser.newContext({viewport:{width:390,height:844},serviceWorkers:'block'});
-  try{
-    const page = await ready.newPage();
-    await page.clock.install();
-    await page.goto(base + '/index.html');
-    await page.click('[data-page="training"]');
-    await openDetails(page,'trainingOptions');
-    assert.equal(await page.textContent('#trainingLevel'), '入门档', '默认档位');
-    assert.equal(await page.locator('#readyHint').isVisible(), false, '状态「不错」时不该有提示行');
-    await page.click('[data-ready="yellow"]');
-    await textIs(page,'trainingLevel','恢复档');
-    await textIs(page,'readyHint','已切到恢复档。轻松一点，不适就停。');
-    // 状态一般时改档位要先确认：确认框必须念中文档名，不能把内部键 standard 摊给人看
-    await page.click('[data-preset="standard"]');
-    await page.waitForSelector('#dlgOk');
-    const dlg = await page.textContent('#dlgMsg');
-    assert.ok(dlg.includes('标准档') && !dlg.includes('standard'), '切换档位的确认框念的是内部键：' + dlg);
-    // 人坚持要练标准档：提示行得跟着说实话，不能再写「已切到恢复档」
-    await page.click('#dlgOk');
-    await textIs(page,'trainingLevel','标准档');
-    const hint = await page.textContent('#readyHint');
-    assert.ok(hint.includes('标准档') && !hint.includes('已切到恢复档'), '手动改回标准档后提示行还在说恢复档：' + hint);
-    await page.click('[data-ready="red"]');
-    assert.ok((await page.textContent('#readyHint')).includes('今天先休息'), '不适时没说先休息');
-    assert.equal(await page.locator('#btnStart').isDisabled(), true, '身体不适时「开始跟练」必须点不动');
-    await page.click('[data-routine="stretch"]');
-    assert.equal(await page.locator('#btnStart').isDisabled(), false, '不适时仍然可以只做放松拉伸');
-    assert.equal(await page.locator('#presetSection').isVisible(), false, '放松拉伸没有档位可言，强度选择要收起来');
-    assert.equal(await page.locator('#readySection').isVisible(), false, '放松拉伸不问今天感觉怎么样');
-  }finally{await ready.close();}
-  const full = await browser.newContext({viewport:{width:375,height:667},reducedMotion:'reduce'});
-  try{
-    const page = await full.newPage();
-    await page.clock.install();
-    await page.goto(base + '/index.html');
-    await page.waitForFunction(() => !!navigator.serviceWorker.controller);
-    await page.click('[data-page="training"]'); await page.locator('.sequence-move').nth(2).click();
-    await page.waitForFunction(async () => !!(await caches.match(new URL('assets/exercise-guides/chair-stand-steps.svg',document.baseURI).href)));
-    await page.click('#moveClose'); await page.click('#btnStart');
-    await textIs(page,'plPhase','热身');
-    await page.clock.fastForward(31000);
-    await textIs(page,'plMv','踝关节绕环');
-    const before = Number(await page.textContent('#plClock'));
-    await page.clock.runFor(3000);
-    assert.ok(Number(await page.textContent('#plClock')) < before,'自然换动作后仍需持续计时');
-    for(let i=0;i<4;i++) await page.clock.fastForward((Number(await page.textContent('#plClock'))+1)*1000);
-    await textIs(page,'plMv','臀桥');
-    await page.waitForFunction(() => document.getElementById('plDemo').getAttribute('src')?.endsWith('hip-bridge-flat.svg'));
-    await textIs(page,'plBadge','分步示意');
-    // 开了减少动效就不轮换：停在第一格起始位，进阶位由图注和文字步骤承担
-    await page.clock.fastForward(4000);
-    assert.match(await page.getAttribute('#plDemo','src'),/hip-bridge-flat\.svg$/,'减少动效时两格不该轮换');
-    for(let i=0;i<17;i++) await page.clock.fastForward((Number(await page.textContent('#plClock'))+1)*1000);
-    await page.waitForSelector('#plDone.show');
-    const logs = await page.evaluate(() => JSON.parse(localStorage.getItem('workbuddy-v5')).logs.filter(l => l.type === 'training'));
-    assert.equal(logs.length,1); assert.equal(logs[0].status,'completed');
-    assert.equal(logs[0].completedMoves,6); assert.equal(logs[0].workSeconds,240);
-    assert.equal(logs[0].actualSeconds,logs[0].plannedSeconds);
-    await textIs(page,'plDoneBtn','回到训练'); await page.click('#plDoneBtn');
-    assert.equal(await page.locator('#page-training').evaluate(el => el.classList.contains('active')),true);
-    await full.setOffline(true); await page.reload();
-    await page.click('[data-page="training"]'); await page.locator('.sequence-move').nth(2).click();
-    await page.waitForFunction(() => document.getElementById('mdMedia').complete && document.getElementById('mdMedia').naturalWidth > 0);
-  }finally{await full.close();}
-  const other = await browser.newContext({viewport:{width:390,height:844},serviceWorkers:'block'});
-  try{
-    const page = await other.newPage();
-    await page.goto(base + '/index.html');
-    await page.click('[data-page="training"]');
-    await openDetails(page,'trainingOptions');
-    await page.click('[data-routine="core"]');
-    await textIs(page,'routineGear','备好垫子、靠墙的椅子和两只轻哑铃（或水瓶）；上下地面困难时用墙面斜板替代跪姿。');
-    await page.locator('.sequence-move',{hasText:'扶椅坐站'}).click();
-    assert.match(await page.locator('#mdMedia').getAttribute('src'),/chair-stand-steps\.svg$/,'腰腹稳定课不能用持铃示范');
-    assert.match(await page.textContent('#mdArea'),/无需负重/);
-    await page.click('#moveClose');
-    await page.locator('.sequence-move',{hasText:'轻负重行走'}).click();
-    assert.match(await page.textContent('#mdArea'),/哑铃或水瓶/,'课表里要持重的动作，备物提示里必须已经说过');
-    await page.click('#moveClose');
-    await page.locator('.sequence-move',{hasText:'鸟狗式'}).click();
-    assert.equal(await page.textContent('#mdMediaNote'),'示范为对侧同伸','示范拍的是另一个变体时，详情里这一行要跟着图说清楚');
-    await page.click('#moveClose');
-    await page.click('[data-routine="dumbbell"]');
-    assert.equal(await page.locator('#routineMoves .sequence-move').count(),5,'哑铃课同样平铺当日顺序');
-    await page.locator('.sequence-move',{hasText:'扶凳箱式深蹲'}).click();
-    assert.match(await page.locator('#mdMedia').getAttribute('src'),/0291\.(gif|poster\.png)$/,'哑铃课保留原示范');
-    await page.click('#moveClose');
-    await page.click('[data-routine="stretch"]');
-    assert.equal(await page.locator('#routineMoves .sequence-move').count(),9,'拉伸课同样平铺当日顺序');
-    await page.locator('.sequence-move',{hasText:'扶墙小腿拉伸'}).click();
-    assert.match(await page.textContent('#mdArea'),/全程约 28 秒，左右各一半/,'单侧拉伸的详情要说清左右各一半');
-    await page.click('#moveClose');
-    await page.locator('.sequence-move',{hasText:'胸前侧拉伸'}).click();
-    assert.match(await page.textContent('#mdArea'),/保持约 28 秒/,'双侧拉伸的详情不写换侧');
-    await page.click('#moveClose');
-    await page.locator('.sequence-move',{hasText:'扶墙股四头拉伸'}).click();
-    assert.match(await page.locator('#mdMedia').getAttribute('src'),/quad-stand-ready\.svg$/,'这一节也有自制分步示范了，详情不能再只有文字');
-    assert.equal(await page.textContent('#mdMediaNote'),'屈膝抬脚跟 · 手抓脚背','图注要跟两格示范的顺序对上');
-    await page.click('#moveClose');
-    await page.click('#btnStart');
-    await textIs(page,'plPhase','拉伸');
-    assert.equal(await page.textContent('#plRound'),'全身拉伸 1 / 9','拉伸要显示第几个');
-    assert.equal(await page.textContent('#plCue'),'后腿跟贴地、膝伸直，前倾到发紧。过半会提示换侧。','单侧拉伸要说明过半会提示换侧');
-    assert.equal(await page.locator('#plLog').isVisible(),false,'拉伸没有档位，不出记录面板');
-    await page.click('#plSkip'); await page.click('#plSkip');
-    await textIs(page,'plMv','扶墙股四头拉伸');
-    await page.waitForFunction(() => document.getElementById('plDemo').getAttribute('src')?.endsWith('quad-stand-ready.svg'));
-    assert.equal(await page.locator('#plDemoWrap').isVisible(),true,'扶墙股四头拉伸有示范了，示范区不再空着一块');
-    // 拉伸屏的角标说的是姿势，不跟着 mediaLabel 走：这一节自带「分步示意」也不许把「站姿·扶墙」挤掉
-    await textIs(page,'plBadge','拉伸 · 站姿·扶墙');
-    assert.equal(await page.locator('#plInstructions').isVisible(),false,'有示范的拉伸不再摆文字步骤块');
-    let sawQuadHold = false;
-    for(let i=0;i<8 && !sawQuadHold;i++){
-      await page.clock.fastForward(700);
-      await new Promise(r => setTimeout(r, 200));
-      sawQuadHold = /quad-stand-hold\.svg$/.test(await page.locator('#plDemo').getAttribute('src') || '');
-    }
-    assert.ok(sawQuadHold,'扶墙股四头拉伸两格必须轮换，只给屈膝那一格就看不出脚最后要抬到哪里');
-    assert.equal(await page.textContent('#plCue'),'扶墙抓同侧脚背拉向臀部。过半会提示换侧。');
-    assert.equal(await page.textContent('#plNext'),'接下来 · 坐姿臀部拉伸');
-  }finally{await other.close();}
-  // 单侧动作过半提示换侧：拉伸说拉伸的话，双侧动作不打扰
-  const side = await browser.newContext({viewport:{width:390,height:844},serviceWorkers:'block'});
-  try{
-    const page = await side.newPage();
-    await page.clock.install();
-    await page.goto(base + '/index.html');
-    await page.click('[data-page="training"]');
-    await openDetails(page,'trainingOptions');
-    await page.click('[data-routine="stretch"]');
-    await page.click('#btnStart');
-    await page.clock.runFor(4000);
-    await textIs(page,'plPhase','拉伸');
-    assert.equal(await page.textContent('#plBadge'),'拉伸 · 站姿·扶墙','拉伸角标要写明姿势');
-    await page.clock.runFor(15000);
-    assert.equal(await page.textContent('#plCue'),'现在换侧另一侧同样轻拉到发紧就好。','单侧拉伸过半要提示换侧');
-    assert.equal(await page.textContent('#plBadge'),'换另一侧');
-    await page.click('#plSkip');
-    await textIs(page,'plMv','仰卧抬腿拉伸');
-    assert.equal(await page.textContent('#plCue'),'抱一条腿往胸口靠，膝可微屈。过半会提示换侧。','换侧提示不能留到下一个动作');
-    for(let i=0;i<3;i++) await page.click('#plSkip');
-    await textIs(page,'plMv','胸前侧拉伸');
-    // 换图是预载完成后才写 src 的，读慢了会拿到上一节的 1377.gif
-    await page.waitForFunction(() => /chest-open-(ready|lift)\.svg$/.test(document.getElementById('plDemo').getAttribute('src') || ''));
-    assert.equal(await page.textContent('#plBadge'),'拉伸 · 站姿','这一节的角标仍写姿势，不写「分步示意」');
-    assert.equal(await page.textContent('#plCue'),'双手身后交握，向后向下伸开，挺胸沉肩。','双侧动作不加换侧提示');
-    await page.clock.runFor(15000);
-    assert.equal(await page.textContent('#plCue'),'双手身后交握，向后向下伸开，挺胸沉肩。','双侧动作过半也不出换侧提示');
-  }finally{await side.close();}
-  // 320 窄屏 + 难度档位面板：口令两行时示范必须自己缩，不能压到上下两块
-  const tight = await browser.newContext({viewport:{width:320,height:667},serviceWorkers:'block'});
-  try{
-    const page = await tight.newPage();
-    await page.goto(base + '/index.html');
-    await page.click('[data-page="training"]');
-    // 计划弹层是按下开始前的最后一屏：主按钮不许被折叠线切掉。
-    // 320×667 上默认这份安排有 650px 高、弹层只有 614（92dvh），不粘底就打不开「开始」。
-    await page.click('#btnPlan');
-    await page.waitForFunction(() => document.getElementById('planModal').classList.contains('open'));
-    assert.equal(await page.evaluate(() => {
-      const pr = document.querySelector('#planModal .panel').getBoundingClientRect();
-      const go = document.getElementById('planGo').getBoundingClientRect();
-      return go.bottom <= pr.bottom + 0.5 && go.top >= pr.top - 0.5;
-    }), true, '窄屏计划弹层的「开始」被折叠线切掉了，打开还得先滚一下才点得到');
-    await page.click('#planCancel');
-    await openDetails(page,'trainingOptions');
-    await page.click('[data-routine="core"]');
-    await page.click('#btnStart');
-    await page.waitForTimeout(3600);
-    for(let i=0;i<5;i++) await page.click('#plSkip');
-    await textIs(page,'plMv','墙面斜板支撑');
-    assert.match(await page.textContent('#plCue'),/能说短句/);
-    assert.equal(await page.locator('#plLog').isVisible(),true);
-    await stageFits(page);
-  }finally{await tight.close();}
-  console.log('✓ 徒手清单、分步示意、暂停继续、缺图提示、小屏幕和实际完成记录通过');
-  console.log('✓ 整套自动跟练、减少动画偏好与新示意图离线重开通过');
-  console.log('✓ 扶椅坐站在腰腹稳定课也用分步示意，居家哑铃仍用原持铃示范');
-  console.log('✓ 热身与拉伸同样是示范优先、一句口令');
-}
-/* 休息屏逐屏走一遍。等待会推进虚拟时间，「第几跳」对不上具体某一屏，所以不假设点击次数：
-   每跳一次读一次状态，只对不变式。两条规则：正式动作都有示范，休息屏就把下一动作摆出来、
-   名字只挂在角标上（底下不能再重复一行）；矮屏休息屏要把「记刚才那组」和文字步骤一起放下。
-   图取不到时的兜底（收起图、由「接下来」那一行报名字）在缺图走查里用网络拦截覆盖。 */
-/* 自制分步示意的墨迹不能压到示范角标。这条以前只能人工量像素（34px 留白带在 <img> 的
-   padding-bottom 上，画出来的图比示范框矮，量错一次就把整张图白缩小两成），这里按真实
-   DOM 的 contain 几何重算一遍：画出来的图底在哪、角标顶在哪、每张图的墨迹最低一行在哪。 */
-const GUIDE_FRAMES = ['chair-stand-steps.svg','dead-bug-tabletop.svg','dead-bug-reach.svg',
-  'hip-bridge-flat.svg','hip-bridge-lift.svg','kneeling-plank-steady.svg','kneeling-plank-tap.svg',
-  'towel-row-ready.svg','towel-row-pull.svg','wall-pushup-start.svg','wall-pushup-bend.svg',
-  'quad-stand-ready.svg','quad-stand-hold.svg','chest-open-ready.svg','chest-open-lift.svg',
-  'ankle-ring-toe-near.svg','ankle-ring-toe-far.svg'];
-async function guideInkClearsBadge(page){
-  const bad = await page.evaluate(async list => {
-    const im = document.getElementById('plDemo'), bd = document.getElementById('plBadge');
-    const cs = getComputedStyle(im), r = im.getBoundingClientRect();
-    const contentH = r.height - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
-    const badgeTop = bd.getBoundingClientRect().top - r.top, out = [];
-    for(const f of list){
-      const img = new Image(); img.src = 'assets/exercise-guides/' + f; await img.decode();
-      const c = document.createElement('canvas'); c.width = img.naturalWidth; c.height = img.naturalHeight;
-      const g = c.getContext('2d'); g.drawImage(img, 0, 0);
-      const d = g.getImageData(0, 0, c.width, c.height).data;
-      let inkBottom = -1;
-      for(let y = c.height - 1; y >= 0 && inkBottom < 0; y--) for(let x = 0; x < c.width; x++){
-        const i = (y * c.width + x) * 4;
-        if(d[i + 3] > 8 && (d[i] < 235 || d[i + 1] < 235 || d[i + 2] < 235)){ inkBottom = y; break; }
-      }
-      if(inkBottom < 0) out.push(f + ' 读不出墨迹');
-      else {
-        const drawnH = img.naturalHeight * Math.min(r.width / img.naturalWidth, contentH / img.naturalHeight);
-        const ink = parseFloat(cs.paddingTop) + (contentH - drawnH) / 2 + inkBottom / img.naturalHeight * drawnH;
-        if(ink > badgeTop - 4) out.push(f + ' 墨迹底 ' + ink.toFixed(0) + '／角标顶 ' + badgeTop.toFixed(0));
-      }
-    }
-    return out;
-  }, GUIDE_FRAMES);
-  assert.deepEqual(bad, [], '自制分步示意的墨迹压到示范角标：' + bad.join('，'));
-}
-async function restScreenWalk(browser, base, viewport, preset){
-  const context = await browser.newContext({viewport, serviceWorkers:'block'});
-  try{
-    const page = await context.newPage(), errors = [];
-    page.on('pageerror', err => errors.push(err.message));
-    await page.clock.install();
-    await page.goto(base + '/index.html');
-    await page.click('[data-page="training"]');
-    await openDetails(page,'trainingOptions');
-    await page.click('[data-routine="bodyweight"]');
-    if(preset){ await openDetails(page,'trainingOptions'); await page.click(`[data-preset="${preset}"]`); }
-    await page.click('#btnStart');
-    const seen = [];
-    for(let i=0;i<40;i++){
-      const s = await page.evaluate(() => {
-        const g = id => document.getElementById(id), ph = g('plPhase').textContent;
-        return { done: g('plDone').classList.contains('show'), ph,
-          badge: g('plBadge').textContent, demo: !g('plDemoWrap').hidden,
-          nextHidden: g('plNext').hidden, next: (g('plNext').textContent||'').trim() };
-      });
-      if(s.done) break;
-      if(s.ph === '准备开始'){ await page.clock.fastForward(4000); continue; }
-      if(s.ph === '换动作' || s.ph === '轮间休息'){ seen.push(s); await stageFits(page); }
-      await page.click('#plSkip');
-    }
-    const shown = seen.filter(s => s.demo);
-    assert.equal(seen.length - shown.length, 0,'每一节正式动作都有示范，休息屏不该出现收起图的一屏：' + JSON.stringify(seen));
-    for(const s of shown){
-      const kind = s.ph === '换动作' ? '下一动作' : '下一轮';
-      assert.ok(s.badge.startsWith(kind + ' · '),'休息屏角标要带上下一个动作的名字：' + JSON.stringify(s));
-      assert.ok(s.badge.length > kind.length + 4, '角标只有前缀没报名字：' + JSON.stringify(s));
-      assert.equal(s.nextHidden, true, '图已经报了名字，底下不能再重复一行：' + JSON.stringify(s));
-    }
-    assert.deepEqual(errors, [], '休息屏逐屏走查不能报错');
-    return { rests: seen.length, shown: shown.length };
-  }finally{await context.close();}
-}
-try{
-  const base = (process.env.TEST_BASE_URL || await localServer()).replace(/\/$/,'');
-  await verifyServer(base);
-  browser = await chromium.launch({channel:process.env.PLAYWRIGHT_CHANNEL || undefined});
-  await bodyweightFlow(browser,base);
-  const w390 = await restScreenWalk(browser,base,{width:390,height:844},null);
-  const w320 = await restScreenWalk(browser,base,{width:320,height:667},'standard');
-  console.log(`✓ 休息屏逐屏走查：390 走过 ${w390.rests} 屏，休息屏全部带着下一动作的示范（${w390.shown}）；320 两轮课 ${w320.rests} 屏排版不溢出`);
-  const context = await browser.newContext({viewport:{width:390,height:844},acceptDownloads:true});
-  context.setDefaultTimeout(15000);
-  context.setDefaultNavigationTimeout(30000);
-  const page = await context.newPage(), errors = [];
-  page.on('pageerror', err => errors.push(err.message));
-  await page.goto(base + '/index.html');
-  await page.waitForFunction(() => /已就绪|可离线/.test(document.getElementById('offlineStatus')?.textContent || ''));
-  await page.waitForFunction(() => !!navigator.serviceWorker.controller);
-  assert.notEqual(await page.locator('#btnUpdateApp').getAttribute('hidden'),null,'首次安装完成后不应残留无效的更新按钮');
-  await page.reload();
-  await page.waitForFunction(() => !!navigator.serviceWorker.controller);
-  console.log('✓ 应用及离线资源已加载');
-  assert.equal(await page.locator('#tDone').isVisible(),false,'空状态不应显示今天已记');
-  const csp = await page.locator('meta[http-equiv="Content-Security-Policy"]').getAttribute('content');
-  assert.ok(csp.includes("media-src 'self' blob: data:") && csp.includes("connect-src 'self'"));
 
-  await page.click('#quickProtein');
-  await page.fill('#recordGrams','25'); await openDetails(page,'proteinExtras'); await page.fill('#recordFood','回归测试鸡胸肉');
-  await page.selectOption('#recordMeal','lunch'); await page.click('#dlgOk');
-  await textIs(page,'pToday','25');
-  assert.match(await page.textContent('#todayLogs'), /回归测试鸡胸肉/);
-  await page.click('#quickProtein'); await page.fill('#recordGrams','2');
-  await page.locator('#proteinExtras > summary').press('Enter');
-  assert.notEqual(await page.locator('#proteinExtras').getAttribute('open'),null,'回车应展开选填内容');
-  assert.equal(await page.locator('#dialogModal').isVisible(),true,'展开详情不能意外提交记录');
-  await page.click('#dlgCancel'); await textIs(page,'pToday','25');
-  await page.click('#quickWater'); await textIs(page,'wToday','350');
-  await page.click('#toastUndo'); await textIs(page,'wToday','0');
-  await page.dblclick('#quickWater'); await textIs(page,'wToday','700');
-  await page.reload(); await textIs(page,'wToday','700'); await textIs(page,'pToday','25');
-  await page.click('#quickProtein'); await page.click('.food-picker summary');
-  assert.match(await page.locator('#quickFoods button').first().textContent(), /≈/);
-  await page.locator('#quickFoods button').first().click();
-  await page.waitForFunction(() => Number(document.getElementById('pToday').textContent) > 25);
-  await page.click('#toastUndo'); await textIs(page,'pToday','25');
-
-  await page.click('[data-page="training"]');
-  assert.equal(await page.locator('#routineMoves').isVisible(),true,'当日顺序直接展示');
-  assert.equal(await page.locator('.sequence-move').count(),6);
-  assert.equal(await page.locator('#routineMoves .sequence-move').count(),6,'不重复显示动作库');
-  await openDetails(page,'trainingOptions'); await page.click('[data-routine="dumbbell"]');
-  assert.equal(await page.locator('#routineMoves .sequence-move').count(),5);
-  await page.click('[data-preset="starter"]'); await textIs(page,'durHint','12.1 分钟');
-  await page.click('#trainingOptions > summary');
-  await page.click('#btnPlan'); await textIs(page,'planTotal','12.1');
-  assert.match(await page.textContent('#planBody'), /休息/);
-  await page.click('#planCancel');
-  await page.click('[data-ready="red"]'); await page.waitForFunction(()=>document.getElementById('btnStart').disabled);
-  assert.equal(await page.locator('#readyHint').isVisible(),true,'身体不适提示不能折叠隐藏');
-  await page.click('[data-ready="green"]'); await page.waitForFunction(()=>!document.getElementById('btnStart').disabled);
-  await page.click('#btnStart'); await page.waitForSelector('#player.open');
-  assert.equal(await page.locator('#planModal').isVisible(),false,'开始跟练无需二次确认安排');
-  await page.click('#plExit'); await textIs(page,'btnStart','继续跟练');
-  await page.click('#btnStart'); await page.click('#plEnd'); await page.click('#dlgOk');
-  await page.waitForSelector('#plDone.show'); await page.click('#plDoneBtn');
-  await page.click('[data-page="data"]');
-  assert.match(await page.textContent('#proteinCoverage'), /未记录不代表/);
-  assert.match(await page.textContent('#archiveSummary'), /3 条记录/);
-  const archive = JSON.parse(await download(page,'#btnArchiveExport'));
-  assert.equal(archive.kind,'qingdaka-monthly-archive'); assert.equal(archive.logs.length,3);
-  await page.click('[data-page="me"]');
-  assert.match(await page.textContent('#backupStatus'), /还未导出/);
-  const backup = JSON.parse(await download(page,'#btnExport'));
-  assert.equal(backup.logs.length,3); assert.equal(backup.v,5);
-  await page.waitForFunction(() => document.getElementById('backupStatus').textContent.includes('上次导出'));
-  await page.click('#btnClear'); await page.click('#dlgOk');
-  await textIs(page,'dlgTitle','再次确认'); await page.click('#dlgOk');
-  await textIs(page,'toastText','本机数据已清空');
-  await page.reload(); await textIs(page,'pToday','0'); await textIs(page,'wToday','0');
-  await page.click('[data-page="me"]'); await importBackup(page,backup);
-  await page.click('[data-page="today"]'); await textIs(page,'pToday','25'); await textIs(page,'wToday','700');
-
-  // 超出旧上限的备份，localStorage 中仍完整保留，并可继续记入。
-  const large = {...backup, weights:[{ts:Date.now()-7*86400000,kg:80},{ts:Date.now(),kg:79.5}], logs:Array.from({length:3101},(_,i) => ({id:'history-'+i,type:'water',ts:Date.now()-40*86400000+i,ml:350}))};
-  await page.click('[data-page="me"]'); await importBackup(page,large);
-  await page.click('[data-page="today"]'); await page.click('#quickWater'); await textIs(page,'wToday','350');
-  await page.reload(); await textIs(page,'wToday','350');
-  await page.click('[data-page="me"]');
-  assert.equal(JSON.parse(await download(page,'#btnExport')).logs.length,3102);
-  assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('workbuddy-v5')).logs.length), 3102);
-  await page.click('[data-page="data"]'); await openDetails(page,'weightHistory');
-  await page.setViewportSize({width:320,height:720});
-  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth),false,'有体重记录的图表在320px下不应溢出');
-  await page.setViewportSize({width:390,height:844});
-
-  // 先注册应用 SW，再开测试页，专门防止测试页污染首页缓存。
-  if(RUN_UNIT_PAGE){ console.log(await unitPage(context,base)); }
+async function openApp(page, { storageFault = false, url = base + '/index.html' } = {}) {
+  lastAction = `打开 ${url}`;
+  const response = await page.goto(url, { waitUntil: 'load' });
+  assert.equal(response?.status(), 200, 'index.html 必须可访问；dist 模式需要已生成的新版产物');
+  const runtime = await page.evaluate(() => ({
+    title: document.title,
+    content: typeof window.QDK_CONTENT?.buildPlan,
+    store: typeof window.QDK_STORE?.get,
+    session: typeof window.QDK_SESSION?.create,
+    scripts: [...document.scripts].map(script => script.getAttribute('src'))
+  }));
+  assert.match(runtime.title, /轻打卡/);
+  assert.ok(runtime.content === 'function' && runtime.store === 'function' && runtime.session === 'function',
+    '新版模块未正确加载，请检查 index.html 的 script src 与浏览器错误：' + JSON.stringify(runtime));
+  if (storageFault) await visible(page, '#storageAlert');
   else {
-    for(const name of ['HANDOVER.md','serve.py','test.html']){
-      assert.equal((await context.request.get(base + '/' + name)).status(),404,'非运行时文件应不可访问：'+name);
+    await until('应用完成首次设置初始化', () => page.locator('#setupDialog').isVisible());
+    const initial = await page.evaluate(() => window.QDK_STORE.get());
+    assert.equal(initial.version, 1);
+    assert.equal(initial.settings.onboarded, false);
+    assert.deepEqual(initial.sessions, []);
+    assert.equal(initial.activeSession, null);
+  }
+}
+
+async function withApp(work, { viewport = { width: 390, height: 844 }, serviceWorkers = 'block', clock = true, init, storageFault = false } = {}) {
+  const context = await browser.newContext({ viewport, serviceWorkers, timezoneId: 'Asia/Shanghai', locale: 'zh-CN', acceptDownloads: true });
+  contexts.add(context);
+  context.setDefaultTimeout(7000);
+  context.setDefaultNavigationTimeout(15000);
+  const evidence = { pageErrors: [], consoleErrors: [], httpErrors: [], requestsFailed: [] };
+  context.on('page', page => observe(page, evidence));
+  let page;
+  try {
+    if (init) await context.addInitScript(init.fn, init.arg);
+    page = await context.newPage();
+    page.setDefaultTimeout(7000);
+    page.setDefaultNavigationTimeout(15000);
+    if (clock) {
+      await page.clock.install({ time: new Date(NOW.getTime() - 1000) });
+      // 尚无应用计时器时冻结；之后只用 runFor，逐个执行 200ms tick，不跳过后台时间。
+      await page.clock.pauseAt(NOW);
+    }
+    await openApp(page, { storageFault });
+    const note = await work(page, context, evidence);
+    assert.deepEqual(evidence.pageErrors, [], '基础流程不得产生未捕获 pageerror');
+    return note;
+  } catch (error) {
+    let ui;
+    try {
+      const currentPage = page && !page.isClosed() ? page : context.pages().filter(tab => tab.url().startsWith(base + '/')).at(-1);
+      ui = await currentPage?.evaluate(() => ({
+        url: location.href,
+        openDialogs: [...document.querySelectorAll('dialog[open]')].map(dialog => dialog.id),
+        phase: document.querySelector('#playerPhase')?.textContent,
+        clock: document.querySelector('#playerClock')?.textContent,
+        storageAlert: !document.querySelector('#storageAlert')?.hidden,
+        finishError: document.querySelector('#finishError')?.hidden === false ? document.querySelector('#finishError').textContent : null
+      }));
+    } catch { /* 页面关闭时仍保留原断言及已收集的错误。 */ }
+    console.error('  最后操作：' + lastAction);
+    console.error('  现场：' + JSON.stringify(ui));
+    for (const [kind, entries] of Object.entries(evidence)) {
+      if (entries.length) console.error(`  ${kind}:\n    ` + entries.slice(0, 8).join('\n    '));
+    }
+    throw error;
+  } finally {
+    try { await context.close(); } finally { contexts.delete(context); }
+  }
+}
+
+async function fillSettings(page, settings = SETTINGS) {
+  await page.locator('#focusInput').selectOption(settings.focus);
+  await page.locator('#anchorInput').selectOption(settings.anchor);
+  await page.locator('#wakeInput').fill(settings.wakeTime);
+  await page.locator('#windInput').fill(settings.windDownTime);
+  await page.locator('#soundInput').setChecked(settings.sound);
+  await click(page, '#setupForm button[type="submit"]');
+  await hidden(page, '#setupDialog');
+  const saved = await stateWhen(page, '设置写入成功', value => value.settings.onboarded);
+  assert.deepEqual(saved.settings, settings);
+}
+async function settingsFields(page, expected) {
+  for (const [id, key] of [['focusInput', 'focus'], ['anchorInput', 'anchor'], ['wakeInput', 'wakeTime'], ['windInput', 'windDownTime']]) {
+    assert.equal(await page.locator('#' + id).inputValue(), expected[key], id + ' 应回填已保存的设置');
+  }
+  assert.equal(await page.locator('#soundInput').isChecked(), expected.sound);
+}
+async function safetyGate(page) {
+  await visible(page, '#safetyDialog');
+  assert.equal(await page.locator('#equipmentCheck').isChecked(), false, '每次进入 safe gate 都必须重新主动勾选');
+  assert.equal(await page.locator('#safetyBegin').isDisabled(), true, '默认未确认，不可开始');
+  assert.equal(await page.locator('#player').isVisible(), false);
+}
+async function approve(page) {
+  await page.locator('#equipmentCheck').check();
+  assert.equal(await page.locator('#safetyBegin').isEnabled(), true);
+  await click(page, '#safetyBegin');
+  await visible(page, '#player');
+  await stateWhen(page, '播放器已开始并保存 running', value => value.activeSession?.phase === 'running');
+  await imageLoaded(page, '#playerImage');
+}
+async function startCourse(page, courseId = 'minute', mode = 'seated') {
+  await nav(page, 'move');
+  await click(page, `[data-course="${courseId}"]`);
+  await click(page, `[data-mode="${mode}"]`);
+  await click(page, '#moveStart');
+  await safetyGate(page);
+  await approve(page);
+}
+async function currentPlan(page, courseId, mode) {
+  return page.evaluate(({ courseId, mode }) => window.QDK_CONTENT.buildPlan(courseId, mode), { courseId, mode });
+}
+
+async function runNatural(page, courseId, mode) {
+  const expected = courseId === 'minute' ? { elapsed: 60, active: 20 } : { elapsed: 180, active: 80 };
+  const plan = await currentPlan(page, courseId, mode);
+  assert.equal(plan.reduce((sum, step) => sum + step.seconds, 0), expected.elapsed, '1/3 分钟必须是真正的总流程长度');
+  assert.equal(plan.filter(step => step.kind === 'move').reduce((sum, step) => sum + step.seconds, 0), expected.active);
+  await startCourse(page, courseId, mode);
+  let elapsed = 0, active = 0;
+  for (const [index, step] of plan.entries()) {
+    await imageLoaded(page, '#playerImage');
+    assert.equal(await text(page, '#playerTitle'), step.name);
+    assert.equal(await page.locator('#playerImage').getAttribute('src'), step.image);
+    lastAction = `${courseId}/${mode} 第 ${index + 1} 段 ${step.kind}，runFor(${step.seconds * 1000})`;
+    // runFor 会执行所有中间 tick；fastForward 大跨度会被引擎当成后台挂起，绝不能替代。
+    await page.clock.runFor(step.seconds * 1000);
+    elapsed += step.seconds;
+    if (step.kind === 'move') active += step.seconds;
+    const done = index === plan.length - 1;
+    const saved = await stateWhen(page, '自然切段的 checkpoint', value => done
+      ? value.activeSession?.phase === 'done'
+      : value.activeSession?.stepIndex === index + 1 && value.activeSession.phase === 'running');
+    near(saved.activeSession.elapsedSeconds, elapsed, step.kind + ' 后流程秒数');
+    near(saved.activeSession.activeSeconds, active, step.kind + ' 后活动秒数（准备/休息/收尾不加活动秒）');
+  }
+  await visible(page, '#finishDialog');
+  await hidden(page, '#player');
+  const saved = await state(page);
+  near(saved.activeSession.elapsedSeconds, expected.elapsed, '自然结束总秒数');
+  near(saved.activeSession.activeSeconds, expected.active, '自然结束实际活动秒数');
+  assert.equal(saved.sessions.length, 0, 'done 只保留待保存状态，不应提前生成历史记录');
+  assert.match(await text(page, '#finishSummary'), /准备、休息与收尾没有算作活动/);
+  assert.equal(await page.locator('[data-feedback][aria-pressed="true"]').count(), 0, '感受不得代选');
+  return saved.activeSession;
+}
+
+async function saveFinish(page, feedback = 'okay') {
+  const before = await state(page);
+  assert.equal(before.activeSession?.phase, 'done');
+  const id = before.activeSession.id;
+  await click(page, `[data-feedback="${feedback}"]`);
+  await click(page, '#saveSession');
+  const after = await stateWhen(page, '完成反馈保存一次', value => !value.activeSession && value.sessions.some(item => item.id === id));
+  await hidden(page, '#finishDialog');
+  assert.equal(after.sessions.length, before.sessions.length + 1);
+  assert.equal(after.sessions.find(item => item.id === id).feedback, feedback);
+  return after.sessions.find(item => item.id === id);
+}
+
+async function learnAll(page) {
+  await nav(page, 'move');
+  await click(page, '[data-course="steady"]');
+  const seen = [];
+  for (const mode of ['seated', 'standing']) {
+    await click(page, `[data-mode="${mode}"]`);
+    const moves = await page.evaluate(mode => window.QDK_CONTENT.moves.filter(move => move.mode === mode), mode);
+    assert.equal(await page.locator('#learningList [data-learn]').count(), moves.length);
+    assert.match(await text(page, '#modeGear'), mode === 'seated' ? /无轮.*承重.*稳定/ : /无痛.*稳定/);
+    for (const move of moves) {
+      await click(page, `[data-learn="${move.id}"]`);
+      await visible(page, '#learnDialog');
+      await imageLoaded(page, '#learnImage');
+      assert.equal(await text(page, '#learnTitle'), move.name);
+      assert.equal(await page.locator('#learnImage').getAttribute('src'), move.image);
+      assert.equal(await page.locator('#learnImage').getAttribute('alt'), move.imageAlt);
+      assert.deepEqual(await page.locator('#learnSteps li').allTextContents(), move.steps);
+      assert.equal(await text(page, '#learnCaution'), move.caution);
+      assert.match(move.image, /^\.\/assets\/habit-guides\/[^/]+\.svg$/);
+      seen.push(move.id);
+      await closeDialog(page, 'learnDialog');
     }
   }
-  await context.setOffline(true);
-  await page.reload(); await textIs(page,'wToday','350');
-  const ranged = await page.evaluate(async () => {
-    const res = await fetch('./assets/voice/countdown-3.m4a',{headers:{Range:'bytes=0-31'}});
-    return {status:res.status,bytes:(await res.arrayBuffer()).byteLength,range:res.headers.get('Content-Range'),accept:res.headers.get('Accept-Ranges')};
-  });
-  assert.equal(ranged.status,206); assert.equal(ranged.bytes,32);
-  assert.match(ranged.range,/^bytes 0-31\/\d+$/); assert.equal(ranged.accept,'bytes');
-  await context.setOffline(false);
-  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth),false,'手机页面不应横向溢出');
-  assert.deepEqual(errors,[],'页面不应出现 JS 异常');
+  assert.deepEqual(seen.sort(), ['seated-arms', 'seated-chest', 'seated-knee', 'seated-neck', 'standing-shoulders', 'standing-walk']);
+  assert.equal((await state(page)).activeSession, null, '学习图不应启动计时');
+  return seen.length;
+}
 
-  // 独立临时上下文模拟损坏数据，导出必须逐字保留原文，不能下载一份空白默认状态。
-  const damaged = await browser.newContext();
-  damaged.setDefaultTimeout(15000);
-  await damaged.addInitScript(() => { if(!localStorage.getItem('workbuddy-v5')) localStorage.setItem('workbuddy-v5','{damaged original'); });
-  const rescue = await damaged.newPage();
-  const rescueErrors = [];
-  rescue.on('pageerror', err => rescueErrors.push(err.message));
-  await rescue.goto(base + '/index.html');
-  await rescue.waitForFunction(() => document.getElementById('toastText').textContent.includes('读取异常'));
-  await rescue.click('[data-page="me"]');
-  await rescue.waitForFunction(() => document.getElementById('page-me')?.classList.contains('active'), {timeout:5000});
-  assert.deepEqual(rescueErrors, [], '只读模式下切换页面不应抛异常');
-  assert.equal(await download(rescue,'#btnExport'),'{damaged original');
-  await damaged.close();
-  console.log('✅ 快捷记录、撤销、时长、月度导出、完整备份恢复、3102 条记录持久保存通过');
-  console.log('✅ 损坏数据原文导出通过');
-  console.log('✅ CSP、离线重开与 m4a Range 缓存通过');
-}finally{
-  if(browser) await browser.close();
-  if(server) server.kill('SIGINT');
+async function recordDay(page, date, wakeTime, windDown) {
+  await page.locator('#recordDate').fill(date);
+  await page.locator('#actualWake').fill(wakeTime);
+  await page.locator('#actualWind').setChecked(windDown);
+  await click(page, '#recordForm button[type="submit"]');
+  await hidden(page, '#recordDialog');
+  return stateWhen(page, '保存指定日期的实际记录', value => value.days[date]?.wakeTime === (wakeTime || undefined) && value.days[date]?.windDown === windDown);
+}
+
+async function download(page, selector) {
+  const event = page.waitForEvent('download');
+  await click(page, selector);
+  const file = await event;
+  assert.equal(await file.failure(), null, '浏览器下载不能失败');
+  assert.match(file.suggestedFilename(), /\.json$/);
+  const path = await file.path();
+  assert.ok(path, '下载应落入临时浏览器目录');
+  return { name: file.suggestedFilename(), raw: await readFile(path, 'utf8') };
+}
+async function importDialog(page, backup) {
+  await nav(page, 'review');
+  await openDetails(page.locator('#backupDetails'));
+  // 通过实际按钮打开文件选择器，而不是直接调用 store.importData 绕过确认。
+  const event = page.waitForEvent('filechooser');
+  await click(page, '#importBackup');
+  await (await event).setFiles({ name: 'e2e-habits-backup.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(backup)) });
+  await visible(page, '#messageDialog');
+  assert.match(await text(page, '#messageTitle'), /核对.*恢复/);
+  assert.match(await text(page, '#messageBody'), /覆盖.*不合并/);
+  assert.match(await text(page, '#messageConfirm'), /确认覆盖/);
+}
+function portableState(value) {
+  const { revision, updatedAt, ...data } = value;
+  return data;
+}
+
+const lockState = page => page.evaluate(() => navigator.locks.query());
+const pendingWrites = (page, count = 1) => until(`应有 ${count} 个真实写锁请求排队`, () => lockState(page), locks => locks.pending.filter(lock => lock.name === WRITE_LOCK).length === count);
+const lockReleased = (page, name) => until(name + ' 应已释放', () => lockState(page), locks => ![...locks.held, ...locks.pending].some(lock => lock.name === name));
+
+async function withWriteLock(page, work) {
+  // 持有浏览器真实锁，不替换 store.transact；句柄只保留测试自己的释放函数。
+  const control = await page.evaluateHandle(name => {
+    const control = { held: false };
+    const gate = new Promise(resolveGate => { control.release = resolveGate; });
+    control.done = navigator.locks.request(name, async lock => {
+      if (!lock) throw new Error('E2E 无法持有写锁');
+      control.held = true;
+      await gate;
+      control.held = false;
+    });
+    return control;
+  }, WRITE_LOCK);
+  let released = false;
+  const release = async () => {
+    if (released || page.isClosed()) return;
+    released = true;
+    await control.evaluate(async control => { control.release(); await control.done; });
+  };
+  try {
+    await until('测试夹具已占用真实写锁', () => control.evaluate(control => control.held));
+    return await work(release);
+  } finally {
+    try { await release(); } finally { await control.dispose(); }
+  }
+}
+
+async function withWriteFailure(page, work) {
+  const restore = await page.evaluateHandle(key => {
+    const original = Storage.prototype.setItem;
+    Storage.prototype.setItem = function (name, value) {
+      if (name === key) throw new DOMException('E2E checkpoint quota exhausted', 'QuotaExceededError');
+      return original.call(this, name, value);
+    };
+    return () => { Storage.prototype.setItem = original; };
+  }, KEY);
+  try { return await work(); }
+  finally {
+    try { if (!page.isClosed()) await restore.evaluate(fn => fn()); }
+    finally { await restore.dispose(); }
+  }
+}
+
+async function simulateVisibility(page, isHidden) {
+  lastAction = `模拟 document.hidden=${isHidden} 并派发 visibilitychange`;
+  await page.evaluate(isHidden => {
+    Object.defineProperty(document, 'hidden', { configurable: true, get: () => isHidden });
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => isHidden ? 'hidden' : 'visible' });
+    document.dispatchEvent(new Event('visibilitychange'));
+  }, isHidden);
+}
+async function restoreVisibility(page) {
+  if (!page.isClosed()) await page.evaluate(() => {
+    delete document.hidden;
+    delete document.visibilityState;
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+}
+
+async function playerFits(page, label) {
+  const report = await page.locator('#player').evaluate(player => {
+    const rect = element => {
+      const r = element.getBoundingClientRect();
+      return { id: element.id || element.className, x: r.x, y: r.y, right: r.right, bottom: r.bottom, width: r.width, height: r.height };
+    };
+    const buttons = [...player.querySelectorAll('button')].map(button => {
+      const r = rect(button), style = getComputedStyle(button);
+      // 圆角外的矩形角点本来就不属于按钮；采样中心和四边中点，完整边界另行断言。
+      const cx = r.x + r.width / 2, cy = r.y + r.height / 2;
+      const points = [[cx, cy], [r.x + 2, cy], [r.right - 2, cy], [cx, r.y + 2], [cx, r.bottom - 2]];
+      const hits = points.map(([x, y]) => {
+        const hit = document.elementFromPoint(x, y);
+        return { x, y, target: hit?.id || hit?.className || hit?.tagName, inside: button.contains(hit) };
+      });
+      return { ...r, visible: style.display !== 'none' && style.visibility === 'visible' && Number(style.opacity) > 0,
+        borderRadius: style.borderRadius, hits, reachable: hits.every(hit => hit.inside) };
+    });
+    const overlap = (a, b) => a.x < b.right - 1 && b.x < a.right - 1 && a.y < b.bottom - 1 && b.y < a.bottom - 1;
+    const overlaps = [];
+    for (let i = 0; i < buttons.length; i++) for (let j = i + 1; j < buttons.length; j++) {
+      if (overlap(buttons[i], buttons[j])) overlaps.push([buttons[i].id, buttons[j].id]);
+    }
+    const blocks = [...player.children].map(rect);
+    const blockOverlaps = [];
+    for (let i = 0; i < blocks.length; i++) for (let j = i + 1; j < blocks.length; j++) {
+      if (overlap(blocks[i], blocks[j])) blockOverlaps.push([blocks[i].id, blocks[j].id]);
+    }
+    return { buttons, overlaps, blockOverlaps, width: innerWidth, height: innerHeight,
+      scrolls: player.scrollHeight > player.clientHeight + 1 || player.scrollWidth > player.clientWidth + 1,
+      horizontalOverflow: document.documentElement.scrollWidth > innerWidth + 1 };
+  });
+  assert.deepEqual(report.buttons.map(button => button.id).sort(), ['playerClose', 'playerDiscomfort', 'playerEnd', 'playerPause', 'playerSkip']);
+  for (const button of report.buttons) {
+    assert.ok(button.visible && button.reachable && button.width > 0 && button.height > 0 && button.x >= -1 && button.y >= -1 && button.right <= report.width + 1 && button.bottom <= report.height + 1,
+      `${label} 按钮必须不滚动就完整可见、可点：${JSON.stringify(button)}`);
+  }
+  assert.deepEqual(report.overlaps, [], label + ' 播放器按钮不得重叠');
+  assert.deepEqual(report.blockOverlaps, [], label + ' 播放器内容不得压住控制区');
+  assert.equal(report.scrolls, false, label + ' 播放器不应需要滚动才能找按钮');
+  assert.equal(report.horizontalOverflow, false, label + ' 页面不得横向溢出');
+}
+
+const cases = [
+  ['首次设置 / 新版启动 / 无蛋白入口', '全新临时浏览器打开首页 → 填写并保存首次设置 → 逐个打开四个导航。', () => withApp(async page => {
+    assert.equal(await page.locator('#wakeInput').inputValue(), '');
+    assert.equal(await page.locator('#windInput').inputValue(), '');
+    assert.equal(await page.locator('#soundInput').isChecked(), true);
+    assert.deepEqual(await page.locator('.bottom-nav [data-page]').evaluateAll(buttons => buttons.map(button => button.dataset.page)), ['today', 'move', 'rhythm', 'review']);
+    await fillSettings(page);
+    for (const name of ['today', 'move', 'rhythm', 'review']) {
+      await nav(page, name);
+      const entries = await page.locator('button:visible, a:visible, input:visible, select:visible').evaluateAll(elements => elements.map(element => [element.textContent, element.id, element.getAttribute('aria-label'), element.getAttribute('data-page')].join(' ')).join('\n'));
+      assert.doesNotMatch(entries, /蛋白|protein|营养打卡/i, '新版不得残留蛋白入口');
+    }
+    await page.reload();
+    await until('刷新后设置仍存在', () => state(page), value => value?.settings.onboarded);
+    assert.equal(await page.locator('#setupDialog').isVisible(), false, '首次设置不能每次刷新重新弹出');
+    assert.deepEqual((await state(page)).settings, SETTINGS);
+  })],
+  ['今日最短回合 / safe gate 默认不勾', '选择 5 分钟站姿 → 今天 → 开始 → 未勾选尝试键盘提交 → 勾选后关闭并重开 → 开始。', () => withApp(async page => {
+    await fillSettings(page);
+    await nav(page, 'move');
+    await click(page, '[data-course="steady"]');
+    await click(page, '[data-mode="standing"]');
+    await nav(page, 'today');
+    await click(page, '#todayStart');
+    await safetyGate(page);
+    assert.match(await text(page, '#equipmentCheckText'), /椅子.*稳固/);
+    await page.locator('#equipmentCheck').focus();
+    await page.keyboard.press('Enter');
+    await page.clock.runFor(3000);
+    assert.equal((await state(page)).activeSession, null, '未勾选时不能创建活动');
+    assert.deepEqual((await state(page)).sessions, []);
+    await page.locator('#equipmentCheck').check();
+    await closeDialog(page, 'safetyDialog');
+    await click(page, '#todayStart');
+    await safetyGate(page);
+    await approve(page);
+    const current = (await state(page)).activeSession;
+    assert.equal(current.courseId, 'minute', '今天入口始终从最短回合开始，不继承 5 分钟');
+    assert.equal(current.mode, 'seated');
+    assert.equal(JSON.parse(current.planKey).reduce((sum, row) => sum + row[2], 0), 60);
+  })],
+  ['痛风 / 急症 / 不确定拦截', '分别从坐姿和站姿的安全确认中选择关节发作、急症、不确定；不允许自动换动作启动。', () => withApp(async page => {
+    await fillSettings(page);
+    for (const [mode, button, title, body] of [
+      ['standing', 'safetyJoint', /先照顾身体/, /痛风.*不开始.*紧急医疗评估/],
+      ['seated', 'safetyEmergency', /立即寻求急救/, /急救.*120/],
+      ['standing', 'safetyUnsure', /不必急着开始/, /医生.*休息/]
+    ]) {
+      await nav(page, 'move');
+      await click(page, `[data-mode="${mode}"]`);
+      await click(page, '#moveStart');
+      await safetyGate(page);
+      await page.locator('#equipmentCheck').check();
+      await click(page, '#' + button);
+      await visible(page, '#messageDialog');
+      assert.match(await text(page, '#messageTitle'), title);
+      assert.match(await text(page, '#messageBody'), body);
+      await page.clock.runFor(5000);
+      const saved = await stateWhen(page, '安全拦截的休息标记最终保存', value => value.days[TODAY]?.rest === true);
+      assert.equal(saved.activeSession, null, button + ' 不得启动计时');
+      assert.deepEqual(saved.sessions, []);
+      assert.equal(saved.days[TODAY].rest, true);
+      assert.equal(await page.locator('#player').isVisible(), false);
+      assert.equal(await page.locator(`[data-mode="${mode}"]`).getAttribute('aria-pressed'), 'true', '拦截不能自动换成另一姿势');
+      await click(page, '#messageConfirm');
+    }
+  })],
+  ['写锁占用时急症立即提示', '占用新版写锁 → 安全确认选择急症 → 不释放锁就检查急救弹窗 → 释放后再核对休息记录。', () => withApp(async page => {
+    await fillSettings(page);
+    await click(page, '#todayStart');
+    await safetyGate(page);
+    await withWriteLock(page, async release => {
+      const before = await rawState(page);
+      await click(page, '#safetyEmergency');
+      // 不用等待弹窗或释放锁：点击返回时急救信息就必须已显示。
+      assert.equal(await page.locator('#messageDialog').isVisible(), true, '急救提示不能 await 被占用的写锁');
+      assert.match(await text(page, '#messageTitle'), /立即寻求急救/);
+      assert.match(await text(page, '#messageBody'), /急救.*120/);
+      assert.equal(await page.locator('#safetyDialog').isVisible(), false);
+      assert.equal(await page.locator('#player').isVisible(), false);
+      await pendingWrites(page);
+      assert.equal(await rawState(page), before, '此时写锁尚未释放，不能伪造写入成功');
+      assert.equal((await state(page)).activeSession, null);
+      await release();
+      const saved = await stateWhen(page, '释放写锁后休息标记落盘', value => value.days[TODAY]?.rest === true);
+      assert.deepEqual(saved.sessions, []);
+      assert.equal(saved.activeSession, null);
+      assert.equal(await page.locator('#messageDialog').isVisible(), true, '写盘完成不能把急救提示收走');
+    });
+  })],
+  ['checkpoint 失败收起不能假成功', '运行至活动段 → 留下 1 秒尚未保存的活动 → 注入写入失败 → 收起必须保留播放器 → 恢复存储后重试并继续原进度。', () => withApp(async (page, context, evidence) => {
+    await fillSettings(page);
+    await startCourse(page);
+    await page.clock.runFor(20000);
+    await click(page, '#playerPause');
+    const durable = (await stateWhen(page, '建立已保存的暂停基线', value => value.activeSession?.phase === 'paused')).activeSession;
+    near(durable.activeSeconds, 5, '已保存活动基线');
+    await click(page, '#playerPause');
+    await stateWhen(page, '明确继续原回合', value => value.activeSession?.phase === 'running');
+    await page.clock.runFor(1000);
+    const before = await rawState(page);
+    await withWriteFailure(page, async () => {
+      await click(page, '#playerClose');
+      await textIs(page, '#toast', '暂未保存，进度仍保留在此页；请重试，不要刷新。');
+      assert.equal(await page.locator('#player').isVisible(), true, 'checkpoint 失败不能收起后谎报已保留');
+      assert.match(await text(page, '#playerSaved'), /尚未保存.*已暂停/);
+      assert.equal(await text(page, '#playerPause'), '继续');
+      assert.equal(await rawState(page), before, '失败不能改动最后一份可恢复原文');
+      assert.equal((await lockState(page)).held.filter(lock => lock.name === SESSION_LOCK).length, 1, '未保存的 engine 仍由此页持有');
+      const clock = await text(page, '#playerClock');
+      await page.clock.runFor(5000);
+      assert.equal(await text(page, '#playerClock'), clock, '错误后不能继续在后台计时');
+      assert.ok(evidence.consoleErrors.some(message => /Save failed|QDKStoreError/.test(message)));
+    });
+    await click(page, '#playerClose');
+    await hidden(page, '#player');
+    await visible(page, '#resumeCard');
+    const kept = (await stateWhen(page, '重试收起保存内存中尚未落盘的进度', value => value.activeSession?.phase === 'paused')).activeSession;
+    assert.equal(kept.id, durable.id);
+    near(kept.elapsedSeconds, 21, '失败期间仍保留实际流程秒数');
+    near(kept.activeSeconds, 6, '不能退回最后 checkpoint 丢掉刚才的 1 秒');
+    await lockReleased(page, SESSION_LOCK);
+    await click(page, '#resumeSession');
+    await safetyGate(page);
+    await approve(page);
+    await page.clock.runFor(1000);
+    await click(page, '#playerEnd');
+    await stateWhen(page, '原回合提前结束', value => value.activeSession?.phase === 'done');
+    const record = await saveFinish(page);
+    assert.equal(record.id, durable.id);
+    assert.equal(record.status, 'stopped');
+    near(record.activeSeconds, 7, '重试后 engine 可以继续且不丢活动秒');
+    near(record.elapsedSeconds, 22, '错误暂停的等待时间不计入流程');
+  })],
+  ...[false, true].map(returnBeforeRelease => [
+    `后台 pending 开始/继续不重启（${returnBeforeRelease ? '先返回前台再解锁' : '保持隐藏再解锁'}）`,
+    '占用写锁使开始/继续处于 pending → hidden 事件 → 可选先回前台 → 解锁 → 检查旧请求不启动，只有新点击才可开始。',
+    () => withApp(async page => {
+      await fillSettings(page);
+      try {
+        await click(page, '#todayStart');
+        await safetyGate(page);
+        await page.locator('#equipmentCheck').check();
+        await withWriteLock(page, async release => {
+          await click(page, '#safetyBegin');
+          await pendingWrites(page);
+          assert.equal((await state(page)).activeSession, null, '开始仍等待首次写入');
+          await simulateVisibility(page, true);
+          if (returnBeforeRelease) await simulateVisibility(page, false);
+          await release();
+          await lockReleased(page, SESSION_LOCK);
+          await until('旧的开始请求已退出 finally', () => page.locator('#safetyBegin').isEnabled());
+        });
+        assert.equal(await page.locator('#player').isVisible(), false, '后台 pending 开始不得晚到后打开播放器');
+        let kept = (await state(page)).activeSession;
+        assert.ok(kept && ['ready', 'paused'].includes(kept.phase), '首次写入可保留未运行的进度，不能标为 running');
+        near(kept.elapsedSeconds, 0, 'pending 开始无流程计时');
+        await page.clock.runFor(5000);
+        await simulateVisibility(page, false);
+        await page.clock.runFor(5000);
+        assert.deepEqual((await state(page)).activeSession, kept, '返回前台也不得自动消费旧开始意图');
+        assert.equal(await page.locator('#player').isVisible(), false);
+        if (await page.locator('#safetyDialog').isVisible()) await closeDialog(page, 'safetyDialog');
+        await visible(page, '#resumeCard');
+        await click(page, '#resumeSession');
+        await safetyGate(page);
+        await approve(page);
+        await page.clock.runFor(20000);
+        await click(page, '#playerPause');
+        kept = (await stateWhen(page, '为 pending 继续建立暂停基线', value => value.activeSession?.phase === 'paused')).activeSession;
+        const clock = await text(page, '#playerClock');
+        await withWriteLock(page, async release => {
+          await click(page, '#playerPause');
+          await pendingWrites(page);
+          await simulateVisibility(page, true);
+          if (returnBeforeRelease) await simulateVisibility(page, false);
+          await release();
+          await lockReleased(page, WRITE_LOCK);
+        });
+        await page.clock.runFor(5000);
+        await simulateVisibility(page, false);
+        await page.clock.runFor(5000);
+        const after = (await state(page)).activeSession;
+        assert.equal(after.phase, 'paused', '异步继续不得在隐藏或 epoch 过期后重启');
+        assert.equal(await text(page, '#playerPause'), '继续');
+        assert.equal(await text(page, '#playerClock'), clock);
+        near(after.activeSeconds, kept.activeSeconds, 'pending 继续不补活动秒');
+        near(after.elapsedSeconds, kept.elapsedSeconds, 'pending 继续不补后台时间');
+        await click(page, '#playerPause');
+        await stateWhen(page, '返回前台后的新点击可以继续', value => value.activeSession?.phase === 'running');
+        await page.clock.runFor(1000);
+        await click(page, '#playerPause');
+        const resumed = (await stateWhen(page, '新点击继续后可再次暂停', value => value.activeSession?.phase === 'paused')).activeSession;
+        near(resumed.activeSeconds, kept.activeSeconds + 1, '只计入新点击后的活动');
+      } finally { await restoreVisibility(page); }
+    })
+  ]),
+  ['多标签 session lock / 并发 days 不丢', 'A 暂停仍占 session lock → B 恢复被拒 → A 收起后 B 接手 → 两标签写锁下并发写同一天不同字段和不同日期。', () => withApp(async (page, context) => {
+    await fillSettings(page);
+    await startCourse(page);
+    await page.clock.runFor(20000);
+    await click(page, '#playerPause');
+    const first = (await stateWhen(page, 'A 暂停但仍拥有回合', value => value.activeSession?.phase === 'paused')).activeSession;
+    const other = await context.newPage();
+    await other.goto(base + '/index.html#move', { waitUntil: 'load' });
+    await visible(other, '#resumeCard');
+    assert.equal(new URL(other.url()).hash, '#today', '未完成活动优先回到今天，不能被旧 hash 藏住');
+    await click(other, '#resumeSession');
+    await safetyGate(other);
+    await other.locator('#equipmentCheck').check();
+    await click(other, '#safetyBegin');
+    await textIs(other, '#toast', '另一个页面正在处理这次活动，请先在那里暂停并收起。');
+    assert.equal(await other.locator('#player').isVisible(), false);
+    assert.deepEqual((await state(other)).activeSession, first, 'B 不得覆盖 A 的暂停快照');
+    assert.equal((await lockState(other)).held.filter(lock => lock.name === SESSION_LOCK).length, 1);
+    await closeDialog(other, 'safetyDialog');
+    await click(page, '#playerClose');
+    await hidden(page, '#player');
+    await lockReleased(page, SESSION_LOCK);
+    await click(other, '#resumeSession');
+    await safetyGate(other);
+    await approve(other);
+    assert.equal((await state(other)).activeSession.id, first.id, 'B 接手同一回合而非重复建档');
+    await click(page, '#resumeSession');
+    await safetyGate(page);
+    await page.locator('#equipmentCheck').check();
+    await click(page, '#safetyBegin');
+    await textIs(page, '#toast', '另一个页面正在处理这次活动，请先在那里暂停并收起。');
+    assert.equal(await page.locator('#player').isVisible(), false, '锁转交 B 后 A 也不能同时启动');
+    await closeDialog(page, 'safetyDialog');
+    await click(other, '#playerEnd');
+    await stateWhen(other, 'B 结束接手的回合', value => value.activeSession?.phase === 'done');
+    const record = await saveFinish(other);
+    assert.equal(record.id, first.id);
+    near(record.activeSeconds, 5, '跨标签不重复计时');
+    await lockReleased(other, SESSION_LOCK);
+    await click(page, '#recordWake');
+    await page.locator('#recordDate').fill(TODAY);
+    await page.locator('#actualWake').fill('07:12');
+    await page.locator('#actualWind').check();
+    await click(other, '#recordBreak');
+    await withWriteLock(page, async release => {
+      const before = await rawState(page);
+      await Promise.all([click(page, '#recordForm button[type="submit"]'), click(other, '#messageConfirm')]);
+      await pendingWrites(page, 2);
+      assert.equal(await rawState(page), before);
+      await release();
+      await stateWhen(page, '同一天的不同字段均保留', value => value.days[TODAY]?.wakeTime === '07:12' && value.days[TODAY]?.windDown === true && value.days[TODAY]?.breaks === 1);
+    });
+    await hidden(page, '#recordDialog');
+    for (const [tab, date, wake] of [[page, YESTERDAY, '08:20'], [other, '2026-11-03', '09:10']]) {
+      await click(tab, '#recordWake');
+      await tab.locator('#recordDate').fill(date);
+      await tab.locator('#actualWake').fill(wake);
+      await tab.locator('#actualWind').uncheck();
+    }
+    await withWriteLock(other, async release => {
+      await Promise.all([click(page, '#recordForm button[type="submit"]'), click(other, '#recordForm button[type="submit"]')]);
+      await pendingWrites(other, 2);
+      await release();
+      await stateWhen(page, '不同日期的并发写入均保留', value => value.days[YESTERDAY]?.wakeTime === '08:20' && value.days['2026-11-03']?.wakeTime === '09:10');
+    });
+    const final = await state(page);
+    assert.equal(Object.keys(final.days).length, 3);
+    assert.equal(final.days[TODAY].breaks, 1);
+    assert.equal(final.days[TODAY].wakeTime, '07:12');
+    assert.equal(final.days[TODAY].windDown, true);
+    assert.equal(final.sessions.length, 1);
+    assert.equal(final.activeSession, null);
+    for (const tab of [page, other]) {
+      const current = await until('storage 事件更新两标签的内存状态', () => tab.evaluate(() => window.QDK_STORE.get()), value => value.revision === final.revision);
+      assert.deepEqual(current, final, '不只磁盘共享，两标签的 store 也要收到最新状态');
+    }
+  })],
+  ['done 最后一步收起 / 稍后处理再恢复', '最后一刻点击收起触发自然 done → 写锁占用时先离开 → 刷新恢复 → 存储失败仍可先离开 → 重试仅保存一次。', () => withApp(async page => {
+    await fillSettings(page);
+    // 先注册同一截止时刻的 UI 点击，使 pause() 在最后一次引擎 tick 前结算自然 done。
+    // 不调用引擎私有方法，避免漏掉 collapsePlayer 的完成回调重入路径。
+    await page.evaluate(() => { setTimeout(() => document.getElementById('playerClose').click(), 60000); });
+    const pending = await runNatural(page, 'minute', 'seated');
+    await withWriteLock(page, async release => {
+      await click(page, '#finishLater');
+      assert.equal(await page.locator('#finishDialog').isVisible(), false, '先离开不能等待写锁');
+      assert.equal(await page.locator('#page-today').isVisible(), true);
+      await pendingWrites(page);
+      assert.equal((await state(page)).activeSession.id, pending.id);
+      assert.equal((await state(page)).sessions.length, 0, '稍后处理不能代用户保存感受');
+      await release();
+      await lockReleased(page, SESSION_LOCK);
+    });
+    await visible(page, '#resumeCard');
+    await nav(page, 'move');
+    await page.reload();
+    await visible(page, '#resumeCard');
+    assert.equal(new URL(page.url()).hash, '#today');
+    await page.clock.runFor(5000);
+    const kept = (await state(page)).activeSession;
+    assert.equal(kept.id, pending.id);
+    assert.equal(kept.phase, 'done');
+    near(kept.elapsedSeconds, 60, '稍后处理期间不继续计时');
+    await click(page, '#resumeSession');
+    await visible(page, '#finishDialog');
+    assert.equal(await page.locator('#safetyDialog').isVisible(), false);
+    assert.equal(await page.locator('#player').isVisible(), false);
+    await withWriteFailure(page, async () => {
+      const before = await rawState(page);
+      await click(page, '#finishLater');
+      assert.equal(await page.locator('#finishDialog').isVisible(), false, '保存异常也不能困住需要先离开的用户');
+      await textIs(page, '#toast', '尚未保存，先保留这个页面，身体要紧；稍后可继续处理。');
+      assert.equal(await rawState(page), before);
+      await visible(page, '#resumeCard');
+      await click(page, '#resumeSession');
+      await visible(page, '#finishDialog');
+      assert.equal(await page.locator('#player').isVisible(), false, '内存中的 pendingFinish 只恢复反馈，不重开计时');
+    });
+    const record = await saveFinish(page, 'easy');
+    assert.equal(record.id, pending.id, 'close 自然完成与稍后恢复都必须保留原 metadata');
+    assert.equal(record.status, 'completed');
+    near(record.activeSeconds, 20, '原活动秒数不丢失');
+    near(record.elapsedSeconds, 60, '原流程秒数不丢失');
+    await page.locator('#saveSession').dispatchEvent('click');
+    await page.clock.runFor(1000);
+    assert.equal((await state(page)).sessions.length, 1);
+    assert.equal((await state(page)).activeSession, null);
+  })],
+  ['坐姿 / 站姿全部学习图', '动一点 → 5 分钟 → 两种姿势 → 逐个打开学习图并核对文字和图片解码。', () => withApp(async page => {
+    await fillSettings(page);
+    return `${await learnAll(page)} 个动作图与步骤`;
+  })],
+  ['设置持久化与恢复', '设置晚间优先、触发点和时间 → 刷新 → 设置回填 → 恢复活动优先。', () => withApp(async page => {
+    await fillSettings(page);
+    const changed = { ...SETTINGS, focus: 'sleep', anchor: 'home', wakeTime: '08:15', windDownTime: '23:10', sound: true };
+    await click(page, '#openSettings');
+    await fillSettings(page, changed);
+    await page.reload();
+    await textIs(page, '#heroTitle', '今晚，慢慢收尾。');
+    assert.deepEqual((await state(page)).settings, changed);
+    await click(page, '#todayStart');
+    await visible(page, '#windDialog');
+    assert.equal((await state(page)).activeSession, null);
+    await closeDialog(page, 'windDialog');
+    await click(page, '#openSettings');
+    await settingsFields(page, changed);
+    await fillSettings(page);
+    await textIs(page, '#heroTitle', '先动 1 分钟。');
+    await nav(page, 'rhythm');
+    assert.equal(await text(page, '#wakeTarget'), SETTINGS.wakeTime);
+    assert.equal(await text(page, '#windTarget'), SETTINGS.windDownTime);
+  })],
+  ['作息补记日期与更正', '晚间收尾 → 补记昨天 → 更改到另一历史日期 → 回顾中更正昨天的起床和收尾。', () => withApp(async page => {
+    await fillSettings(page);
+    await click(page, '#openWindDown');
+    await click(page, '#windBackfill');
+    assert.equal(await page.locator('#recordDate').inputValue(), YESTERDAY);
+    assert.equal(await page.locator('#recordDate').getAttribute('max'), TODAY);
+    let saved = await recordDay(page, YESTERDAY, '07:43', true);
+    assert.equal(saved.days[TODAY], undefined, '补记昨天不能写到打开应用的今天');
+    await click(page, '#recordWake');
+    await page.locator('#recordDate').fill(YESTERDAY);
+    assert.equal(await page.locator('#actualWake').inputValue(), '07:43');
+    assert.equal(await page.locator('#actualWind').isChecked(), true);
+    await page.locator('#recordDate').fill('2026-11-03');
+    assert.equal(await page.locator('#actualWake').inputValue(), '', '切日期不能携带前一天的表单内容');
+    assert.equal(await page.locator('#actualWind').isChecked(), false);
+    await recordDay(page, '2026-11-03', '09:12', false);
+    await nav(page, 'review');
+    await openDetails(page.locator('details').filter({ has: page.locator('#rhythmHistory') }));
+    await click(page, `[data-edit-day="${YESTERDAY}"]`);
+    assert.equal(await page.locator('#recordDate').inputValue(), YESTERDAY);
+    saved = await recordDay(page, YESTERDAY, '08:06', false);
+    assert.equal(saved.days['2026-11-03'].wakeTime, '09:12');
+    assert.equal(saved.days[TODAY], undefined);
+    assert.equal(Object.keys(saved.days).length, 2, '更正覆盖当天，不制造重复日期');
+    await click(page, `[data-edit-day="${YESTERDAY}"]`);
+    await recordDay(page, YESTERDAY, '', true);
+    assert.equal(Object.hasOwn((await state(page)).days[YESTERDAY], 'wakeTime'), false, '清空实际起床时间应能删除误记');
+    await page.reload();
+    saved = await state(page);
+    assert.equal(saved.days[YESTERDAY].windDown, true);
+    assert.deepEqual(saved.sessions, [], '作息记录不应变成活动');
+  })],
+  ['记录休息与活动间隙不等于运动', '今天需要休息 → 取消再确认 → 活动间隙确认 → 回顾检查运动数为零。', () => withApp(async page => {
+    await fillSettings(page);
+    const before = await rawState(page);
+    await click(page, '#restToday');
+    await click(page, '#messageCancel');
+    assert.equal(await rawState(page), before, '取消不能写休息记录');
+    await click(page, '#restToday');
+    await click(page, '#messageConfirm');
+    await stateWhen(page, '休息标记已保存', value => value.days[TODAY]?.rest);
+    await click(page, '#recordBreak');
+    await click(page, '#messageConfirm');
+    const saved = await stateWhen(page, '活动间隙单独记录', value => value.days[TODAY]?.breaks === 1);
+    assert.deepEqual(saved.sessions, []);
+    assert.equal(saved.activeSession, null);
+    assert.match(await text(page, '#todayActivity'), /休息/);
+    await nav(page, 'review');
+    assert.equal(await page.locator('#reviewStats .stat strong').first().innerText(), '0');
+    const day = page.locator('#weekGrid .week-day').filter({ has: page.locator(`time[datetime="${TODAY}"]`) });
+    assert.match(await day.innerText(), /休/);
+    assert.doesNotMatch(await day.innerText(), /●/);
+  })],
+  ...[['minute', 'seated', 60, 20], ['gentle', 'standing', 180, 80]].map(([courseId, mode, elapsed, active]) => [
+    `${elapsed / 60} 分钟自然走完 / done 反馈保存且不可重复`, `选择 ${courseId}/${mode} → 逐段自然计时 ${elapsed} 秒 → 选择感受 → 保存 → 重复点击保存 → 刷新。`,
+    () => withApp(async page => {
+      await fillSettings(page);
+      const pending = await runNatural(page, courseId, mode);
+      await click(page, '[data-feedback="discomfort"]');
+      await visible(page, '#finishSafety');
+      assert.match(await text(page, '#finishSafety'), /立即停止/);
+      const record = await saveFinish(page, 'okay');
+      assert.equal(record.id, pending.id);
+      assert.equal(record.status, 'completed');
+      assert.equal(record.plannedSeconds, elapsed);
+      near(record.elapsedSeconds, elapsed, '保存的总秒数');
+      near(record.activeSeconds, active, '保存的活动秒数');
+      assert.equal(record.recovery, 'unknown');
+      // 重复投递真实 UI 事件，验证已保存后的幂等防线；不调用闭包或引擎钩子。
+      await page.locator('#saveSession').dispatchEvent('click');
+      await page.locator('#saveSession').dispatchEvent('click');
+      await page.clock.runFor(5000);
+      assert.equal((await state(page)).sessions.filter(item => item.id === record.id).length, 1);
+      await page.reload();
+      assert.equal((await state(page)).sessions.length, 1);
+      assert.equal((await state(page)).activeSession, null);
+      assert.equal(await page.locator('#resumeCard').isVisible(), false);
+      await nav(page, 'review');
+      assert.equal(await page.locator('#sessionHistory .history-item').count(), 1);
+      assert.match(await text(page, '#sessionHistory'), /走完流程.*实际活动/s);
+      return `总流程 ${elapsed}s / 实际活动 ${active}s`;
+    })
+  ]),
+  ['手动暂停 / skip 不补秒 / 刷新恢复 paused', '1 分钟坐姿自然运行 20 秒 → 暂停 → 等待 → 跳过剩余动作 → 刷新 → 重新确认 → 走完休息收尾。', () => withApp(async page => {
+    await fillSettings(page);
+    await startCourse(page);
+    await page.clock.runFor(20000);
+    await click(page, '#playerPause');
+    const paused = (await stateWhen(page, '手动暂停保存', value => value.activeSession?.phase === 'paused')).activeSession;
+    near(paused.elapsedSeconds, 20, '暂停前流程秒数');
+    near(paused.activeSeconds, 5, '15 秒准备之后只活动了 5 秒');
+    const clock = await text(page, '#playerClock');
+    await page.clock.runFor(10000);
+    assert.equal(await text(page, '#playerClock'), clock);
+    assert.deepEqual((await state(page)).activeSession, paused, '暂停期间不可补时或产生后台进度');
+    await click(page, '#playerSkip');
+    const skipped = (await stateWhen(page, '跳过动作到休息段', value => value.activeSession?.stepIndex === 2)).activeSession;
+    near(skipped.activeSeconds, paused.activeSeconds, 'skip 不增加活动秒数');
+    near(skipped.elapsedSeconds, paused.elapsedSeconds, 'skip 不增加流程秒数');
+    assert.equal(skipped.phase, 'paused');
+    await page.reload();
+    await visible(page, '#resumeCard');
+    assert.equal(await page.locator('#player').isVisible(), false, '刷新不应自动启动播放器');
+    await page.clock.runFor(10000);
+    assert.deepEqual((await state(page)).activeSession, skipped, '刷新等待期间保持 paused 和原剩余时间');
+    await click(page, '#resumeSession');
+    await safetyGate(page);
+    await approve(page);
+    assert.equal((await state(page)).activeSession.id, paused.id, '恢复原回合而不是新建');
+    assert.equal(await text(page, '#playerClock'), '15');
+    await page.clock.runFor(15000);
+    await imageLoaded(page, '#playerImage');
+    await page.clock.runFor(10000);
+    await visible(page, '#finishDialog');
+    await stateWhen(page, '部分参与已结束', value => value.activeSession?.phase === 'done');
+    const record = await saveFinish(page, 'easy');
+    assert.equal(record.status, 'partial', '跳段后不得伪装自然完整完成');
+    near(record.activeSeconds, 5, '部分参与实际活动');
+    near(record.elapsedSeconds, 45, '15+5+15+10 秒实际经过时间');
+  })],
+  ['导出下载 / 导入覆盖确认 / 恢复设置和恢复反馈', '完成并导出新版备份 → 新增记录、改设置 → 导入先取消再确认 → 核对不是合并 → 导入昨日活动并记录恢复不适。', () => withApp(async page => {
+    await fillSettings(page);
+    await click(page, '#recordWake');
+    await recordDay(page, YESTERDAY, '07:43', true);
+    await runNatural(page, 'minute', 'seated');
+    await saveFinish(page, 'easy');
+    await nav(page, 'review');
+    await openDetails(page.locator('#backupDetails'));
+    const exported = await download(page, '#exportBackup');
+    assert.match(exported.name, /习惯备份/);
+    const backup = JSON.parse(exported.raw);
+    assert.equal(backup.format, 'qingdaka-habits');
+    assert.ok(Number.isFinite(Date.parse(backup.exportedAt)));
+    assert.deepEqual(backup.state, await state(page));
+    assert.equal(backup.state.activeSession, null);
+    await startCourse(page);
+    await click(page, '#playerEnd');
+    await visible(page, '#finishDialog');
+    await stateWhen(page, '提前结束待保存', value => value.activeSession?.phase === 'done');
+    const extra = await saveFinish(page, 'hard');
+    assert.equal(extra.status, 'stopped');
+    near(extra.activeSeconds, 0, '立即结束不算活动');
+    await click(page, '#recordWake');
+    await recordDay(page, TODAY, '10:20', false);
+    await click(page, '#openSettings');
+    await fillSettings(page, { ...SETTINGS, focus: 'sleep', anchor: 'home', wakeTime: '10:00' });
+    const before = await rawState(page);
+    await importDialog(page, backup);
+    assert.equal(await rawState(page), before, '核对弹窗出现时不能提前覆盖');
+    await click(page, '#messageCancel');
+    assert.equal(await rawState(page), before, '取消导入必须原文不变');
+    await importDialog(page, backup);
+    await click(page, '#messageConfirm');
+    await textIs(page, '#toast', '备份已完整恢复。');
+    const restored = await state(page);
+    assert.deepEqual(portableState(restored), portableState(backup.state), '确认导入必须完整覆盖，不能合并或漏掉设置');
+    assert.ok(restored.revision > JSON.parse(before).revision);
+    assert.equal(restored.sessions.some(item => item.id === extra.id), false);
+    assert.equal(restored.days[TODAY], undefined);
+    await page.reload();
+    assert.deepEqual(portableState(await state(page)), portableState(backup.state));
+    await click(page, '#openSettings');
+    await settingsFields(page, SETTINGS);
+    await closeDialog(page, 'setupDialog');
+    // 夹具由刚刚真实导出的新版备份派生，不依赖旧数据格式或私有 app 钩子。
+    const previousDay = structuredClone(backup);
+    for (const session of previousDay.state.sessions) {
+      session.date = YESTERDAY;
+      session.startedAt -= 86400000;
+      session.endedAt -= 86400000;
+    }
+    await importDialog(page, previousDay);
+    await click(page, '#messageConfirm');
+    await textIs(page, '#toast', '备份已完整恢复。');
+    await nav(page, 'today');
+    await visible(page, '#recoveryCard');
+    await click(page, '[data-recovery="pain"]');
+    await stateWhen(page, '恢复不适已保存', value => value.sessions[0]?.recovery === 'pain');
+    await visible(page, '#messageDialog');
+    assert.match(await text(page, '#messageBody'), /停止.*紧急医疗评估/);
+    await click(page, '#messageConfirm');
+    await nav(page, 'review');
+    assert.match(await text(page, '#reviewAdvice'), /疼痛或不适.*暂停/);
+    assert.match(await text(page, '#sessionHistory'), /之后有疼痛或不适/);
+  })],
+  ['storage 损坏原文 / 错误可见', '在隔离 context 中放入损坏的新版 JSON → 打开 → 看到 storageAlert → 导出原文 → 尝试开始。', () => withApp(async page => {
+    const fault = await page.evaluate(() => {
+      try { window.QDK_STORE.get(); return null; } catch (error) { return { name: error.name, code: error.code }; }
+    });
+    assert.equal(fault?.code, 'INVALID_DATA', '检查真实 error.code，不读取虚构的 state.error');
+    assert.equal(await page.locator('#setupDialog').isVisible(), false, '损坏数据不能被首次设置静默覆盖');
+    assert.match(await text(page, '#storageAlert'), /无法安全读取.*原始数据/s);
+    const downloaded = await download(page, '#exportRaw');
+    assert.equal(downloaded.raw, '{损坏的新版原文\n  保留空格与换行');
+    await nav(page, 'today');
+    await click(page, '#todayStart');
+    assert.equal(await page.locator('#player').isVisible(), false);
+    assert.equal(await rawState(page), downloaded.raw);
+  }, { storageFault: true, init: { fn: ({ origin, key, raw }) => {
+    // 下载可能创建 about:blank / opaque document；只给本次服务的 HTTP 主文档放夹具。
+    // 不捕获 setItem 或应用异常，合法目标上的真实错误仍交给 pageerror 断言。
+    if (location.protocol !== 'http:' || location.origin !== origin || window.top !== window) return;
+    localStorage.setItem(key, raw);
+  }, arg: { origin: new URL(base).origin, key: KEY, raw: '{损坏的新版原文\n  保留空格与换行' } } })],
+  ['storage 读取不可用 / error 通知', '完成设置 → 令新版 key 的 getItem 抛 SecurityError → 重读时 error 通知、storageAlert 明确报错且不能开始。', () => withApp(async page => {
+    await fillSettings(page);
+    const fault = await page.evaluate(async key => {
+      const notices = [];
+      const original = Storage.prototype.getItem;
+      const before = original.call(localStorage, key);
+      const unsubscribe = window.QDK_STORE.subscribe((state, error) => notices.push({ state, code: error?.code }));
+      Storage.prototype.getItem = function (name) {
+        if (name === key) throw new DOMException('E2E blocked storage read', 'SecurityError');
+        return original.call(this, name);
+      };
+      let loadError, getError;
+      try { await window.QDK_STORE.load(); } catch (error) { loadError = error.code; }
+      try { window.QDK_STORE.get(); } catch (error) { getError = error.code; }
+      unsubscribe();
+      return { loadError, getError, notices, before, after: original.call(localStorage, key) };
+    }, KEY);
+    assert.equal(fault.loadError, 'STORAGE_UNAVAILABLE');
+    assert.equal(fault.getError, 'STORAGE_UNAVAILABLE');
+    assert.deepEqual(fault.notices, [{ state: null, code: 'STORAGE_UNAVAILABLE' }], '读取失败必须经 subscribe 第二个参数报告 error，不能当空数据成功');
+    assert.equal(fault.after, fault.before, '读取失败不能清空或覆盖已存记录');
+    assert.equal(await page.locator('#storageAlert').isVisible(), true);
+    assert.equal(await page.locator('#setupDialog').isVisible(), false);
+    await nav(page, 'today');
+    await click(page, '#todayStart');
+    assert.equal(await page.locator('#player').isVisible(), false);
+  })],
+  ['storage 保存失败 / done 保留并重试', '自然完成 1 分钟 → 注入 QuotaExceededError → 保存显示 finishError → 刷新恢复未保存 done → 重试成功一次。', () => withApp(async (page, context, evidence) => {
+    await fillSettings(page);
+    await runNatural(page, 'minute', 'seated');
+    const before = await rawState(page);
+    await page.evaluate(key => {
+      const original = Storage.prototype.setItem;
+      Storage.prototype.setItem = function (name, value) {
+        if (name === key) throw new DOMException('E2E quota exhausted', 'QuotaExceededError');
+        return original.call(this, name, value);
+      };
+    }, KEY);
+    await click(page, '[data-feedback="okay"]');
+    await click(page, '#saveSession');
+    await visible(page, '#finishError');
+    assert.match(await text(page, '#finishError'), /尚未保存成功.*仍保留/);
+    assert.equal(await rawState(page), before, '失败后磁盘原文和待保存 done 都必须保留');
+    assert.equal((await state(page)).sessions.length, 0);
+    assert.equal(await page.locator('#finishDialog').isVisible(), true);
+    assert.ok(evidence.consoleErrors.some(message => /Save failed|QDKStoreError/.test(message)), '实际存储异常应报告 error，而非伪报成功');
+    // 注入只作用于当前文档；刷新恢复原生存储，不需要应用暴露测试钩子。
+    await page.reload();
+    await visible(page, '#resumeCard');
+    assert.match(await text(page, '#resumeTitle'), /没保存感受/);
+    await click(page, '#resumeSession');
+    await visible(page, '#finishDialog');
+    assert.equal(await page.locator('#player').isVisible(), false, '恢复 done 只保存反馈，不重新计时');
+    const record = await saveFinish(page, 'okay');
+    assert.equal(record.status, 'completed');
+    near(record.activeSeconds, 20, '重试保存仍是原活动秒数');
+    assert.equal((await state(page)).sessions.length, 1);
+  })],
+  ...[{ width: 320, height: 560 }, { width: 390, height: 844 }].map(viewport => [
+    `${viewport.width}×${viewport.height} 播放器按钮可见不重叠`, '3 分钟坐姿和站姿逐段检查 running/paused；不滚动、不 force 点击、不隐藏内容来规避布局。',
+    () => withApp(async page => {
+      await fillSettings(page);
+      let steps = 0;
+      for (const mode of ['seated', 'standing']) {
+        await startCourse(page, 'gentle', mode);
+        const plan = await currentPlan(page, 'gentle', mode);
+        for (const [index, step] of plan.entries()) {
+          if (index > 0) {
+            await click(page, '#playerPause');
+            await textIs(page, '#playerPause', '暂停');
+          }
+          await imageLoaded(page, '#playerImage');
+          await playerFits(page, `${mode}/${step.kind}/running`);
+          await click(page, '#playerPause');
+          await textIs(page, '#playerPause', '继续');
+          await playerFits(page, `${mode}/${step.kind}/paused`);
+          await click(page, '#playerSkip');
+          await stateWhen(page, '逐段跳过保存', value => index === plan.length - 1
+            ? value.activeSession?.phase === 'done'
+            : value.activeSession?.stepIndex === index + 1 && value.activeSession.phase === 'paused');
+          steps++;
+        }
+        const record = await saveFinish(page);
+        near(record.activeSeconds, 0, '全部跳过不增加活动秒数');
+        near(record.elapsedSeconds, 0, '全部跳过不增加流程秒数');
+        assert.equal(record.status, 'partial');
+      }
+      return `${steps} 段 × running/paused`;
+    }, { viewport })
+  ]),
+  ['离线全部图 / 明确源码或产物版本（独立 SW context）', '独立 allow context 首装 → 核对全图已预缓存 → 断网并禁用 HTTP cache → 新页面重开 → 所有 SVG 解码、学习和播放器。', () => offlineFlow()]
+];
+
+async function guideFiles(directory, prefix = '') {
+  const files = [];
+  for (const entry of await readdir(directory, { withFileTypes: true })) {
+    const name = prefix + entry.name;
+    if (entry.isDirectory()) files.push(...await guideFiles(resolve(directory, entry.name), name + '/'));
+    else if (entry.isFile() && entry.name.endsWith('.svg')) files.push('./assets/habit-guides/' + name);
+  }
+  return files.sort();
+}
+async function offlineFlow() {
+  const sw = await readFile(resolve(ROOT, DIRECTORY, 'sw.js'), 'utf8');
+  const version = sw.match(/\/\* BUILD_VERSION_START \*\/\s*['"]([^'"]+)['"]/);
+  assert.ok(version, 'sw.js 必须声明明确的 BUILD_VERSION');
+  const expectedVersion = version[1];
+  const complete = sw.match(/\/\* BUILD_COMPLETE_START \*\/\s*(true|false)/)?.[1];
+  assert.equal(complete, DIRECTORY === 'dist' ? 'true' : 'false', '源码开发版与完整产物必须明确区分');
+  assert.match(expectedVersion, DIRECTORY === 'dist' ? /^habits-[a-f0-9]{20}$/ : /^habits-dev-/);
+  const guides = await guideFiles(resolve(ROOT, DIRECTORY, 'assets/habit-guides'));
+  assert.ok(guides.length >= 10, '整套轻活动至少应包含当前 10 张坐姿/站姿示意图');
+  return withApp(async (page, context) => {
+    await fillSettings(page);
+    await nav(page, 'review');
+    await until('SW 接管当前页面', () => page.evaluate(() => !!navigator.serviceWorker.controller), Boolean, 20000);
+    await until('完整离线状态明确就绪', () => text(page, '#offlineStatus'), value => /核心页面与全部轻活动示意已离线就绪/.test(value), 20000);
+    await textIs(page, '#appVersion', '当前离线版本：' + expectedVersion);
+    assert.equal(await page.locator('#updateApp').isVisible(), false, '首装不能显示无效的更新按钮');
+    const core = ['./index.html', './styles.css', './app.js', './content.js', './store.js', './session.js', './manifest.webmanifest'];
+    const cacheReport = await page.evaluate(async ({ version, files }) => {
+      const names = await caches.keys();
+      const name = names.find(value => value.startsWith('qingdaka-habits:') && value.endsWith(':' + version));
+      if (!name) return { names, missing: files };
+      const cache = await caches.open(name);
+      const missing = [];
+      for (const file of files) {
+        const hit = await cache.match(new URL(file, location.href).href);
+        if (!hit || hit.status !== 200) missing.push(file);
+      }
+      return { names, missing };
+    }, { version: expectedVersion, files: [...core, ...guides] });
+    assert.deepEqual(cacheReport.missing, [], '首次安装就必须预缓存全部图，而不是测试浏览过才凑齐：' + JSON.stringify(cacheReport));
+    await context.setOffline(true);
+    const networkState = { originalPageOnline: await page.evaluate(() => navigator.onLine) };
+    const offline = await context.newPage();
+    offline.setDefaultTimeout(7000);
+    offline.setDefaultNavigationTimeout(15000);
+    networkState.newPageOnline = await offline.evaluate(() => navigator.onLine);
+    const cdp = await context.newCDPSession(offline);
+    await cdp.send('Network.enable');
+    networkState.afterCDPEnable = await offline.evaluate(() => navigator.onLine);
+    await cdp.send('Network.setCacheDisabled', { cacheDisabled: true });
+    networkState.afterCacheDisabled = await offline.evaluate(() => navigator.onLine);
+    const swResponses = new Set();
+    offline.on('response', response => {
+      if (response.fromServiceWorker()) swResponses.add(new URL(response.url()).pathname);
+    });
+    await page.close();
+    lastAction = '断网，新 tab 禁用 HTTP cache 后打开 /index.html#review';
+    const response = await offline.goto(base + '/index.html#review', { waitUntil: 'load' });
+    assert.equal(response?.status(), 200);
+    assert.equal(response.fromServiceWorker(), true, '离线重开不能依赖 HTTP cache 假通过');
+    networkState.afterNavigation = await offline.evaluate(() => navigator.onLine);
+    assert.equal(networkState.originalPageOnline, false, '原 context 已设置离线');
+    assert.equal(networkState.newPageOnline, false, '新 tab 在导航前同样继承离线设置');
+    // Chrome 的 SW 导航后 onLine 可能回到 true，即使传输层仍是离线。
+    // 不篡改 navigator：用未缓存请求的真实网络失败证明断网，防止缓存命中假通过。
+    offline.on('requestfailed', request => {
+      if (new URL(request.url()).pathname === '/__e2e_uncached_network_probe__') {
+        networkState.uncachedFailure = request.failure()?.errorText;
+      }
+    });
+    networkState.uncachedRequestRejected = await offline.evaluate(async () => {
+      // 地址故意不在 SW 清单中；在线时即使服务器返回 404，fetch 也会 resolve。
+      try { await fetch('./__e2e_uncached_network_probe__', { cache: 'no-store' }); return false; }
+      catch { return true; }
+    });
+    assert.equal(networkState.uncachedRequestRejected, true, '必须真的断网，而不仅从 SW/HTTP cache 读到页面：' + JSON.stringify(networkState));
+    await until('未缓存请求应报告真实断网错误', () => networkState.uncachedFailure);
+    assert.match(networkState.uncachedFailure, /ERR_INTERNET_DISCONNECTED/, 'CSP、404 或其他错误不能代替断网证明');
+    await until('离线重开后全图状态仍就绪', () => text(offline, '#offlineStatus'), value => /全部轻活动示意已离线就绪/.test(value));
+    await textIs(offline, '#appVersion', '当前离线版本：' + expectedVersion);
+    assert.deepEqual((await state(offline)).settings, SETTINGS, '离线重开保留本机设置');
+    const fetched = await offline.evaluate(async files => Promise.all(files.map(async file => {
+      const response = await fetch(file, { cache: 'no-store' });
+      return { file, status: response.status, bytes: (await response.arrayBuffer()).byteLength };
+    })), [...core, ...guides]);
+    for (const file of fetched) {
+      assert.equal(file.status, 200, '离线资源 ' + file.file);
+      assert.ok(file.bytes > 0, '离线资源不得为空：' + file.file);
+    }
+    const decoded = await offline.evaluate(async files => Promise.all(files.map(async file => {
+      const image = new Image();
+      image.src = file;
+      try { await image.decode(); return { file, width: image.naturalWidth, height: image.naturalHeight }; }
+      catch (error) { return { file, error: error.message }; }
+    })), guides);
+    for (const image of decoded) assert.ok(image.width > 0 && image.height > 0, '离线全图必须可解码：' + JSON.stringify(image));
+    for (const file of [...core, ...guides]) {
+      await until('资源由 SW 返回：' + file, () => swResponses.has(new URL(file, base + '/index.html').pathname));
+    }
+    await learnAll(offline);
+    await startCourse(offline, 'minute', 'standing');
+    await click(offline, '#playerPause');
+    await stateWhen(offline, '断网仍可保存暂停进度', value => value.activeSession?.phase === 'paused');
+    await imageLoaded(offline, '#playerImage');
+    await click(offline, '#playerClose');
+    await hidden(offline, '#player');
+    await nav(offline, 'today');
+    await visible(offline, '#resumeCard');
+    return `${DIRECTORY === 'dist' ? '产物' : '源码'} ${expectedVersion}；${guides.length} 张 SVG 离线解码，核心资源确由 SW 返回`;
+  }, { serviceWorkers: 'allow', clock: false });
+}
+
+async function runCase([name, reproduction, work]) {
+  if (stopping) return false;
+  const started = Date.now();
+  lastAction = reproduction;
+  try {
+    const note = await work();
+    results.push({ name, status: 'passed', ms: Date.now() - started });
+    console.log(`✓ ${name}${note ? ' — ' + note : ''} (${Date.now() - started}ms)`);
+    return true;
+  } catch (error) {
+    results.push({ name, status: 'failed', ms: Date.now() - started });
+    process.exitCode = 1;
+    console.error(`✗ ${name}\n  复现：${reproduction}\n  ${error.stack || error}`);
+    return false;
+  }
+}
+
+try {
+  // 只读检查；绝不为了跑产物测试而改写应用或 dist。
+  const html = await readFile(resolve(ROOT, DIRECTORY, 'index.html'), 'utf8').catch(error => {
+    throw new Error(`${DIRECTORY}/index.html 不可读。${DIRECTORY === 'dist' ? '请由构建流程先生成新版 dist；E2E 不会代为构建。' : ''}`, { cause: error });
+  });
+  assert.match(html, /<title>轻打卡/);
+  base = await localServer();
+  if (stopping) throw new Error('服务启动期间测试被中止');
+  console.log(`E2E：${DIRECTORY === 'dist' ? '产物 dist' : '源码 .'}；${base}；channel=${CHANNEL}；仅临时 context`);
+  // chromium/bundled 可显式选择 Playwright 自带浏览器，其余值原样作为 channel。
+  browser = await chromium.launch({ headless: true, ...(CHANNEL === 'chromium' || CHANNEL === 'bundled' ? {} : { channel: CHANNEL }) });
+  if (stopping) {
+    await browser.close();
+    throw new Error('浏览器启动期间测试被中止');
+  }
+  const bootPassed = await runCase(cases[0]);
+  if (bootPassed) {
+    for (const test of cases.slice(1)) {
+      if (stopping || results.filter(result => result.status === 'failed').length >= 3) break;
+      await runCase(test);
+    }
+  } else {
+    console.error('新版启动门槛未通过，后续流程标记为阻塞，不重复制造相同超时，也不移除断言。');
+  }
+} catch (error) {
+  process.exitCode = 1;
+  console.error('E2E 启动失败：', error.stack || error);
+  if (serverOutput) console.error(serverOutput.trim());
+} finally {
+  try { await cleanup(); }
+  catch (error) { process.exitCode = 1; console.error('清理失败：', error.stack || error); }
+  clearTimeout(watchdog);
+  process.removeListener('SIGINT', onInterrupt);
+  process.removeListener('SIGTERM', onTerminate);
+  const passed = results.filter(result => result.status === 'passed').length;
+  const failed = results.filter(result => result.status === 'failed').length;
+  const remaining = cases.filter(([name]) => !results.some(result => result.name === name));
+  console.log(`\nE2E 摘要 [${DIRECTORY === 'dist' ? '产物 dist' : '源码 .'} / ${CHANNEL}]：${passed} 通过，${failed} 失败，${remaining.length} 阻塞/未运行。`);
+  for (const [name] of remaining) console.log('  - 未运行：' + name);
+  if (!failed && !remaining.length && !process.exitCode) console.log('✅ 全部新版流程通过；临时 context、下载与本地服务已清理。');
+  else process.exitCode ||= 1;
 }
