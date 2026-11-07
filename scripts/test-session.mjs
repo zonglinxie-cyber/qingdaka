@@ -415,4 +415,86 @@ check('零秒步骤只在 start 后自动通过，有限遍历且不制造活动
   assert.equal(mixed.session.get().phase, 'done');
 });
 
+check('新跟练阶段：countdown/warmup/work/rest/roundBreak/stretch 正常流转，work 与 stretch 计入 activeSeconds', () => {
+  const plan = [
+    {id:'cd', kind:'countdown', seconds:3},
+    {id:'wm', kind:'warmup', seconds:10},
+    {id:'w1', kind:'work', seconds:20},
+    {id:'rst', kind:'rest', seconds:15},
+    {id:'w2', kind:'work', seconds:20},
+    {id:'rb', kind:'roundBreak', seconds:30},
+    {id:'st', kind:'stretch', seconds:20}
+  ];
+  const {session:s, clock:c, finishes} = setup({plan});
+  assert.equal(s.get().phase, 'ready');
+  s.start();
+  // 运行满 118 秒
+  c.run(118000);
+  const state = s.get();
+  assert.equal(state.phase, 'done');
+  close(state.elapsedSeconds, 118);
+  // work (20 + 20) + stretch (20) = 60s activeSeconds
+  close(state.activeSeconds, 60);
+  assert.equal(finishes.length, 1);
+  assert.equal(finishes[0].reason, 'natural');
+});
+
+check('步骤钩子 onStep、单侧过半 onHalfway 与休息倒数 onCountdown3', () => {
+  const plan = [
+    {id:'w-half', kind:'work', seconds:10, sideMode:'half'},
+    {id:'rest-10', kind:'rest', seconds:10, sideMode:'none'}
+  ];
+  const stepEvents = [], halfwayEvents = [], countdown3Events = [];
+  const clock = fakeClock();
+  const context = vm.createContext({
+    window:{},
+    Date:class extends Date { static now(){ return clock.now(); } },
+    setTimeout(fn, delay){ return clock.schedule(fn); },
+    clearTimeout:clock.cancel
+  });
+  vm.runInContext(source, context, {filename:'session.js'});
+  const session = context.window.QDK_SESSION.create({
+    plan,
+    now: clock.now,
+    schedule: clock.schedule,
+    cancel: clock.cancel,
+    onStep(step, idx){ stepEvents.push({id:step.id, idx}); },
+    onHalfway(step, idx){ halfwayEvents.push({id:step.id, idx}); },
+    onCountdown3(step, idx){ countdown3Events.push({id:step.id, idx}); }
+  });
+
+  session.start();
+  assert.equal(stepEvents.length, 1);
+  assert.equal(stepEvents[0].id, 'w-half');
+
+  // 推进 4 秒：left 变为 6，尚未过半（半程为 5）
+  clock.run(4000);
+  assert.equal(halfwayEvents.length, 0);
+
+  // 再推进 2 秒：left 变为 4，已过半
+  clock.run(2000);
+  assert.equal(halfwayEvents.length, 1);
+  assert.equal(halfwayEvents[0].id, 'w-half');
+
+  // 推进 4 秒完成第 0 步，进入第 1 步 (rest-10, 10s)
+  clock.run(4000);
+  assert.equal(stepEvents.length, 2);
+  assert.equal(stepEvents[1].id, 'rest-10');
+  assert.equal(countdown3Events.length, 0);
+
+  // rest-10 推进 4 秒：left 变为 6，未到 3 秒
+  clock.run(4000);
+  assert.equal(countdown3Events.length, 0);
+
+  // 再推进 3.5 秒：left 变为 2.5，触发 onCountdown3
+  clock.run(3500);
+  assert.equal(countdown3Events.length, 1);
+  assert.equal(countdown3Events[0].id, 'rest-10');
+
+  // 走完最后 2.5 秒自然结束
+  clock.run(2500);
+  assert.equal(session.get().phase, 'done');
+  assert.equal(countdown3Events.length, 1); // 不会重复触发
+});
+
 console.log(`\n${checks} session checks passed.`);

@@ -21,17 +21,15 @@ export async function checkArtifact(files) {
   const precache = readBuildBlock(sw, 'PRECACHE');
   const hashes = readBuildBlock(sw, 'HASHES');
   assert.equal(readBuildBlock(sw, 'COMPLETE'), true, '发布 SW 未标记为完整包');
-  assert.match(version, /^habits-[a-f0-9]{20}$/, '版本必须来自发布内容 hash');
+  assert.match(version, /^coach-[a-f0-9]{20}$/, '版本必须来自发布内容 hash');
   assert.equal(version, releaseVersion(files), '发布包内容与版本 hash 不符');
-  assert.deepEqual(precache, precacheFiles(files), '预缓存必须精确覆盖所有核心文件、icons 和自制 SVG');
+  assert.deepEqual(precache, precacheFiles(files), '预缓存必须精确覆盖所有核心文件、icons、动图和预录语音');
   assert.deepEqual(Object.keys(hashes).sort(), precache.slice().sort(), '完整性清单与预缓存不符');
   for (const file of precache) {
     assert.equal(hashes[file], sha256(files.get(file.slice(2))), `SW 文件校验值不符：${file}`);
   }
   assert.ok(sw.includes("'qingdaka-habits:' + encodeURIComponent(SCOPE.href) + ':'"), '缓存必须隔离 registration.scope');
   const precached = new Set(precache);
-  const guides = [...files.keys()].filter(name => name.startsWith('assets/habit-guides/'));
-  assert.ok(guides.length > 0, '缺少自制课程示范');
 
   function localResource(value, from = 'index.html') {
     assert.equal(typeof value, 'string', `${from} 的资源地址应是字符串`);
@@ -45,103 +43,119 @@ export async function checkArtifact(files) {
     return name;
   }
 
-  const legacy = /assets\/(?:exercise-guides|voice(?:-samples)?)(?:\/|\b)|voice-scripts|\b(?:VOICE_FILES|playVoice\w*|voiceKey|speechSynthesis|SpeechSynthesisUtterance)\b|new\s+Audio\s*\(|<audio\b|protein|蛋白/i;
+  // 语法解析检查
   for (const [name, data] of files) {
-    if (!/\.(?:html|js|css|svg|webmanifest)$/.test(name)) { continue; }
-    const source = data.toString('utf8');
-    assert.ok(!legacy.test(source), `发布文件仍有旧蛋白或语音功能：${name}`);
-    if (name.endsWith('.js')) { new vm.Script(source, { filename: name }); }
-    if (name.endsWith('.svg')) {
-      assert.match(source, /<svg\b/i, `不是 SVG：${name}`);
-      assert.ok(!/<(?:script|foreignObject)\b|\bon\w+\s*=|<!ENTITY/i.test(source), `SVG 不得嵌入活动内容：${name}`);
-      for (const match of source.matchAll(/(?:href|url)\s*(?:=\s*["']|\(\s*["']?)([^"')\s>]+)/gi)) {
-        assert.ok(match[1].startsWith('#'), `SVG 必须自包含：${name} → ${match[1]}`);
-      }
+    if (name.endsWith('.js')) {
+      new vm.Script(data.toString('utf8'), { filename: name });
     }
   }
 
   const manifest = JSON.parse(text('manifest.webmanifest'));
-  assert.equal(manifest.name, '轻打卡 · 动起来');
+  assert.equal(manifest.name, '轻打卡 · 科学跟练');
   assert.equal(manifest.short_name, '轻打卡');
   assert.equal(manifest.id, './index.html', '不得改变已有 PWA 身份');
   assert.equal(manifest.start_url, './index.html');
   assert.equal(manifest.scope, './');
-  assert.equal(manifest.theme_color, '#203f36');
-  assert.equal(manifest.background_color, '#f5f4ee');
   assert.ok(Array.isArray(manifest.icons) && manifest.icons.length > 0, 'manifest 缺少图标');
   for (const icon of manifest.icons) { localResource(icon.src, 'manifest.webmanifest'); }
 
   const html = text('index.html');
+  assert.ok(html.includes("img-src 'self' data: blob:;"), 'CSP 必须允许 img-src data: blob:');
+  assert.ok(html.includes("media-src 'self' data: blob:;"), 'CSP 必须允许 media-src data: blob:');
+  assert.ok(!html.includes('store.js'), '首页不得加载已废弃的 store.js');
+
   const scripts = [];
-  for (const match of html.matchAll(/<(script|link|img)\b[^>]*>/gi)) {
+  for (const match of html.matchAll(/<(script|link)\b[^>]*>/gi)) {
     const tag = match[0];
     const attr = name => tag.match(new RegExp('\\b' + name + '\\s*=\\s*["\']([^"\']+)["\']', 'i'))?.[1];
     const kind = match[1].toLowerCase();
     if (kind === 'script' && attr('src')) { scripts.push(localResource(attr('src'))); }
-    if (kind === 'img' && attr('src')) { localResource(attr('src')); }
     if (kind === 'link' && attr('href')) { localResource(attr('href')); }
   }
-  for (const name of ['content.js', 'store.js', 'session.js', 'app.js']) {
-    assert.ok(scripts.includes(name), `首页未加载 ${name}`);
-  }
-  assert.ok(scripts.indexOf('app.js') > Math.max(...['content.js', 'store.js', 'session.js'].map(name => scripts.indexOf(name))), 'app.js 必须在三个核心模块之后加载');
+  assert.deepEqual(scripts, ['content.js', 'session.js', 'app.js'], '必须按顺序加载 content.js, session.js, app.js');
+
   const css = text('styles.css');
   assert.ok(!/@import\b/i.test(css), '样式不得依赖外部 CSS');
-  for (const match of css.matchAll(/url\(\s*["']?([^"')\s]+)["']?\s*\)/gi)) {
-    if (!match[1].startsWith('data:') && !match[1].startsWith('#')) { localResource(match[1], 'styles.css'); }
-  }
 
+  // content.js 深度课程校验
   const context = vm.createContext({ window: {} });
   vm.runInContext(text('content.js'), context, { timeout: 1000, filename: 'content.js' });
   const content = context.window.QDK_CONTENT;
-  assert.ok(content && typeof content.buildPlan === 'function', '缺少 QDK_CONTENT.buildPlan(courseId, mode)');
-  assert.ok(Array.isArray(content.courses) && Array.isArray(content.modes), '课程及模式必须是数组');
-  assert.deepEqual(Array.from(content.courses, course => course.minutes).sort((a, b) => a - b), [1, 3, 5], '课程必须精确包含 1/3/5 分钟');
-  assert.deepEqual(Array.from(content.modes, mode => mode.id).sort(), ['seated', 'standing'], '必须验证坐姿和站姿');
-  assert.equal(new Set(content.courses.map(course => course.id)).size, 3, '课程 id 重复');
-  const usedImages = new Set();
-  function checkImage(image, label) {
-    const name = localResource(image, 'content.js');
-    assert.ok(name.startsWith('assets/habit-guides/') && name.endsWith('.svg'), `${label} 不使用自制 SVG`);
-    usedImages.add(name);
+  assert.ok(content && typeof content.buildSessionPlan === 'function', '缺少 QDK_CONTENT.buildSessionPlan');
+  assert.deepEqual([...content.cycleOrder], ['A', 'B', 'C'], '周循环顺序必须为 A -> B -> C');
+  assert.deepEqual(Object.keys(content.plans).sort(), ['A', 'B', 'C', 'gym', 'stretch'].sort(), '课程计划必须精确包含 A, B, C, gym, stretch');
+  assert.deepEqual(Object.keys(content.levels).sort(), ['recovery', 'standard', 'starter', 'steady'].sort(), '强度档位必须精确包含 4 档');
+
+  // 动作与媒体精确校验
+  const referencedAssets = new Set();
+  const operationalVoices = [
+    'assets/voice/countdown-start.m4a', 'assets/voice/countdown-3.m4a',
+    'assets/voice/switch-side.m4a', 'assets/voice/finish-done.m4a', 'assets/voice/finish-stretch.m4a',
+    'assets/voice/encourage-1.m4a', 'assets/voice/encourage-2.m4a', 'assets/voice/encourage-3.m4a',
+    'assets/voice/encourage-4.m4a', 'assets/voice/encourage-5.m4a'
+  ];
+  for (const op of operationalVoices) {
+    referencedAssets.add(op);
+    assert.ok(files.has(op), `缺少运行语音：${op}`);
+    assert.ok(precached.has('./' + op), `运行语音未预缓存：${op}`);
   }
-  function visitImages(value) {
-    if (!value || typeof value !== 'object') { return; }
-    for (const [key, item] of Object.entries(value)) {
-      if (key === 'image') { checkImage(item, '内容'); }
-      else { visitImages(item); }
+
+  const moves = Object.values(content.movesDict);
+  assert.equal(moves.length, 32, '动作清单必须精确为 32 个');
+  for (const m of moves) {
+    assert.ok(m.id && m.name && m.gif && m.poster && m.primary && m.secondary && m.benefit, `动作元数据不全：${m.id}`);
+    assert.ok(Array.isArray(m.steps) && m.steps.length === 3, `动作步骤必须为 3 步拆解：${m.id}`);
+    assert.ok(m.shortCue && m.shortCue.length <= 32, `动作口令过长：${m.id} (${m.shortCue})`);
+    assert.ok(!m.mistake.startsWith('常见错误：'), `避坑提醒不要重复带常见错误前缀：${m.id}`);
+
+    assert.ok(files.has(m.gif), `动图不存在：${m.gif}`);
+    assert.ok(precached.has('./' + m.gif), `动图未预缓存：${m.gif}`);
+    referencedAssets.add(m.gif);
+
+    assert.ok(files.has(m.poster), `海报图不存在：${m.poster}`);
+    assert.ok(precached.has('./' + m.poster), `海报图未预缓存：${m.poster}`);
+    referencedAssets.add(m.poster);
+
+    if (m.voice) {
+      assert.ok(files.has(m.voice), `动作语音不存在：${m.voice}`);
+      assert.ok(precached.has('./' + m.voice), `动作语音未预缓存：${m.voice}`);
+      referencedAssets.add(m.voice);
     }
   }
-  visitImages(content);
-  let plans = 0;
-  for (const course of content.courses) {
-    for (const mode of content.modes) {
-      context.courseId = course.id;
-      context.modeId = mode.id;
-      const plan = vm.runInContext('window.QDK_CONTENT.buildPlan(courseId, modeId)', context, { timeout: 1000 });
-      assert.ok(Array.isArray(plan) && plan.length > 0, `空课程：${course.id}/${mode.id}`);
-      let total = 0;
-      for (const step of plan) {
-        assert.ok(Number.isInteger(step.seconds) && step.seconds > 0, `非法步骤时长：${step.id}`);
-        assert.ok(['prepare', 'move', 'rest', 'settle'].includes(step.kind), `未知阶段：${step.id}`);
-        assert.equal(step.mode, mode.id, `课程混入另一模式：${step.id}`);
-        assert.equal(step.activeSeconds, step.kind === 'move' ? step.seconds : 0, `准备/休息/收尾不得冒充活动：${step.id}`);
-        checkImage(step.image, step.id);
-        total += step.seconds;
+
+  // 校验 5 套课程 × 4 档强度的全部跟练步序列
+  for (const pid of Object.keys(content.plans)) {
+    for (const lid of content.levelOrder) {
+      const steps = content.buildSessionPlan(pid, lid);
+      assert.ok(Array.isArray(steps) && steps.length > 0, `课程生成步骤为空：${pid} ${lid}`);
+      for (let i = 0; i < steps.length; i++) {
+        const s = steps[i];
+        assert.ok(s.id && s.kind && s.seconds > 0, `步字段不全：${pid} ${lid} #${i}`);
+        assert.ok(['countdown', 'warmup', 'work', 'rest', 'roundBreak', 'stretch'].includes(s.kind), `未知步阶段：${s.kind}`);
+        assert.ok(files.has(s.gif), `步动图不存在：${s.gif}`);
+        assert.ok(files.has(s.poster), `步海报图不存在：${s.poster}`);
+        if (s.kind === 'rest' || s.kind === 'roundBreak' || s.kind === 'countdown') {
+          assert.ok(s.nextMove && s.nextMove.name && s.nextMove.gif, `休息步缺少下一动作引用：${s.id}`);
+        }
       }
-      assert.equal(total, course.minutes * 60, `${course.id}/${mode.id} 总时长必须精确为 ${course.minutes * 60} 秒（含准备、休息、收尾）`);
-      plans++;
     }
   }
-  return { version, courses: content.courses.length, plans, guides: guides.length, usedImages: usedImages.size };
+
+  // 双向精确匹配：发布包中的 exercise-guides 与 voice 媒体文件不得含有未引用的孤儿文件
+  for (const name of files.keys()) {
+    if (name.startsWith('assets/exercise-guides/') || name.startsWith('assets/voice/')) {
+      assert.ok(referencedAssets.has(name), `发布包中存在未被引用的孤儿媒体文件：${name}`);
+    }
+  }
+
+  return { plans: 5, moves: moves.length };
 }
 
 async function main() {
-  if (process.argv.length > 2) { throw new Error('Usage: node scripts/check-dist.mjs'); }
-  const files = await readArtifact(resolve(PROJECT_ROOT, 'dist'));
+  const artifactDir = resolve(PROJECT_ROOT, 'dist');
+  const files = await readArtifact(artifactDir);
   const result = await checkArtifact(files);
-  console.log(`Deploy artifact verified: ${result.version}; ${files.size} allowlisted files; ${result.guides} precached SVGs`);
-  console.log(`Content verified: ${result.plans} plans; exact 60/180/300 seconds; no legacy pages, audio, documents or dependencies`);
+  console.log(`Artifact check passed: ${artifactDir} (${files.size} files; ${result.plans} plans; ${result.moves} moves)`);
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

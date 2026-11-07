@@ -6,7 +6,7 @@
     "check:dist": "node scripts/check-dist.mjs",
     "deploy": "node scripts/deploy-pages.mjs",
     "test:e2e": "node scripts/e2e-test.mjs",
-    "test:reliability": "node --test scripts/test-store.mjs scripts/test-session.mjs scripts/test-sw.mjs",
+    "test:reliability": "node --test scripts/test-session.mjs scripts/test-sw.mjs",
     "test": "npm run test:reliability && npm run test:e2e"
   },
   "devDependencies": {

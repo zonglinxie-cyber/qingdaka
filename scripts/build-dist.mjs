@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 export const PROJECT_ROOT = fileURLToPath(new URL('../', import.meta.url));
 export const REQUIRED_FILES = [
-  'index.html', 'styles.css', 'app.js', 'content.js', 'store.js', 'session.js',
+  'index.html', 'styles.css', 'app.js', 'content.js', 'session.js',
   'sw.js', 'manifest.webmanifest', '.nojekyll'
 ];
 const MARKERS = ['VERSION', 'PRECACHE', 'COMPLETE', 'HASHES'];
@@ -13,7 +13,8 @@ const MARKERS = ['VERSION', 'PRECACHE', 'COMPLETE', 'HASHES'];
 export function allowedFile(name) {
   return REQUIRED_FILES.includes(name) ||
     /^icons\/(?:[a-zA-Z0-9_-]+\/)*[a-zA-Z0-9_-]+\.(?:png|svg|ico|webp|jpe?g)$/.test(name) ||
-    /^assets\/habit-guides\/(?:[a-zA-Z0-9_-]+\/)*[a-zA-Z0-9_-]+\.svg$/.test(name);
+    /^assets\/exercise-guides\/(?:[a-zA-Z0-9_-]+\/)*[a-zA-Z0-9_-]+\.(?:png|gif)$/.test(name) ||
+    /^assets\/voice\/[a-zA-Z0-9_-]+\.m4a$/.test(name);
 }
 
 // 不跟随软链接，避免白名单目录间接带出文档、旧素材或项目外的文件。
@@ -45,7 +46,6 @@ function replaceBlock(source, marker, value) {
 
 export function readBuildBlock(source, marker) {
   if (!MARKERS.includes(marker)) { throw new Error(`Unknown build marker: ${marker}`); }
-  // 同时检查唯一性，防止检查器与注入器读到不同的清单。
   replaceBlock(source, marker, 'null');
   return JSON.parse(source.split(`/* BUILD_${marker}_START */`)[1].split(`/* BUILD_${marker}_END */`)[0]);
 }
@@ -60,14 +60,13 @@ export function releaseVersion(files) {
     let data = files.get(name);
     if (name === 'sw.js') {
       let source = data.toString('utf8');
-      // 注入字段由包内文件推导，归一化后才能独立复算版本，不产生 hash 循环。
       for (const marker of MARKERS) { source = replaceBlock(source, marker, 'null'); }
       data = Buffer.from(source);
     }
     digest.update(JSON.stringify([name, data.length]) + '\n');
     digest.update(data);
   }
-  return 'habits-' + digest.digest('hex').slice(0, 20);
+  return 'coach-' + digest.digest('hex').slice(0, 20);
 }
 
 export function renderServiceWorker(source, { version, precache, hashes, complete = true }) {
@@ -77,14 +76,13 @@ export function renderServiceWorker(source, { version, precache, hashes, complet
 }
 
 export function precacheFiles(files) {
-  // SW 自身由浏览器更新；.nojekyll 是发布标记，不是应用运行资源。
   return [...files.keys()].filter(name => name !== 'sw.js' && name !== '.nojekyll').sort().map(name => './' + name);
 }
 
 export async function prepareBuild(root = PROJECT_ROOT) {
   const names = [...REQUIRED_FILES];
   try {
-    for (const directory of ['icons', 'assets/habit-guides']) {
+    for (const directory of ['icons', 'assets/exercise-guides', 'assets/voice']) {
       names.push(...(await listFiles(root, directory)).filter(allowedFile));
     }
     const files = new Map();
@@ -93,8 +91,11 @@ export async function prepareBuild(root = PROJECT_ROOT) {
       if (!(await lstat(path)).isFile()) { throw new Error(`Not a regular file: ${name}`); }
       files.set(name, await readFile(path));
     }
-    if (!names.some(name => name.startsWith('assets/habit-guides/'))) {
-      throw new Error('assets/habit-guides/ 尚无自制 SVG');
+    if (!names.some(name => name.startsWith('assets/exercise-guides/'))) {
+      throw new Error('assets/exercise-guides/ 尚无动作示范资源');
+    }
+    if (!names.some(name => name.startsWith('assets/voice/'))) {
+      throw new Error('assets/voice/ 尚无预录语音资源');
     }
     const version = releaseVersion(files);
     const precache = precacheFiles(files);
@@ -112,11 +113,10 @@ async function main() {
     throw new Error('Usage: node scripts/build-dist.mjs [--check]');
   }
   const { files, version } = await prepareBuild();
-  // 完整内存快照先通过发布门槛，才允许清空 dist；--check 永远不写文件。
   const { checkArtifact } = await import('./check-dist.mjs');
   const result = await checkArtifact(files);
   if (args[0] === '--check') {
-    console.log(`Build preflight passed (dist untouched): ${version}; ${result.courses} courses; ${result.guides} SVGs; ${files.size} files`);
+    console.log(`Build preflight passed (dist untouched): ${version}; ${result.plans} plans; ${result.moves} moves; ${files.size} files`);
     return;
   }
   const outputDir = resolve(PROJECT_ROOT, 'dist');
@@ -130,7 +130,7 @@ async function main() {
     await mkdir(dirname(path), { recursive: true });
     await writeFile(path, data);
   }
-  console.log(`Built deploy artifact: ${outputDir} (${version}; ${files.size} files; ${result.guides} SVGs)`);
+  console.log(`Built deploy artifact: ${outputDir} (${version}; ${files.size} files; ${result.moves} moves)`);
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
