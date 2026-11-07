@@ -167,8 +167,8 @@ function create(options){
       }
     }
 
-    // 休息/倒数最后3秒
-    if((currentStep.kind === 'rest' || currentStep.kind === 'roundBreak' || currentStep.kind === 'countdown') &&
+    // 休息段结束前最后3秒（countdown 首步自身已播 countdown-start，不重复截断）
+    if((currentStep.kind === 'rest' || currentStep.kind === 'roundBreak') &&
        !countdown3Triggered[idx]){
       if(state.left <= 3 + EPSILON && state.left > 0){
         countdown3Triggered[idx] = true;

@@ -439,8 +439,9 @@ check('新跟练阶段：countdown/warmup/work/rest/roundBreak/stretch 正常流
   assert.equal(finishes[0].reason, 'natural');
 });
 
-check('步骤钩子 onStep、单侧过半 onHalfway 与休息倒数 onCountdown3', () => {
+check('步骤钩子 onStep、单侧过半 onHalfway 与休息倒数 onCountdown3（countdown 首步不误触）', () => {
   const plan = [
+    {id:'cd-3', kind:'countdown', seconds:3, sideMode:'none'},
     {id:'w-half', kind:'work', seconds:10, sideMode:'half'},
     {id:'rest-10', kind:'rest', seconds:10, sideMode:'none'}
   ];
@@ -465,7 +466,14 @@ check('步骤钩子 onStep、单侧过半 onHalfway 与休息倒数 onCountdown3
 
   session.start();
   assert.equal(stepEvents.length, 1);
-  assert.equal(stepEvents[0].id, 'w-half');
+  assert.equal(stepEvents[0].id, 'cd-3');
+  assert.equal(countdown3Events.length, 0, 'countdown 首步不应重复触发 onCountdown3');
+
+  // 走完 3 秒首步倒数，进入 w-half
+  clock.run(3000);
+  assert.equal(countdown3Events.length, 0);
+  assert.equal(stepEvents.length, 2);
+  assert.equal(stepEvents[1].id, 'w-half');
 
   // 推进 4 秒：left 变为 6，尚未过半（半程为 5）
   clock.run(4000);
@@ -476,10 +484,10 @@ check('步骤钩子 onStep、单侧过半 onHalfway 与休息倒数 onCountdown3
   assert.equal(halfwayEvents.length, 1);
   assert.equal(halfwayEvents[0].id, 'w-half');
 
-  // 推进 4 秒完成第 0 步，进入第 1 步 (rest-10, 10s)
+  // 推进 4 秒完成 w-half，进入 rest-10
   clock.run(4000);
-  assert.equal(stepEvents.length, 2);
-  assert.equal(stepEvents[1].id, 'rest-10');
+  assert.equal(stepEvents.length, 3);
+  assert.equal(stepEvents[2].id, 'rest-10');
   assert.equal(countdown3Events.length, 0);
 
   // rest-10 推进 4 秒：left 变为 6，未到 3 秒

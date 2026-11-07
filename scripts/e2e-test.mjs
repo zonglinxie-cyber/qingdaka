@@ -58,6 +58,7 @@ async function cleanup() {
 function stop(reason, code = 1) {
   if (stopping) return;
   stopping = true;
+  clearTimeout(watchdog);
   process.exitCode = code;
   console.error('\n' + reason);
   void cleanup().catch(error => console.error('清理失败：', error.message));
@@ -202,8 +203,8 @@ async function main() {
     }
   });
 
-  // 4. 单练体验 30 秒
-  await testCheck('从教学弹层启动单练体验 30 秒，干净退出无问卷', async () => {
+  // 4. 单练体验 30 秒（提前结束与跳过完成均不弹问卷、不推进周循环）
+  await testCheck('从教学弹层启动单练体验 30 秒，退出与完成均不误推计划书签', async () => {
     const { page, context } = await newPage();
     try {
       await page.click('.exercise-item[data-move-id="0291"]');
@@ -216,20 +217,27 @@ async function main() {
       assert.match(await page.locator('#playerStepName').innerText(), /单练体验/);
       assert.equal(await page.locator('#playerClock').innerText(), '30');
 
-      // 提前点击结束直接关闭回到主页
-      await page.click('#btnPlayerEnd');
+      // 跳过单练最后一步触发完成，验证直接干净回到主页、不弹完成卡、不改 A 推荐
+      await page.click('#btnPlayerSkip');
       await page.locator('#player').waitFor({ state: 'hidden' });
-      assert.ok(await page.locator('#consoleCard').isVisible());
+      assert.equal(await page.locator('#doneDialog').isVisible(), false);
+      assert.ok(await page.locator('.cycle-card[data-plan="A"] .badge-recommend').isVisible());
     } finally {
       await context.close();
       contexts.delete(context);
     }
   });
 
-  // 5. 点「开始跟练」零弹窗直接进入播放器、暂停/继续/换另一侧提示
-  await testCheck('点「开始跟练」零弹窗进入播放器、单侧换边触发提示', async () => {
+  // 5. 点「开始跟练」零弹窗直接进入播放器、暂停/继续/真实换边提示
+  await testCheck('点「开始跟练」零弹窗进入播放器、单侧动作过半真实弹出换边提示', async () => {
     const { page, context } = await newPage();
     try {
+      // 将恢复档正式动作时长调为 1.2 秒以便真实计时验证过半换边
+      await page.evaluate(() => {
+        window.QDK_CONTENT.levels.recovery.workSec = 1.2;
+      });
+      await page.click('.level-btn[data-level="recovery"]');
+
       // 首页直接点击开始跟练
       await page.click('#btnStartWorkout');
       await page.locator('#player').waitFor({ state: 'visible' });
@@ -245,70 +253,51 @@ async function main() {
       await page.click('#btnPlayerToggle');
       assert.equal(await page.locator('#btnPlayerToggle').innerText(), '暂停');
 
-      // 跳过功能测试
-      await page.click('#btnPlayerSkip');
-      // 进入下一节（第 2 节热身）
-      assert.match(await page.locator('#playerProgressText').innerText(), /第 2/);
+      // 跳到计划 A 中的单侧动作「侧卧髋外展」(0710, sideMode === 'half')
+      for (let guard = 0; guard < 20; guard++) {
+        const name = await page.locator('#playerStepName').innerText();
+        if (name.includes('侧卧髋外展')) break;
+        await page.click('#btnPlayerSkip');
+      }
+      assert.match(await page.locator('#playerStepName').innerText(), /侧卧髋外展/);
+      assert.equal(await page.locator('#playerSwitchBadge').isVisible(), false);
 
-      // 测试单侧动作换侧提示
-      // 通过 evaluate 构造一个 2 秒单侧动作并在 1 秒后检查换侧徽章
-      await page.evaluate(() => {
-        const testSteps = [
-          {
-            id: 'test-half',
-            kind: 'work',
-            seconds: 2,
-            name: '单侧测试动作',
-            shortCue: '单侧换边测试',
-            gif: 'assets/exercise-guides/0710.gif',
-            poster: 'assets/exercise-guides/0710-poster.png',
-            sideMode: 'half',
-            mediaLabel: '换边测试'
-          }
-        ];
-        window.testSessionWithSteps = function() {
-          const se = window.QDK_SESSION;
-          const session = se.create({
-            plan: testSteps,
-            onHalfway: function() {
-              document.getElementById('playerSwitchBadge').hidden = false;
-            }
-          });
-          session.start();
-          return session;
-        };
-      });
+      // 等待过半（>0.6s），真实触发 app.js 的 onHalfway 显示换侧徽章
+      await page.locator('#playerSwitchBadge').waitFor({ state: 'visible', timeout: 3000 });
 
-      // 直接跳过剩余步骤关闭播放器
+      // 提前退出不推进书签
       await page.click('#btnPlayerExit');
       await page.locator('#player').waitFor({ state: 'hidden' });
+      assert.ok(await page.locator('.cycle-card[data-plan="A"] .badge-recommend').isVisible());
     } finally {
       await context.close();
       contexts.delete(context);
     }
   });
 
-  // 6. 自然走完跟练推进 A → B 书签
-  await testCheck('跟练自然完成触发完成卡，周循环书签推进 A → B', async () => {
+  // 6. 走完跟练触发完成卡并自动推进 A → B 书签
+  await testCheck('真实走完计划 A 跟练弹出完成卡，周循环书签推进 A → B 并持久化', async () => {
     const { page, context } = await newPage();
     try {
-      // 选计划 A
       await page.click('.cycle-card[data-plan="A"]');
+      await page.click('.level-btn[data-level="recovery"]');
+      await page.click('#btnStartWorkout');
+      await page.locator('#player').waitFor({ state: 'visible' });
 
-      // 通过页面脚本以极速秒数完成一节课程，验证自然完成推进书签逻辑
-      await page.evaluate(() => {
-        // 模拟完成计划 A 的自然回调
-        const content = window.QDK_CONTENT;
-        const cycleIdx = content.cycleOrder.indexOf('A');
-        const nextIdx = (cycleIdx + 1) % content.cycleOrder.length;
-        const nextPlanId = content.cycleOrder[nextIdx];
-        const prefs = JSON.parse(localStorage.getItem('qingdaka-coach-prefs') || '{}');
-        prefs.nextCycle = nextPlanId;
-        prefs.selectedPlan = nextPlanId;
-        localStorage.setItem('qingdaka-coach-prefs', JSON.stringify(prefs));
-      });
+      // 逐节跳过直至最后一节结束（触发 partial/skipped 完成流转）
+      for (let guard = 0; guard < 30; guard++) {
+        if (!(await page.locator('#player').isVisible())) break;
+        await page.click('#btnPlayerSkip');
+      }
 
-      // 刷新页面，验证书签已推进到 B
+      await page.locator('#doneDialog').waitFor({ state: 'visible' });
+      assert.match(await page.locator('#doneSummary').innerText(), /计划 A/);
+      assert.match(await page.locator('#doneCycleUpdate').innerText(), /计划 B/);
+
+      await page.click('#btnDoneFinish');
+      await page.locator('#doneDialog').waitFor({ state: 'hidden' });
+
+      // 刷新页面，验证书签已持久化推进到 B
       await page.reload();
       const recCard = page.locator('.cycle-card[data-plan="B"] .badge-recommend');
       assert.ok(await recCard.isVisible(), '计划 B 上应有「本次推荐」徽章');

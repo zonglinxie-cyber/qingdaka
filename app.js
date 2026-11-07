@@ -93,17 +93,44 @@ var doneSummary = document.getElementById('doneSummary');
 var doneCycleUpdate = document.getElementById('doneCycleUpdate');
 var btnDoneFinish = document.getElementById('btnDoneFinish');
 
-// 音频
+// 音频与屏幕常亮
 var playerAudio = document.getElementById('playerAudio');
+var sharedAudioCtx = null;
+var wakeLockSentinel = null;
+
+function requestWakeLock(){
+  try {
+    if(navigator.wakeLock && !document.hidden && !wakeLockSentinel){
+      navigator.wakeLock.request('screen').then(function(lock){
+        wakeLockSentinel = lock;
+        lock.addEventListener('release', function(){ wakeLockSentinel = null; });
+        if(!currentSession || currentSession.get().phase !== 'running'){ releaseWakeLock(); }
+      }).catch(function(){});
+    }
+  } catch(e){}
+}
+
+function releaseWakeLock(){
+  if(wakeLockSentinel){
+    try { wakeLockSentinel.release().catch(function(){}); } catch(e){}
+    wakeLockSentinel = null;
+  }
+}
 
 // 解锁音频
 function unlockAudio(){
-  if(!playerAudio){ return; }
   try {
-    playerAudio.play().then(function(){
-      playerAudio.pause();
-    }).catch(function(){});
+    var AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if(AudioCtx && !sharedAudioCtx){ sharedAudioCtx = new AudioCtx(); }
+    if(sharedAudioCtx && sharedAudioCtx.state === 'suspended'){
+      sharedAudioCtx.resume().catch(function(){});
+    }
   } catch(e){}
+}
+
+function stopVoice(){
+  if(!playerAudio){ return; }
+  try { playerAudio.pause(); } catch(e){}
 }
 
 function playVoice(src){
@@ -121,15 +148,16 @@ function playBeep(freq, dur){
   try {
     var AudioCtx = window.AudioContext || window.webkitAudioContext;
     if(AudioCtx){
-      var ctx = new AudioCtx();
-      var osc = ctx.createOscillator();
-      var gain = ctx.createGain();
+      if(!sharedAudioCtx){ sharedAudioCtx = new AudioCtx(); }
+      if(sharedAudioCtx.state === 'suspended'){ sharedAudioCtx.resume().catch(function(){}); }
+      var osc = sharedAudioCtx.createOscillator();
+      var gain = sharedAudioCtx.createGain();
       osc.frequency.value = freq || 880;
-      gain.gain.value = 0.15;
+      gain.gain.value = 0.12;
       osc.connect(gain);
-      gain.connect(ctx.destination);
+      gain.connect(sharedAudioCtx.destination);
       osc.start();
-      osc.stop(ctx.currentTime + (dur || 0.12));
+      osc.stop(sharedAudioCtx.currentTime + (dur || 0.12));
     }
   } catch(e){}
 }
@@ -246,9 +274,10 @@ function renderConsole(){
   activePlanSteps = content.buildSessionPlan(currentPrefs.selectedPlan, currentPrefs.level);
   var totalSec = 0;
   activePlanSteps.forEach(function(s){ totalSec += s.seconds; });
-  var totalMin = Math.round(totalSec / 60);
+  var totalMin = Math.max(1, Math.round(totalSec / 60));
+  var roundText = (plan.id === 'stretch') ? '1 轮直连' : (lvl.rounds + ' 轮');
 
-  planSummaryTextEl.textContent = '预计 ' + totalMin + ' 分钟 · ' + lvl.rounds + ' 轮 · 共 ' + activePlanSteps.length + ' 节';
+  planSummaryTextEl.textContent = '预计 ' + totalMin + ' 分钟 · ' + roundText + ' · 共 ' + activePlanSteps.length + ' 节';
 }
 
 // 渲染动作分组列表
@@ -442,8 +471,13 @@ function startSessionWithPlan(steps, planId){
       }
     },
     onFinish: function(state, reason){
-      if(reason === 'natural'){
-        finishWorkoutNaturally(planId);
+      if(reason !== 'early'){
+        if(planId === 'practice'){
+          playBeep(880, 0.18);
+          exitPlayerDirectly();
+        } else {
+          finishWorkoutNaturally(planId);
+        }
       }
     }
   });
@@ -455,6 +489,7 @@ function startSessionWithPlan(steps, planId){
   }
 
   currentSession.start();
+  requestWakeLock();
   btnPlayerToggle.textContent = '暂停';
 }
 
@@ -504,13 +539,14 @@ function updatePlayerView(step, idx, totalSteps){
 }
 
 function finishWorkoutNaturally(planId){
+  releaseWakeLock();
   if(currentSession){
     currentSession.destroy();
     currentSession = null;
   }
 
   if(typeof playerDialog.close === 'function'){
-    playerDialog.close();
+    if(playerDialog.open){ playerDialog.close(); }
   } else {
     playerDialog.removeAttribute('open');
   }
@@ -550,13 +586,14 @@ function finishWorkoutNaturally(planId){
 }
 
 function exitPlayerDirectly(){
+  stopVoice();
+  releaseWakeLock();
   if(currentSession){
-    currentSession.finish();
     currentSession.destroy();
     currentSession = null;
   }
   if(typeof playerDialog.close === 'function'){
-    playerDialog.close();
+    if(playerDialog.open){ playerDialog.close(); }
   } else {
     playerDialog.removeAttribute('open');
   }
@@ -578,6 +615,8 @@ btnVoiceToggle.addEventListener('click', function(){
   if(currentPrefs.voice){
     unlockAudio();
     playVoice('assets/voice/countdown-3.m4a');
+  } else {
+    stopVoice();
   }
 });
 
@@ -587,6 +626,8 @@ btnPlayerVoice.addEventListener('click', function(){
   updateVoiceButtons();
   if(currentPrefs.voice){
     unlockAudio();
+  } else {
+    stopVoice();
   }
 });
 
@@ -637,23 +678,32 @@ btnPlayerToggle.addEventListener('click', function(){
   var st = currentSession.get();
   if(st.phase === 'running'){
     currentSession.pause();
+    stopVoice();
+    releaseWakeLock();
     btnPlayerToggle.textContent = '继续';
   } else if(st.phase === 'paused' || st.phase === 'ready'){
     unlockAudio();
     currentSession.start();
+    requestWakeLock();
     btnPlayerToggle.textContent = '暂停';
   }
 });
 
 btnPlayerSkip.addEventListener('click', function(){
   if(!currentSession){ return; }
+  stopVoice();
   currentSession.next();
 });
 
 btnPlayerExit.addEventListener('click', exitPlayerDirectly);
 btnPlayerEnd.addEventListener('click', exitPlayerDirectly);
+playerDialog.addEventListener('cancel', function(e){
+  e.preventDefault();
+  exitPlayerDirectly();
+});
 
 btnDoneFinish.addEventListener('click', function(){
+  stopVoice();
   if(typeof doneDialog.close === 'function'){
     doneDialog.close();
   } else {
@@ -668,6 +718,8 @@ document.addEventListener('visibilitychange', function(){
     var st = currentSession.get();
     if(st.phase === 'running'){
       currentSession.pause();
+      stopVoice();
+      releaseWakeLock();
       btnPlayerToggle.textContent = '继续';
     }
   }
