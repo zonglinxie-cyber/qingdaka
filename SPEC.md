@@ -39,7 +39,7 @@
 
 | 模块 | 文件 | 职责 |
 | --- | --- | --- |
-| `QDK_CONTENT` | `content.js` | 32 个动作元数据（3D 解剖动图、海报、预录女声口令、主次肌群、3步做法、呼吸发力、避坑红框）、5 套课程、cycleOrder、4 档强度、`buildSessionPlan(planId, levelId)` |
+| `QDK_CONTENT` | `content.js` | 31 个精选动作元数据（100% 完整流畅 3D 解剖动图、海报、精炼教练口令/哨音、主次肌群、3步做法、呼吸发力、避坑红框）、5 套课程、cycleOrder、4 档强度、`buildSessionPlan(planId, levelId)` |
 | `QDK_SESSION` | `session.js` | 纯内存计时状态机；支持阶段 `countdown` / `warmup` / `work` / `rest` / `roundBreak` / `stretch`；`work` 与 `stretch` 计入 `activeSeconds`；提供 `onStep`、`onHalfway`（单侧换边）、`onCountdown3` 钩子；严格时间推进（>2000ms 间隔自动暂停不补算） |
 | UI 单页 | `index.html` / `styles.css` / `app.js` | 单页全屏跟练架构：顶栏语音开关与离线指示、周循环推荐书签、4档强度切换控制台、按顺序学与练动作列表、3D 动作教学弹层（含「单练体验 30 秒」）、全屏跟练播放器（白底正方形舞台融合 3D GIF、下一动作角标、换另一侧提示、直关退出）、自然完成卡与 A→B→C 书签自动推进 |
 | 离线缓存 | `sw.js` | Service Worker PWA 离线支持；支持 Range 头部放行返回 206 Partial Content（保证 iOS Safari `<audio>` 正常播放）；预缓存核心壳及全部引用的动图与语音 |

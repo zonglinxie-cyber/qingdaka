@@ -101,7 +101,7 @@ export async function checkArtifact(files) {
   }
 
   const moves = Object.values(content.movesDict);
-  assert.equal(moves.length, 32, '动作清单必须精确为 32 个');
+  assert.equal(moves.length, 31, '动作清单必须精确为 31 个');
   for (const m of moves) {
     assert.ok(m.id && m.name && m.gif && m.poster && m.primary && m.secondary && m.benefit, `动作元数据不全：${m.id}`);
     assert.ok(Array.isArray(m.steps) && m.steps.length === 3, `动作步骤必须为 3 步拆解：${m.id}`);

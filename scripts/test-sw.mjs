@@ -111,7 +111,7 @@ test('完整包构建与检查：版本 hash 可复算且精确通过全部断�
   const { files, version } = await prepareBuild();
   const check = await checkArtifact(files);
   assert.equal(check.plans, 5);
-  assert.equal(check.moves, 32);
+  assert.equal(check.moves, 31);
   assert.match(version, /^coach-[a-f0-9]{20}$/);
 });
 
