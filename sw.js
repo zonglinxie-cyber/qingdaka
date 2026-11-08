@@ -1,7 +1,7 @@
 'use strict';
 
 // 构建会替换这四组标记，自动绑定内容 hash。
-var VERSION = /* BUILD_VERSION_START */ "coach-5a17196796160669ab54" /* BUILD_VERSION_END */;
+var VERSION = /* BUILD_VERSION_START */ "coach-30294a063bc8f8c2b9da" /* BUILD_VERSION_END */;
 var CORE = /* BUILD_PRECACHE_START */ [
   "./app.js",
   "./assets/exercise-guides/0257-poster.png",
@@ -118,7 +118,7 @@ var CORE = /* BUILD_PRECACHE_START */ [
 ] /* BUILD_PRECACHE_END */;
 var COMPLETE_RELEASE = /* BUILD_COMPLETE_START */ true /* BUILD_COMPLETE_END */;
 var RELEASE_HASHES = /* BUILD_HASHES_START */ {
-  "./app.js": "30a362792fa93da73b7bc5382b432bb949de86689d11bc4c6ac20e0c9527586b",
+  "./app.js": "d7bdeb3847132a102f829d3ea38bb62208867d342e7f94cee5a20afd7c7e9cd6",
   "./assets/exercise-guides/0257-poster.png": "1f1ffe6a159e58f71a4cd588dd12b476d65777ece75f7accf3c441273302dafa",
   "./assets/exercise-guides/0257.gif": "c16f80d17e0755607992ad4f7f8702fb590f778683eb082d22bdc36985329055",
   "./assets/exercise-guides/0276-poster.png": "2aea608c56fc02135862a14b4614674c8fbb27419e0c39212ff5bf9135267b68",
@@ -301,7 +301,9 @@ async function installRelease() {
 
 self.addEventListener('install', function (event) {
   installation = installRelease();
-  event.waitUntil(installation);
+  event.waitUntil(installation.then(function () {
+    return self.skipWaiting();
+  }));
 });
 
 self.addEventListener('activate', function (event) {
