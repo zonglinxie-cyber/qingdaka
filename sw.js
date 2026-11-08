@@ -1,7 +1,7 @@
 'use strict';
 
 // 构建会替换这四组标记，自动绑定内容 hash。
-var VERSION = /* BUILD_VERSION_START */ "coach-30294a063bc8f8c2b9da" /* BUILD_VERSION_END */;
+var VERSION = /* BUILD_VERSION_START */ "coach-bb201f3c7e00dd0eee3f" /* BUILD_VERSION_END */;
 var CORE = /* BUILD_PRECACHE_START */ [
   "./app.js",
   "./assets/exercise-guides/0257-poster.png",
@@ -64,9 +64,8 @@ var CORE = /* BUILD_PRECACHE_START */ [
   "./assets/exercise-guides/3013.gif",
   "./assets/exercise-guides/3221-poster.png",
   "./assets/exercise-guides/3221.gif",
-  "./assets/exercise-guides/bird-dog-poster.png",
-  "./assets/exercise-guides/bird-dog.gif",
-  "./assets/exercise-guides/generated/wall-plank-anatomy.png",
+  "./assets/exercise-guides/3239-poster.png",
+  "./assets/exercise-guides/3239.gif",
   "./assets/voice/countdown-3.m4a",
   "./assets/voice/countdown-start.m4a",
   "./assets/voice/encourage-1.m4a",
@@ -106,6 +105,7 @@ var CORE = /* BUILD_PRECACHE_START */ [
   "./assets/voice/work-1677.m4a",
   "./assets/voice/work-2287.m4a",
   "./assets/voice/work-3013.m4a",
+  "./assets/voice/work-3239.m4a",
   "./content.js",
   "./icons/apple-touch-icon-180.png",
   "./icons/icon-192.png",
@@ -118,7 +118,7 @@ var CORE = /* BUILD_PRECACHE_START */ [
 ] /* BUILD_PRECACHE_END */;
 var COMPLETE_RELEASE = /* BUILD_COMPLETE_START */ true /* BUILD_COMPLETE_END */;
 var RELEASE_HASHES = /* BUILD_HASHES_START */ {
-  "./app.js": "d7bdeb3847132a102f829d3ea38bb62208867d342e7f94cee5a20afd7c7e9cd6",
+  "./app.js": "fbc6c0949c931c1719bac8f6de3273a875ee830a05ee2e541b7b1896c75c592d",
   "./assets/exercise-guides/0257-poster.png": "1f1ffe6a159e58f71a4cd588dd12b476d65777ece75f7accf3c441273302dafa",
   "./assets/exercise-guides/0257.gif": "c16f80d17e0755607992ad4f7f8702fb590f778683eb082d22bdc36985329055",
   "./assets/exercise-guides/0276-poster.png": "2aea608c56fc02135862a14b4614674c8fbb27419e0c39212ff5bf9135267b68",
@@ -179,9 +179,8 @@ var RELEASE_HASHES = /* BUILD_HASHES_START */ {
   "./assets/exercise-guides/3013.gif": "35417faf76b51c5e2bfddb47751730e5cee0d953d37a054795ba50ee22ded1fc",
   "./assets/exercise-guides/3221-poster.png": "a6c404ced5c59b854c638b7e78d63eba982f6fd23ede272b7e86265f13b24fc6",
   "./assets/exercise-guides/3221.gif": "4e66b42df0d2706d58aadcfcfd94c7eda79cca048bd7e9c244d349af686bf0fd",
-  "./assets/exercise-guides/bird-dog-poster.png": "abc3646181d82940d2b182c03c3aa266a43e3510c9233ce0820b5e2826c81b70",
-  "./assets/exercise-guides/bird-dog.gif": "7aeb8cb5dcd93e6ff87de567956b618ed6d4b57a3a8236aa9439c56bcaf995e0",
-  "./assets/exercise-guides/generated/wall-plank-anatomy.png": "9335dcd995dbd244bda589ae4f85f9fb37c6c8703a28a686b5cb3c421026929e",
+  "./assets/exercise-guides/3239-poster.png": "71aaf71e726f05fb20c2d188b1af106ef62330064dacc08ceae2d13ac3328106",
+  "./assets/exercise-guides/3239.gif": "25938cbaaf245e9918b63a722e6b07124cf6ad58a6f0d4464b7b814f7495feba",
   "./assets/voice/countdown-3.m4a": "0d113b3c86ca3ea3e53942fc5722286db4ab9a6d7bee3aa42e0fcbbe42db2fc1",
   "./assets/voice/countdown-start.m4a": "50500157e0a0633a5c6c3e4df0aba54286dc2ba3f9f5abbc83655ffeed12d077",
   "./assets/voice/encourage-1.m4a": "274ea7b93bd66510b968acc447509c6f6052bcd1fe0f5970004a1f7e99442697",
@@ -221,15 +220,16 @@ var RELEASE_HASHES = /* BUILD_HASHES_START */ {
   "./assets/voice/work-1677.m4a": "30e4cc8987361289a3e4a5bdac6a9391e264d38816c7b341a32f3fd480ca016f",
   "./assets/voice/work-2287.m4a": "323ea5dabe76073f2da7e5bbe886f5f424b813876f6121d9d9bc283d3a903d2e",
   "./assets/voice/work-3013.m4a": "618a1bce96fcafa923ed58409b177ec2217f80c81a5e56e34041d2671fd21b49",
-  "./content.js": "a3ac07e0fae3c7398d633231596b0b00380fcedcb424db50438a4fa4d257526c",
+  "./assets/voice/work-3239.m4a": "0db36a43e0a113d19187f3d6975a456f7377cc25c17e8ba75adfd34b8bea5055",
+  "./content.js": "13b2913d97a461bc5b1af4d2e07a06ddf012d0208143dbd4692dcba29cb0e347",
   "./icons/apple-touch-icon-180.png": "989da9616e205b878097be824e97fb7da865b4c7b9546933da28fa62bed47bb6",
   "./icons/icon-192.png": "6c392bf8142fee95fce333905eab906a62abd37c7781e84ea2c07ff8d95bdfac",
   "./icons/icon-512-maskable.png": "b5b9a9e528e6f024db137a1ba0986f33b6c355c8608108d3e020bfdd29721153",
   "./icons/icon-512.png": "b5b9a9e528e6f024db137a1ba0986f33b6c355c8608108d3e020bfdd29721153",
-  "./index.html": "cdc543b3041248d0c7ae423bd7d1282009bf17d1e1e4fa3b7db6bea91f91d821",
+  "./index.html": "155c1da63c2bf733a6f8ae8be5ec7fb8b9593f4badb3ec70b0b7df56d7aa02f4",
   "./manifest.webmanifest": "aa399110c2c1cb0ebb99e5584cc29311e7b019f68b5448f72f317a7c62a853d0",
   "./session.js": "cd0bbf1249e8e226bb87557316320d0a888c9db4bebc180870d870aff23685b7",
-  "./styles.css": "ca2b4d69473287ec6518c8562a526c0be7f5751a0896a18d17b78c10f4f0a876"
+  "./styles.css": "bfda1120edc1fc428693071ff77d61bf024ae0c0139ee3c3383cc0a763d73655"
 } /* BUILD_HASHES_END */;
 
 var SCOPE = new URL(self.registration.scope);

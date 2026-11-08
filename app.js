@@ -12,7 +12,7 @@ var defaultPrefs = {
   nextCycle: 'A',
   selectedPlan: 'A',
   level: 'starter',
-  voice: true
+  voiceMode: 'speech' // 'speech' (精炼教练语音) | 'whistle' (极简节拍哨音) | 'mute' (静音)
 };
 
 function loadPrefs(){
@@ -21,7 +21,11 @@ function loadPrefs(){
     if(raw){
       var parsed = JSON.parse(raw);
       if(parsed && typeof parsed === 'object'){
-        return Object.assign({}, defaultPrefs, parsed);
+        var p = Object.assign({}, defaultPrefs, parsed);
+        if(!p.voiceMode){
+          p.voiceMode = (p.voice === false) ? 'mute' : 'speech';
+        }
+        return p;
       }
     }
   } catch(e){}
@@ -74,6 +78,8 @@ var currentLearnMove = null;
 var playerDialog = document.getElementById('player');
 var btnPlayerExit = document.getElementById('btnPlayerExit');
 var btnPlayerVoice = document.getElementById('btnPlayerVoice');
+var playerProgressTrack = document.querySelector('.player-progress-track');
+var playerProgressFill = document.getElementById('playerProgressFill');
 var playerProgressText = document.getElementById('playerProgressText');
 var playerRoundBadge = document.getElementById('playerRoundBadge');
 var playerClock = document.getElementById('playerClock');
@@ -98,6 +104,33 @@ var playerAudio = document.getElementById('playerAudio');
 var sharedAudioCtx = null;
 var wakeLockSentinel = null;
 
+// 语音合成（Web Speech API）
+var speechSynth = window.speechSynthesis;
+var chineseVoice = null;
+
+function pickChineseVoice(){
+  if(!speechSynth || typeof speechSynth.getVoices !== 'function'){ return; }
+  try {
+    var voices = speechSynth.getVoices() || [];
+    for(var i = 0; i < voices.length; i++){
+      var v = voices[i];
+      if(v.lang && (v.lang === 'zh-CN' || v.lang === 'zh-HK' || v.lang.indexOf('zh') === 0)){
+        if(v.name.indexOf('Siri') >= 0 || v.name.indexOf('Tingting') >= 0 || v.name.indexOf('Xiaoxiao') >= 0){
+          chineseVoice = v;
+          return;
+        }
+        if(!chineseVoice){ chineseVoice = v; }
+      }
+    }
+  } catch(e){}
+}
+if(speechSynth){
+  pickChineseVoice();
+  if(typeof speechSynth.onvoiceschanged !== 'undefined'){
+    speechSynth.onvoiceschanged = pickChineseVoice;
+  }
+}
+
 function requestWakeLock(){
   try {
     if(navigator.wakeLock && !document.hidden && !wakeLockSentinel){
@@ -117,7 +150,6 @@ function releaseWakeLock(){
   }
 }
 
-// 解锁音频
 function unlockAudio(){
   try {
     var AudioCtx = window.AudioContext || window.webkitAudioContext;
@@ -126,53 +158,146 @@ function unlockAudio(){
       sharedAudioCtx.resume().catch(function(){});
     }
   } catch(e){}
+  if(speechSynth && speechSynth.paused){
+    try { speechSynth.resume(); } catch(e){}
+  }
 }
 
 function stopVoice(){
-  if(!playerAudio){ return; }
-  try { playerAudio.pause(); } catch(e){}
+  if(playerAudio){
+    try { playerAudio.pause(); } catch(e){}
+  }
+  if(speechSynth && speechSynth.speaking){
+    try { speechSynth.cancel(); } catch(e){}
+  }
 }
 
-function playVoice(src){
-  if(!currentPrefs.voice || !src || !playerAudio){ return; }
+function speakText(text){
+  if(currentPrefs.voiceMode !== 'speech' || !text || !speechSynth){ return; }
   try {
-    playerAudio.src = src;
-    playerAudio.currentTime = 0;
-    var p = playerAudio.play();
-    if(p && p.catch){ p.catch(function(){}); }
+    speechSynth.cancel();
+    var utterance = new SpeechSynthesisUtterance(text);
+    if(chineseVoice){ utterance.voice = chineseVoice; }
+    utterance.lang = 'zh-CN';
+    utterance.rate = 1.05;
+    utterance.pitch = 1.0;
+    speechSynth.speak(utterance);
   } catch(e){}
 }
 
-function playBeep(freq, dur){
-  if(!currentPrefs.voice){ return; }
+function playWhistle(type){
+  if(currentPrefs.voiceMode === 'mute'){ return; }
   try {
     var AudioCtx = window.AudioContext || window.webkitAudioContext;
-    if(AudioCtx){
-      if(!sharedAudioCtx){ sharedAudioCtx = new AudioCtx(); }
-      if(sharedAudioCtx.state === 'suspended'){ sharedAudioCtx.resume().catch(function(){}); }
-      var osc = sharedAudioCtx.createOscillator();
-      var gain = sharedAudioCtx.createGain();
-      osc.frequency.value = freq || 880;
-      gain.gain.value = 0.12;
-      osc.connect(gain);
-      gain.connect(sharedAudioCtx.destination);
-      osc.start();
-      osc.stop(sharedAudioCtx.currentTime + (dur || 0.12));
+    if(!AudioCtx){ return; }
+    if(!sharedAudioCtx){ sharedAudioCtx = new AudioCtx(); }
+    if(sharedAudioCtx.state === 'suspended'){ sharedAudioCtx.resume().catch(function(){}); }
+    var now = sharedAudioCtx.currentTime;
+    var osc = sharedAudioCtx.createOscillator();
+    var gain = sharedAudioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(sharedAudioCtx.destination);
+
+    if(type === 'start'){
+      osc.frequency.setValueAtTime(880, now);
+      osc.frequency.setValueAtTime(1174, now + 0.08);
+      gain.gain.setValueAtTime(0.15, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+      osc.start(now);
+      osc.stop(now + 0.22);
+    } else if(type === 'switch'){
+      osc.frequency.setValueAtTime(659, now);
+      osc.frequency.setValueAtTime(987, now + 0.08);
+      gain.gain.setValueAtTime(0.18, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.24);
+      osc.start(now);
+      osc.stop(now + 0.24);
+    } else if(type === 'count'){
+      osc.frequency.setValueAtTime(587, now);
+      gain.gain.setValueAtTime(0.12, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+      osc.start(now);
+      osc.stop(now + 0.12);
+    } else if(type === 'done'){
+      osc.frequency.setValueAtTime(523, now);
+      osc.frequency.setValueAtTime(659, now + 0.1);
+      osc.frequency.setValueAtTime(784, now + 0.2);
+      gain.gain.setValueAtTime(0.15, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
+      osc.start(now);
+      osc.stop(now + 0.45);
     }
   } catch(e){}
 }
 
-// 顶栏语音开关更新
+function notifyCue(step, eventType){
+  var mode = currentPrefs.voiceMode;
+  if(mode === 'mute'){ return; }
+
+  if(mode === 'whistle'){
+    if(eventType === 'step'){ playWhistle('start'); }
+    else if(eventType === 'halfway'){ playWhistle('switch'); }
+    else if(eventType === 'count3'){ playWhistle('count'); }
+    else if(eventType === 'done'){ playWhistle('done'); }
+    return;
+  }
+
+  // 模式为 'speech'（精炼教练语音）
+  if(eventType === 'step'){
+    if(step.kind === 'countdown'){
+      speakText('准备开始');
+    } else if(step.kind === 'rest' || step.kind === 'roundBreak'){
+      var nextTxt = step.nextMove ? ('，下一动作：' + step.nextMove.name) : '';
+      speakText('休息' + nextTxt);
+    } else {
+      var shortPrompt = step.shortCue ? ('。' + step.shortCue.split('，')[0]) : '';
+      speakText(step.name + shortPrompt);
+    }
+  } else if(eventType === 'halfway'){
+    playWhistle('switch');
+    speakText('换另一侧');
+  } else if(eventType === 'count3'){
+    playWhistle('count');
+    speakText('三、二、一');
+  } else if(eventType === 'done'){
+    playWhistle('done');
+    speakText('跟练完成！');
+  }
+}
+
+// 顶栏声音三态按钮更新
 function updateVoiceButtons(){
-  var isVoiceOn = currentPrefs.voice;
+  var mode = currentPrefs.voiceMode;
+  var icons = { speech: '🗣️', whistle: '🔔', mute: '🔇' };
+  var labels = { speech: '教练语音', whistle: '节拍哨音', mute: '静音' };
+
   if(btnVoiceToggle){
-    btnVoiceToggle.classList.toggle('active', isVoiceOn);
-    btnVoiceToggle.classList.toggle('muted', !isVoiceOn);
-    btnVoiceToggle.querySelector('.voice-icon').textContent = isVoiceOn ? '🔊' : '🔇';
-    btnVoiceToggle.querySelector('.voice-text').textContent = isVoiceOn ? '语音开' : '静音';
+    btnVoiceToggle.className = 'btn-voice voice-' + mode;
+    btnVoiceToggle.querySelector('.voice-icon').textContent = icons[mode] || '🗣️';
+    btnVoiceToggle.querySelector('.voice-text').textContent = labels[mode] || '教练语音';
   }
   if(btnPlayerVoice){
-    btnPlayerVoice.textContent = isVoiceOn ? '🔊' : '🔇';
+    btnPlayerVoice.textContent = icons[mode] || '🗣️';
+    btnPlayerVoice.title = labels[mode] || '声音模式';
+  }
+}
+
+function cycleVoiceMode(){
+  var modes = ['speech', 'whistle', 'mute'];
+  var idx = modes.indexOf(currentPrefs.voiceMode);
+  var nextMode = modes[(idx + 1) % modes.length];
+  currentPrefs.voiceMode = nextMode;
+  currentPrefs.voice = (nextMode !== 'mute');
+  savePrefs(currentPrefs);
+  updateVoiceButtons();
+  unlockAudio();
+
+  if(nextMode === 'speech'){
+    speakText('教练语音');
+  } else if(nextMode === 'whistle'){
+    playWhistle('start');
+  } else {
+    stopVoice();
   }
 }
 
@@ -446,34 +571,28 @@ function startSessionWithPlan(steps, planId){
     plan: steps,
     onStep: function(step, idx){
       updatePlayerView(step, idx, totalSteps);
-      if(step.voice){
-        playVoice(step.voice);
-      } else {
-        playBeep(660, 0.12);
-      }
+      notifyCue(step, 'step');
     },
     onHalfway: function(step){
+      playerImg.classList.add('mirror');
       playerSwitchBadge.hidden = false;
-      playVoice('assets/voice/switch-side.m4a');
+      notifyCue(step, 'halfway');
     },
     onCountdown3: function(step){
-      playVoice('assets/voice/countdown-3.m4a');
+      notifyCue(step, 'count3');
     },
     onChange: function(state){
       playerClock.textContent = Math.ceil(state.left);
       var currentStep = steps[state.stepIndex];
-      if(currentStep && currentStep.kind === 'work' && currentStep.seconds >= 40 &&
-         currentStep.sideMode !== 'half' && state.left <= 18 && state.left >= 10 &&
-         !encouragePlayed[state.stepIndex]){
-        encouragePlayed[state.stepIndex] = true;
-        var r = (state.stepIndex % 5) + 1;
-        playVoice('assets/voice/encourage-' + r + '.m4a');
+      if(currentStep && currentStep.seconds > 0 && playerProgressFill){
+        var pct = Math.max(0, Math.min(100, (state.left / currentStep.seconds) * 100));
+        playerProgressFill.style.width = pct + '%';
       }
     },
     onFinish: function(state, reason){
       if(reason !== 'early'){
         if(planId === 'practice'){
-          playBeep(880, 0.18);
+          notifyCue(null, 'done');
           exitPlayerDirectly();
         } else {
           finishWorkoutNaturally(planId);
@@ -503,6 +622,9 @@ function updatePlayerView(step, idx, totalSteps){
   }
 
   playerClock.textContent = Math.ceil(step.seconds);
+  if(playerProgressFill){
+    playerProgressFill.style.width = '100%';
+  }
 
   var kindLabels = {
     countdown: '倒数准备',
@@ -516,13 +638,14 @@ function updatePlayerView(step, idx, totalSteps){
   playerStepName.textContent = step.name;
   playerShortCue.textContent = step.shortCue;
 
-  // 动图与角标展示
+  // 动图与角标展示（下一动作满屏大图预判）
+  playerImg.classList.remove('mirror');
   if(step.kind === 'countdown' || step.kind === 'rest' || step.kind === 'roundBreak'){
     var upcoming = step.nextMove;
     if(upcoming){
       playerImg.src = upcoming.gif;
       playerImg.alt = upcoming.name;
-      playerNextBadge.textContent = '下一动作 · ' + upcoming.name;
+      playerNextBadge.textContent = '下一动作预告 · ' + upcoming.name;
       playerNextBadge.hidden = false;
     } else {
       playerImg.src = step.gif;
@@ -551,11 +674,7 @@ function finishWorkoutNaturally(planId){
     playerDialog.removeAttribute('open');
   }
 
-  if(planId === 'stretch'){
-    playVoice('assets/voice/finish-stretch.m4a');
-  } else {
-    playVoice('assets/voice/finish-done.m4a');
-  }
+  notifyCue(null, 'done');
 
   var plan = content.plans[planId] || content.plans.A;
   doneSummary.textContent = '本次完成了 ' + plan.name + '（' + (content.levels[currentPrefs.level] ? content.levels[currentPrefs.level].name : '入门档') + '）';
@@ -588,6 +707,9 @@ function finishWorkoutNaturally(planId){
 function exitPlayerDirectly(){
   stopVoice();
   releaseWakeLock();
+  if(playerImg){
+    playerImg.classList.remove('mirror');
+  }
   if(currentSession){
     currentSession.destroy();
     currentSession = null;
@@ -608,28 +730,8 @@ function renderAll(){
 }
 
 // 事件绑定
-btnVoiceToggle.addEventListener('click', function(){
-  currentPrefs.voice = !currentPrefs.voice;
-  savePrefs(currentPrefs);
-  updateVoiceButtons();
-  if(currentPrefs.voice){
-    unlockAudio();
-    playVoice('assets/voice/countdown-3.m4a');
-  } else {
-    stopVoice();
-  }
-});
-
-btnPlayerVoice.addEventListener('click', function(){
-  currentPrefs.voice = !currentPrefs.voice;
-  savePrefs(currentPrefs);
-  updateVoiceButtons();
-  if(currentPrefs.voice){
-    unlockAudio();
-  } else {
-    stopVoice();
-  }
-});
+btnVoiceToggle.addEventListener('click', cycleVoiceMode);
+btnPlayerVoice.addEventListener('click', cycleVoiceMode);
 
 levelSegmentedEl.addEventListener('click', function(e){
   var btn = e.target.closest('.level-btn');
@@ -748,8 +850,12 @@ if('serviceWorker' in navigator){
       if(offlineBadge){ offlineBadge.textContent = '本机运行'; }
     });
 
+    var hadController = !!navigator.serviceWorker.controller;
     var reloading = false;
     navigator.serviceWorker.addEventListener('controllerchange', function(){
+      if(!hadController){
+        return;
+      }
       if(!reloading){
         reloading = true;
         window.location.reload();

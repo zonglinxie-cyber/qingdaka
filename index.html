@@ -30,9 +30,9 @@
     </div>
     <div class="header-actions">
       <span id="offlineBadge" class="badge-status" title="离线状态">就绪</span>
-      <button id="btnVoiceToggle" class="btn-voice" aria-label="切换语音播报">
-        <span class="voice-icon" aria-hidden="true">🔊</span>
-        <span class="voice-text">语音开</span>
+      <button id="btnVoiceToggle" class="btn-voice" aria-label="切换声音模式">
+        <span class="voice-icon" aria-hidden="true">🗣️</span>
+        <span class="voice-text">教练语音</span>
       </button>
     </div>
   </header>
@@ -139,14 +139,17 @@
 <!-- 全屏跟练播放器 -->
 <dialog id="player" class="player-dialog" aria-labelledby="playerStepName">
   <div class="player-container">
-    <!-- 顶栏状态 -->
+    <!-- 顶栏状态与平滑进度条 -->
     <div class="player-header">
       <button id="btnPlayerExit" class="btn-player-text" type="button">收起 / 结束</button>
       <div class="player-progress-info">
         <span id="playerProgressText" class="progress-steps">第 1 / 22 节</span>
         <span id="playerRoundBadge" class="round-badge">第 1 / 1 轮</span>
       </div>
-      <button id="btnPlayerVoice" class="btn-player-voice" type="button" aria-label="播放器语音开关">🔊</button>
+      <button id="btnPlayerVoice" class="btn-player-voice" type="button" aria-label="切换声音模式">🗣️</button>
+    </div>
+    <div class="player-progress-track" aria-hidden="true">
+      <div id="playerProgressFill" class="player-progress-fill"></div>
     </div>
 
     <!-- 中部舞台 -->

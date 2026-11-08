@@ -132,13 +132,21 @@ html, body {
   transition: all 0.15s ease;
 }
 
-.btn-voice.active {
+.btn-voice.voice-speech {
   background: var(--primary-light);
   border-color: #bae6fd;
   color: var(--primary);
 }
 
-.btn-voice.muted {
+.btn-voice.voice-whistle {
+  background: #fef3c7;
+  border-color: #fde68a;
+  color: #b45309;
+}
+
+.btn-voice.voice-mute {
+  background: #f1f5f9;
+  border-color: var(--border);
   color: var(--text-muted);
 }
 
@@ -606,7 +614,7 @@ dialog::backdrop {
 .learn-media-box {
   position: relative;
   width: 100%;
-  max-width: 280px;
+  max-width: 360px;
   aspect-ratio: 1 / 1;
   margin: 0 auto;
   background: #ffffff;
@@ -616,6 +624,7 @@ dialog::backdrop {
   align-items: center;
   justify-content: center;
   overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
 }
 
 .learn-gif {
@@ -732,7 +741,7 @@ dialog::backdrop {
   border: 1px solid var(--border);
 }
 
-/* 全屏播放器 (#player) - 保证 320x560 和 390x844 均一屏全显不溢出 */
+/* 全屏播放器 (#player) - 满屏大画幅沉浸跟练 */
 .player-dialog {
   width: 100vw;
   height: 100vh;
@@ -750,18 +759,35 @@ dialog::backdrop {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  padding: 10px 14px 16px;
+  padding: 8px 12px 14px;
   color: #ffffff;
   box-sizing: border-box;
 }
 
-/* 播放器顶栏 */
+/* 播放器顶栏与时间进度条 */
 .player-header {
-  height: 44px;
-  min-height: 44px;
+  height: 42px;
+  min-height: 42px;
   display: flex;
   align-items: center;
   justify-content: space-between;
+}
+
+.player-progress-track {
+  width: 100%;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.16);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+  margin: 2px 0 4px;
+}
+
+.player-progress-fill {
+  height: 100%;
+  width: 100%;
+  background: linear-gradient(90deg, #38bdf8, #0284c7);
+  box-shadow: 0 0 8px rgba(56, 189, 248, 0.6);
+  transition: width 0.15s linear;
 }
 
 .btn-player-text {
@@ -770,7 +796,7 @@ dialog::backdrop {
   color: #e2e8f0;
   font-size: 0.8rem;
   font-weight: 600;
-  padding: 6px 12px;
+  padding: 5px 12px;
   border-radius: var(--radius-full);
   cursor: pointer;
 }
@@ -796,22 +822,22 @@ dialog::backdrop {
   display: flex;
   align-items: baseline;
   justify-content: center;
-  gap: 6px;
-  margin-bottom: 4px;
+  gap: 4px;
+  margin-bottom: 2px;
 }
 
 .clock-digits {
-  font-size: 2.5rem;
-  font-weight: 800;
+  font-size: 3.2rem;
+  font-weight: 900;
   color: #38bdf8;
   font-variant-numeric: tabular-nums;
   line-height: 1;
-  text-shadow: 0 2px 12px rgba(56, 189, 248, 0.25);
+  text-shadow: 0 2px 16px rgba(56, 189, 248, 0.35);
 }
 
 .clock-unit {
-  font-size: 0.9rem;
-  font-weight: 600;
+  font-size: 0.95rem;
+  font-weight: 700;
   color: #94a3b8;
 }
 
@@ -828,7 +854,7 @@ dialog::backdrop {
   justify-content: center;
 }
 
-/* 播放器舞台 */
+/* 播放器舞台 - 满屏核心区 */
 .player-stage {
   flex: 1;
   min-height: 0;
@@ -836,56 +862,69 @@ dialog::backdrop {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 4px 0;
-  gap: 8px;
+  padding: 2px 0;
+  gap: 6px;
+  width: 100%;
 }
 
 .stage-frame {
   position: relative;
-  /* 严格限制舞台尺寸，确保 560px 高度屏幕不溢出 */
-  width: min(56vw, 196px);
-  height: min(56vw, 196px);
+  width: 100%;
+  max-width: 520px;
+  flex: 1;
+  min-height: 220px;
+  max-height: 56vh;
   background: #ffffff;
-  border-radius: var(--radius-md);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.45);
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 6px;
+  padding: 8px;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
 .stage-img {
   width: 100%;
   height: 100%;
+  max-height: 54vh;
   object-fit: contain;
-  border-radius: calc(var(--radius-md) - 4px);
+  border-radius: calc(var(--radius-lg) - 4px);
+  transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.stage-img.mirror {
+  transform: scaleX(-1);
 }
 
 .badge-next {
   position: absolute;
-  top: -12px;
-  z-index: 2;
+  top: 10px;
+  z-index: 5;
   background: #0284c7;
   color: #ffffff;
-  font-size: 0.72rem;
+  font-size: 0.78rem;
   font-weight: 700;
-  padding: 3px 11px;
+  padding: 4px 12px;
   border-radius: var(--radius-full);
-  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.28);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3);
   white-space: nowrap;
 }
 
 .badge-switch {
   position: absolute;
-  bottom: 10px;
+  bottom: 12px;
+  z-index: 5;
   background: #ea580c;
   color: #ffffff;
-  font-size: 0.88rem;
+  font-size: 0.95rem;
   font-weight: 800;
-  padding: 4px 14px;
+  padding: 6px 18px;
   border-radius: var(--radius-full);
-  box-shadow: 0 4px 12px rgba(234, 88, 12, 0.5);
+  box-shadow: 0 4px 16px rgba(234, 88, 12, 0.65);
   animation: pulse-switch 0.8s infinite alternate ease-in-out;
+  letter-spacing: 0.02em;
 }
 
 @keyframes pulse-switch {
@@ -897,6 +936,7 @@ dialog::backdrop {
   display: flex;
   align-items: center;
   gap: 6px;
+  margin-top: 2px;
 }
 
 .step-kind-badge {
@@ -917,13 +957,13 @@ dialog::backdrop {
 
 .cue-container {
   width: 100%;
-  max-width: 380px;
-  padding: 0 10px;
+  max-width: 440px;
+  padding: 0 8px;
   text-align: center;
 }
 
 .short-cue-text {
-  font-size: 0.95rem;
+  font-size: 0.92rem;
   font-weight: 600;
   color: #e2e8f0;
   line-height: 1.35;
@@ -1028,13 +1068,12 @@ dialog::backdrop {
     font-size: 3.6rem;
   }
   .player-stage {
-    gap: 12px;
+    gap: 10px;
   }
   .stage-frame {
-    width: min(70vw, 268px);
-    height: min(70vw, 268px);
+    max-height: 60vh;
   }
   .short-cue-text {
-    font-size: 1.05rem;
+    font-size: 1.02rem;
   }
 }

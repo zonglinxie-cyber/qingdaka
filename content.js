@@ -312,25 +312,25 @@ var movesDict = {
     mistake: '身体前后摆动借力，或把肘部向前送缩短行程。',
     mediaLabel: '孤立发力'
   },
-  'wall-plank': {
-    id: 'wall-plank',
-    name: '墙面斜板支撑',
-    gif: GUIDES_PATH + 'generated/wall-plank-anatomy.png',
-    poster: GUIDES_PATH + 'generated/wall-plank-anatomy.png',
-    voice: null,
-    primary: '腹横肌、前锯肌',
-    secondary: '腹直肌、肩胛稳定肌',
-    benefit: '以无冲击斜板姿态激活深层腹横肌，建立抗塌腰核心张力。',
-    sideMode: 'none',
-    shortCue: '双手撑墙身体呈直线，收紧腹部，平稳呼吸不塌腰。',
+  '3239': {
+    id: '3239',
+    name: '跪姿平板点肩',
+    gif: GUIDES_PATH + '3239.gif',
+    poster: GUIDES_PATH + '3239-poster.png',
+    voice: VOICE_PATH + 'work-3239.m4a',
+    primary: '腹横肌、腹直肌',
+    secondary: '肩胛稳定肌、腹斜肌、臀肌',
+    benefit: '跪姿支撑最安全护腰，交替触肩强化深层抗旋转核心。',
+    sideMode: 'alternate',
+    shortCue: '头至膝一条线，身体稳住不晃，交替轻点对侧肩。',
     steps: [
-      '面对平整墙面站立，双手撑墙略宽于肩',
-      '双脚向后小步移动，让身体从头到脚呈一直线',
-      '轻轻收紧腹部保持平稳呼吸，时间到后走近墙面'
+      '膝盖着地、双肘或双手撑地，头至膝盖保持平直一条线',
+      '腹部收紧、骨盆不塌，呼吸平稳保持核心紧绷',
+      '身体保持极度稳定，左右手缓慢交替轻触对侧肩膀'
     ],
-    cue: '按静态姿势撑住，双脚踩稳，不做推起动作。墙越近越轻松，全程能说短句。呼吸：深长均匀呼吸。',
-    mistake: '塌腰、耸肩或屏住呼吸憋气。',
-    mediaLabel: '3D肌肉解剖图'
+    cue: '先稳住跪姿平板，能平稳说话、不塌腰；稳了再轻点对侧肩，身体一晃就保持静止支撑。呼吸：不要憋气。',
+    mistake: '骨盆大幅扭动借力，或腰背塌陷下沉。',
+    mediaLabel: '跪姿抗旋转护腰'
   },
   '2133': {
     id: '2133',
@@ -351,26 +351,6 @@ var movesDict = {
     cue: '图是双手持铃慢走。重量宁轻勿重；空间不够就原地踏步。肩膀放松，不侧弯。呼吸：平稳呼吸。',
     mistake: '为了追求负重而耸肩、身体侧弯，或在狭窄空间勉强行走。',
     mediaLabel: '抗侧屈核心稳定'
-  },
-  'bird-dog': {
-    id: 'bird-dog',
-    name: '鸟狗式',
-    gif: GUIDES_PATH + 'bird-dog.gif',
-    poster: GUIDES_PATH + 'bird-dog-poster.png',
-    voice: null,
-    primary: '多裂肌、竖脊肌',
-    secondary: '腹壁肌群、臀大肌、后三角肌',
-    benefit: '经典的躯干抗旋转与腰盆协调训练，增强下背部稳定。',
-    sideMode: 'alternate',
-    shortCue: '四点跪姿对侧手脚伸平，骨盆水平不晃，左右交替。',
-    steps: [
-      '四点跪姿于垫上，手腕在肩下方，膝在髋下方',
-      '先伸一只手或一条腿，稳定后再做对侧手脚伸展',
-      '身体不晃、腰不塌，平稳停留后回到原位换对侧'
-    ],
-    cue: '图是对侧手脚一起伸。家里先只伸一手或一腿；腹部较大可手撑稳固沙发座面。呼吸：伸展呼气，回位吸气。',
-    mistake: '抬得过高导致腰部塌陷旋转，或为了跟图超出幅度。',
-    mediaLabel: '示范为对侧同伸'
   },
   '2287': {
     id: '2287',
@@ -694,7 +674,7 @@ var plans = {
     tagline: '躯干稳定与体态强化',
     desc: '强化深层抗伸展与抗旋转核心，改善骨盆体态，提升脊柱稳定性。',
     gear: '两只水瓶/轻哑铃 + 垫子',
-    moves: ['wall-plank', '2133', '3013', 'bird-dog', '0276'],
+    moves: ['0659', '3239', '2133', '3013', '0276'],
     cooldown: ['1424', '0794', '1365', '0669', '1403']
   },
   stretch: {
