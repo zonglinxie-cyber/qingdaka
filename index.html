@@ -3,74 +3,194 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#203f36">
-<meta name="description" content="从一点轻活动开始，找到自己的作息。无需账号，记录只在本机。">
+<meta name="theme-color" content="#1e293b">
+<meta name="description" content="轻打卡 · 个人科学跟练版。3D肌肉解剖动图与预录口令，周循环科学抗阻。">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; worker-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'none'; object-src 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self'; worker-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'none'; object-src 'none'">
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="apple-touch-icon" href="./icons/apple-touch-icon-180.png">
 <link rel="icon" href="./icons/icon-192.png">
 <link rel="stylesheet" href="./styles.css">
-<title>轻打卡 · 动起来</title>
+<title>轻打卡 · 科学跟练</title>
 <script src="./content.js" defer></script>
-<script src="./store.js" defer></script>
 <script src="./session.js" defer></script>
 <script src="./app.js" defer></script>
 </head>
 <body>
-<a class="skip-link" href="#main">跳到内容</a>
-<div id="shell" class="shell">
-<header class="brand"><a href="#today" aria-label="轻打卡首页"><span class="brand-mark" aria-hidden="true">轻</span><span>轻打卡<small>动一点，慢慢来。</small></span></a><button class="icon-button" id="openSettings" aria-label="设置我的节奏">设置</button></header>
-<div id="storageAlert" class="alert danger" role="alert" hidden><strong>记录暂时无法安全读取</strong><p>原始数据没有被覆盖。先导出原文，再恢复备份或清空数据。</p><button id="exportRaw">导出原文</button><button data-page="review">去备份与恢复</button></div>
-<main id="main" tabindex="-1">
-<section id="page-today" class="page" aria-labelledby="todayTitle">
-<div class="page-heading"><p class="eyebrow" id="todayDate"></p><h1 id="todayTitle">今天，从一点开始。</h1><p id="todayLead" class="muted">不用一下改变所有习惯。先找到一个能重复的小动作。</p></div>
-<article id="resumeCard" class="card resume-card" hidden><div><p class="eyebrow">上次还没收尾</p><h2 id="resumeTitle">有一段活动等你处理</h2><p class="muted">离开期间没有补算时间。不必从头重来。</p></div><button class="primary" id="resumeSession">继续或记录</button><button class="text-button" id="discardSession">放弃这段，不留欠账</button></article>
-<article class="hero" id="todayHero"><div class="hero-copy"><p class="eyebrow">今天只选一件事</p><h2 id="heroTitle">先动 1 分钟。</h2><p id="heroDescription">含准备和休息，不追次数，不必出汗。坐稳后试一个小回合。</p><p class="anchor-line" id="anchorLine"></p></div><div class="minute-orbit" aria-hidden="true"><span id="heroNumber">1</span><small id="heroUnit">分钟 · 含休息</small></div><button id="todayStart" class="primary light">开始我的小回合 ↗</button><button class="hero-link" data-page="move">先看动作与其他时长</button></article>
-<p id="todayActivity" class="quiet-summary"></p>
-<article id="recoveryCard" class="card" hidden><p class="eyebrow">不急着加量</p><h2>上次活动后，感觉怎么样？</h2><p class="muted">看看当时和之后的关节、疲劳。不确定也可以暂不记录。</p><div class="choices"><button data-recovery="good">没有新不适</button><button data-recovery="tired">仍有疲劳</button><button data-recovery="pain">疼痛或不适</button></div></article>
-<div class="section-heading"><h2>把节奏放回生活里</h2><span>不是每日必交的作业</span></div>
-<div class="daily-grid"><article class="card daily-card"><span class="card-symbol" aria-hidden="true">☀</span><h3>起床锚点</h3><p id="wakeSummary" class="muted">选一个现实的时间，不必刻意早起。</p><button id="recordWake">记实际起床时间</button></article><article class="card daily-card"><span class="card-symbol" aria-hidden="true">☾</span><h3>晚间收尾</h3><p id="windSummary" class="muted">把灯调暗，把手机放远，今天到这里。</p><button id="openWindDown">看看怎么收尾</button></article></div>
-<article class="card break-card"><div><h3>办公间隙，松一松</h3><p class="muted">接水、午饭或工作告一段落时，离开屏幕一会儿。身体允许再轻松活动。</p><small id="breakSummary">没记录，不代表没做到。</small></div><button id="recordBreak">我刚活动了一下</button></article>
-<button class="text-button rest-link" id="restToday">今天需要休息，也可以记下</button>
-</section>
-<section id="page-move" class="page" aria-labelledby="moveTitle" hidden>
-<div class="page-heading"><p class="eyebrow">小回合 · 不比赛</p><h1 id="moveTitle">先让身体习惯活动。</h1><p class="muted">借一点回合的节奏，不做跳跃、快速转脚或负重出拳。可以随时暂停、结束。</p></div>
-<article class="card"><h2>今天留多少时间？</h2><div class="segmented" id="courseChoices" aria-label="活动时长"><button data-course="minute" aria-pressed="true">1 分钟<small>先试一次</small></button><button data-course="gentle" aria-pressed="false">3 分钟<small>轻轻重复</small></button><button data-course="steady" aria-pressed="false">5 分钟<small>主动选择</small></button></div><p class="muted" id="courseDescription"></p><h3 class="spaced">选择姿势</h3><div class="segmented" id="modeChoices" aria-label="活动姿势"><button data-mode="seated" aria-pressed="true">坐姿</button><button data-mode="standing" aria-pressed="false">站姿</button></div><p id="modeGear" class="equipment"></p><button id="moveStart" class="primary wide">先确认身体状态，再开始</button><p class="fine-print">时长包含准备、休息与收尾，不等于同样时长的有效运动；不会按天数自动升级。</p></article>
-<div class="section-heading"><h2>先看懂，再计时</h2><span>点开看完整做法</span></div><div id="learningList" class="learning-list"></div>
-<details class="card"><summary>什么时候不应该继续？</summary><p id="moveSafety"></p><button class="text-button" data-help>查看安全说明与依据</button></details>
-</section>
-<section id="page-rhythm" class="page" aria-labelledby="rhythmTitle" hidden>
-<div class="page-heading"><p class="eyebrow">留出睡眠，而不是考核睡眠</p><h1 id="rhythmTitle">作息，不靠硬撑。</h1><p class="muted">先稳定一件事。睡得不好不是人格问题，也不能都归因于自制力。</p></div>
-<article class="card rhythm-plan"><h2>我的两个时间点</h2><div class="time-pair"><div><small>现实的起床锚点</small><strong id="wakeTarget">尚未设置</strong></div><div><small>开始收尾，不是必须睡着</small><strong id="windTarget">尚未设置</strong></div></div><button data-settings>调整我的节奏</button><p class="fine-print">成年人通常需要约 7–9 小时睡眠。留出足够机会，不为了早起打卡压缩睡眠。工作日与周末尽量规律。</p></article>
-<ol class="rhythm-steps"><li><span>早</span><div><h3>起床后，见一点日光</h3><p>选能维持的起床时间，白天方便时到户外待一会儿。不要求“越早越好”。</p><button id="rhythmWake">记录实际起床</button></div></li><li><span>日</span><div><h3>给久坐留个中断</h3><p>用午饭、接水这些已有的事情提醒自己。一次短短的轻活动也有意义，不补昨天的量。</p><button data-page="move">去选一个小回合</button></div></li><li><span>晚</span><div><h3>从一个收尾动作开始</h3><p>睡前留一段安静时间，调暗灯、减少屏幕。困了再上床，不用看着分数努力入睡。</p><button id="rhythmWind">查看收尾小清单</button></div></li></ol>
-<article class="card"><h2>咖啡和手机，给它们一个下班时间</h2><p>咖啡因可能影响数小时。可尝试在计划就寝前 6–8 小时避免含咖啡因饮品，再观察自己的感受；不是固定的安全线。</p><p>睡前约一小时逐渐安静下来。两分钟收尾只是一个容易开始的入口，不等于完整的睡眠干预。</p></article>
-<article class="card caution"><h2>这些情况，别只靠调整作息</h2><p>大声打鼾、睡觉憋醒、他人看到呼吸停止，或白天明显困倦，值得去睡眠／呼吸门诊评估。没有嗜睡也不能排除睡眠呼吸问题。</p><p>困倦影响驾驶时不要开车。失眠持续或影响生活，应咨询医生；本工具不诊断、不治疗失眠。</p><button class="text-button" data-help>阅读依据与就医提醒</button></article>
-<article class="card"><h2>iPhone 提醒，交给系统</h2><p>在「时钟」设置起床闹钟，在「提醒事项」设置晚间收尾。这里保存的是计划，不会创建系统闹钟。</p><p class="muted">纯本地网页不能保证锁屏后准点提醒，也不会在后台持续计时。收尾可以第二天补记，不必睡前打开手机。</p></article>
-</section>
-<section id="page-review" class="page" aria-labelledby="reviewTitle" hidden>
-<div class="page-heading"><p class="eyebrow">留一点痕迹，不给自己打分</p><h1 id="reviewTitle">看见自己开始了。</h1><p class="muted">不设连胜，不追补欠账。未记录不等于没做到。</p></div>
-<div id="reviewStats" class="stats"></div><article class="card"><h2>近 7 天的小节奏</h2><div id="weekGrid" class="week-grid"></div><p class="fine-print">圆点表示有活动记录，月亮表示记过收尾。休息另作标记，不算运动。</p><p id="reviewAdvice" class="muted"></p></article>
-<div class="section-heading"><h2>实际做过的活动</h2><span>准备和休息不算活动秒数</span></div><div id="sessionHistory"></div><button id="historyMore" class="wide" hidden>再看 20 条</button>
-<details class="card"><summary>起床与收尾记录</summary><div id="rhythmHistory"></div><button id="editRhythmRecord" class="text-button">补记或更正</button></details>
-<details class="card" id="backupDetails"><summary>备份与恢复</summary><p>数据只在这个浏览器／主屏应用内。清理浏览器、换手机或换网址可能失去记录；请把备份保存到「文件」或其他安全位置。</p><div class="button-stack"><button id="exportBackup">导出完整备份</button><button id="importBackup">导入备份（核对后覆盖）</button><input type="file" id="backupFile" accept="application/json,.json" hidden><button id="resetData" class="danger-text">清空全部数据</button></div><p class="fine-print">导出文件含私人记录，请不要公开分享。导出操作不代表文件已保存成功，请自行确认。</p></details>
-<article class="card"><h2>离线与版本</h2><p id="offlineStatus" class="muted">正在确认离线资源…</p><small id="appVersion"></small><button id="updateApp" hidden>更新到已下载的新版本</button><p class="fine-print">用 Safari 打开固定网址 → 分享 → 添加到主屏幕。首次使用保持联网，确认整套轻活动已离线就绪。</p></article>
-<button class="text-button wide" data-help>安全边界、资料来源与产品说明</button>
-</section>
-</main>
-<nav class="bottom-nav" aria-label="主导航"><button data-page="today" aria-current="page"><span aria-hidden="true">◉</span>今天</button><button data-page="move"><span aria-hidden="true">↗</span>动一点</button><button data-page="rhythm"><span aria-hidden="true">☾</span>作息</button><button data-page="review"><span aria-hidden="true">▤</span>回顾</button></nav>
+<div id="app" class="app-shell">
+  <!-- 顶栏 -->
+  <header class="app-header">
+    <div class="brand">
+      <span class="brand-logo" aria-hidden="true">💪</span>
+      <div class="brand-text">
+        <h1 class="brand-title">轻打卡</h1>
+        <span class="brand-sub">科学跟练</span>
+      </div>
+    </div>
+    <div class="header-actions">
+      <span id="offlineBadge" class="badge-status" title="离线状态">就绪</span>
+      <button id="btnVoiceToggle" class="btn-voice" aria-label="切换语音播报">
+        <span class="voice-icon" aria-hidden="true">🔊</span>
+        <span class="voice-text">语音开</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- 主体内容 -->
+  <main class="main-content">
+    <!-- 周计划循环路线条 -->
+    <section class="section-cycle" aria-label="训练计划选择">
+      <div class="section-title-row">
+        <span class="section-title">每周 3 练 · 循环推进</span>
+        <span class="cycle-hint">练完自动推荐下一节</span>
+      </div>
+      <div id="cycleCards" class="cycle-cards-row">
+        <!-- 由 app.js 渲染 A、B、C 三张卡片 -->
+      </div>
+      <div id="scenePills" class="scene-pills-row">
+        <!-- 由 app.js 渲染久坐拉伸与器械课胶囊 -->
+      </div>
+    </section>
+
+    <!-- 当节控制台 -->
+    <section id="consoleCard" class="card console-card" aria-label="当节训练配置">
+      <div class="console-head">
+        <div>
+          <span id="planBadge" class="plan-badge">周循环第 1 练</span>
+          <h2 id="planTitle" class="plan-title">计划 A · 徒手根基</h2>
+        </div>
+      </div>
+      <p id="planTagline" class="plan-tagline">徒手臀腿与核心根基，椅子托底保护膝踝，零跑跳冲击。</p>
+      <div class="gear-row">
+        <span class="gear-icon" aria-hidden="true">🪑</span>
+        <span id="planGear" class="gear-text">备物：靠墙稳固椅 + 垫子（纯徒手零器械）</span>
+      </div>
+
+      <!-- 4 档强度分段切换器 -->
+      <div class="level-segmented" id="levelSegmented" role="radiogroup" aria-label="选择训练强度档位">
+        <button type="button" class="level-btn" data-level="recovery" role="radio" aria-checked="false">恢复档</button>
+        <button type="button" class="level-btn active" data-level="starter" role="radio" aria-checked="true">入门档</button>
+        <button type="button" class="level-btn" data-level="standard" role="radio" aria-checked="false">标准档</button>
+        <button type="button" class="level-btn" data-level="steady" role="radio" aria-checked="false">进阶档</button>
+      </div>
+
+      <div class="console-summary">
+        <span id="planSummaryText" class="summary-text">预计 12 分钟 · 1 轮 · 共 22 节（含热身拉伸）</span>
+      </div>
+
+      <button id="btnStartWorkout" class="btn-start" type="button">开始跟练</button>
+    </section>
+
+    <!-- 按顺序学与练动作列表 -->
+    <section class="section-exercises" aria-label="本节动作列表">
+      <div class="section-title-row">
+        <span class="section-title">按顺序学与练</span>
+        <span class="section-sub">点击动作查看 3D 解剖动图与要领</span>
+      </div>
+      <div id="exerciseGroups" class="exercise-groups">
+        <!-- 由 app.js 渲染热身、正式动作、拉伸列表 -->
+      </div>
+    </section>
+  </main>
 </div>
-<dialog id="setupDialog" aria-labelledby="setupTitle"><form id="setupForm"><div class="dialog-heading"><p class="eyebrow">先适合生活，再谈坚持</p><button type="button" class="close-button" data-close="setupDialog" aria-label="关闭设置">×</button></div><h2 id="setupTitle">先建立一个小节奏。</h2><p>不需要填写体重，不需要证明自律。这一阶段只选一件最想开始的事。</p><label for="focusInput">首页优先提醒我</label><select id="focusInput"><option value="move">开始一点轻活动</option><option value="sleep">先做好晚间收尾</option></select><label for="anchorInput">把轻活动接在哪件事之后？</label><select id="anchorInput"><option value="lunch">午饭收好餐具后</option><option value="work">工作告一段落后</option><option value="home">回家换好衣服后</option></select><div class="form-row"><div><label for="wakeInput">起床锚点（可不填）</label><input type="time" id="wakeInput"></div><div><label for="windInput">开始收尾（可不填）</label><input type="time" id="windInput"></div></div><p class="fine-print">按现实生活设置，不要突然早起或缩短睡眠。时间只是计划，需在 iPhone 里另设闹钟。</p><label class="checkbox"><input type="checkbox" id="soundInput" checked>回合切换时播放轻提示音</label><p class="notice">长期没运动或有慢性病、关节问题，开始前先和医生讨论适合的活动与强度。痛风发作时休息，不忍痛跟练。</p><button class="primary wide" type="submit">保存我的节奏</button></form></dialog>
-<dialog id="safetyDialog" aria-labelledby="safetyTitle"><div class="dialog-heading"><p class="eyebrow">每次开始，都先确认</p><button class="close-button" data-close="safetyDialog" aria-label="关闭">×</button></div><h2 id="safetyTitle">现在身体允许吗？</h2><p>这不是健康评估，也不代表通过检查。任何时候都可以停止。</p><div class="safety-options"><button id="safetyEmergency"><strong>胸痛、严重气短、晕厥等</strong><span>不开始，查看紧急处理提示</span></button><button id="safetyJoint"><strong>关节红肿热痛、疑似发作或其他不适</strong><span>不换动作硬撑，今天先休息</span></button><button id="safetyUnsure"><strong>不确定是否适合活动</strong><span>先咨询，不必急着开始</span></button></div><label class="checkbox safety-check"><input id="equipmentCheck" type="checkbox"><span id="equipmentCheckText">我已看懂动作，确认椅子稳固、承重适合、无轮，环境安全。</span></label><button id="safetyBegin" class="primary wide" disabled>目前没有上述不适，轻轻试一回合</button><p class="fine-print">不以能说话、心率正常或坐姿作为安全保证。出现异常立即停止。</p></dialog>
-<dialog id="recordDialog" aria-labelledby="recordTitle"><form id="recordForm"><div class="dialog-heading"><p class="eyebrow">只记事实，可以更正</p><button type="button" class="close-button" data-close="recordDialog" aria-label="关闭">×</button></div><h2 id="recordTitle">记录生活里的时间</h2><label for="recordDate">记录哪一天？</label><input type="date" id="recordDate" required><label for="actualWake">实际起床时间（可不填）</label><input type="time" id="actualWake"><label class="checkbox"><input type="checkbox" id="actualWind">这一天做了晚间收尾</label><p class="fine-print">起床时间不是打开应用的时间，也不用于推算睡眠时长或质量。</p><button class="primary wide" type="submit">保存记录</button></form></dialog>
-<dialog id="windDialog" aria-labelledby="windTitle"><div class="dialog-heading"><p class="eyebrow">不用完成清单，选一件就好</p><button class="close-button" data-close="windDialog" aria-label="关闭">×</button></div><h2 id="windTitle">让今天慢慢结束。</h2><ol class="wind-list"><li>调暗一点灯，结束刺激的内容。</li><li>洗漱，或把明天要用的东西放好。</li><li>把手机放远，困了再上床。</li></ol><p>不用盯着屏幕计时。现在放下手机，明天再补记也可以。</p><button class="primary wide" id="markWindDown">今天已经做过收尾，记下</button><button class="text-button wide" id="windBackfill">补记昨天或更正日期</button></dialog>
-<dialog id="learnDialog" aria-labelledby="learnTitle"><div class="dialog-heading"><p class="eyebrow">先学习 · 不计时</p><button class="close-button" data-close="learnDialog" aria-label="关闭">×</button></div><h2 id="learnTitle"></h2><img id="learnImage" alt="" width="600" height="400"><ol id="learnSteps"></ol><p id="learnCaution" class="notice"></p><p class="fine-print">原创分步示意，非专业视频。不追求图中的幅度；不熟悉或有疑问时请专业人士指导。</p></dialog>
-<dialog id="messageDialog" aria-labelledby="messageTitle"><h2 id="messageTitle"></h2><div id="messageBody"></div><div class="button-stack"><button id="messageConfirm" class="primary">知道了</button><button id="messageCancel">取消</button></div></dialog>
-<dialog id="helpDialog" aria-labelledby="helpTitle"><div class="dialog-heading"><p class="eyebrow">了解边界，放心使用</p><button class="close-button" data-close="helpDialog" aria-label="关闭">×</button></div><h2 id="helpTitle">帮助开始，不替代医疗。</h2><div id="helpContent"></div><h3>参考资料</h3><ul id="sourceList" class="source-list"></ul><p class="fine-print">资料核对：2026-11-05。1／3／5 分钟回合及界面是本项目的习惯设计，不是这些机构验证过的个体运动处方，也不保证减重或治疗睡眠问题。</p></dialog>
-<dialog id="player" class="player" aria-labelledby="playerTitle"><div class="player-top"><button id="playerClose" class="text-button">暂停并收起</button><span id="playerProgress"></span><span class="live-dot" aria-hidden="true"></span></div><div class="player-stage"><div class="player-heading"><div><p id="playerPhase" class="eyebrow"></p><h2 id="playerTitle"></h2></div><div class="player-clock"><span id="playerClock"></span><small>秒</small></div></div><img id="playerImage" alt="" width="600" height="400"><p id="playerCue" class="player-cue"></p><p id="playerNext" class="muted"></p><p id="playerSaved" class="fine-print">进度会在步骤切换、暂停及定期保存；切后台自动暂停。</p></div><div class="player-controls"><button id="playerPause" class="primary">暂停</button><button id="playerSkip">跳过本段</button><button id="playerEnd">结束并记录</button></div><button id="playerDiscomfort" class="danger-text wide">出现疼痛或不适，立即停止</button></dialog>
-<dialog id="finishDialog" aria-labelledby="finishTitle"><p class="eyebrow">到这里就可以了</p><h2 id="finishTitle">今天有一个小开始。</h2><p id="finishSummary"></p><p id="finishSafety" class="notice" hidden></p><fieldset><legend>刚才的感受（不选也可以）</legend><div class="feedback-grid"><button data-feedback="easy" aria-pressed="false">轻松</button><button data-feedback="okay" aria-pressed="false">合适</button><button data-feedback="hard" aria-pressed="false">太吃力</button><button data-feedback="discomfort" aria-pressed="false">疼痛或不适</button></div></fieldset><p class="muted">下次仍然可以选最短的一回合。没有需要补做的量。</p><p id="finishError" class="alert danger" hidden></p><button id="saveSession" class="primary wide">保存实际记录</button></dialog>
-<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
-<noscript><p class="alert">请启用 JavaScript。活动记录只在本机保存。</p></noscript>
+
+<!-- 动作教学与单练弹层 -->
+<dialog id="learnDialog" class="dialog-learn" aria-labelledby="learnTitle">
+  <div class="dialog-card">
+    <div class="dialog-header">
+      <h2 id="learnTitle" class="dialog-title">扶凳箱式深蹲</h2>
+      <button id="btnLearnClose" class="btn-close" type="button" aria-label="关闭教学弹层">×</button>
+    </div>
+    <div class="learn-body">
+      <div class="learn-media-box">
+        <img id="learnGif" class="learn-gif" alt="3D解剖动作示范" width="300" height="300">
+        <span id="learnMediaBadge" class="media-label-badge">椅子托底护膝</span>
+      </div>
+      <div class="learn-muscles-row">
+        <span class="muscle-label">主练：</span><strong id="learnPrimary" class="muscle-val primary">股四头肌、臀大肌</strong>
+        <span class="muscle-sep">·</span>
+        <span class="muscle-label">协同：</span><span id="learnSecondary" class="muscle-val">腘绳肌、躯干稳定肌</span>
+      </div>
+      <p id="learnBenefit" class="learn-benefit">强化下肢起身与深蹲核心肌群，椅子托底护膝。</p>
+
+      <div class="learn-section">
+        <h3 class="learn-sec-title">三步标准做法</h3>
+        <ol id="learnSteps" class="learn-steps-list"></ol>
+      </div>
+
+      <div class="learn-section">
+        <h3 class="learn-sec-title">发力与呼吸细节</h3>
+        <p id="learnCue" class="learn-cue-text"></p>
+      </div>
+
+      <div class="learn-section">
+        <h3 class="learn-sec-title alert">避坑提醒</h3>
+        <div id="learnMistake" class="mistake-box"></div>
+      </div>
+    </div>
+    <div class="dialog-footer">
+      <button id="btnPractice30" class="btn-secondary" type="button">单练体验 30 秒</button>
+      <button id="btnLearnDismiss" class="btn-primary" type="button">我知道了</button>
+    </div>
+  </div>
+</dialog>
+
+<!-- 全屏跟练播放器 -->
+<dialog id="player" class="player-dialog" aria-labelledby="playerStepName">
+  <div class="player-container">
+    <!-- 顶栏状态 -->
+    <div class="player-header">
+      <button id="btnPlayerExit" class="btn-player-text" type="button">收起 / 结束</button>
+      <div class="player-progress-info">
+        <span id="playerProgressText" class="progress-steps">第 1 / 22 节</span>
+        <span id="playerRoundBadge" class="round-badge">第 1 / 1 轮</span>
+      </div>
+      <button id="btnPlayerVoice" class="btn-player-voice" type="button" aria-label="播放器语音开关">🔊</button>
+    </div>
+
+    <!-- 中部舞台 -->
+    <div class="player-stage">
+      <div class="player-clock-box">
+        <span id="playerClock" class="clock-digits">40</span>
+        <small class="clock-unit">秒</small>
+      </div>
+      <div class="stage-frame">
+        <img id="playerImg" class="stage-img" alt="跟练示范" width="300" height="300">
+        <span id="playerNextBadge" class="badge-next" hidden>下一动作 · 臀桥</span>
+        <span id="playerSwitchBadge" class="badge-switch" hidden>⇄ 换另一侧</span>
+      </div>
+      <div class="step-meta">
+        <span id="playerStepKind" class="step-kind-badge">正式抗阻</span>
+        <h2 id="playerStepName" class="step-name">扶凳箱式深蹲</h2>
+      </div>
+      <div class="cue-container">
+        <p id="playerShortCue" class="short-cue-text">臀部后坐轻触椅面，脚跟推地站起，膝朝脚尖。</p>
+      </div>
+    </div>
+
+    <!-- 底部控制栏 -->
+    <div class="player-controls">
+      <button id="btnPlayerToggle" class="btn-ctrl primary" type="button">暂停</button>
+      <button id="btnPlayerSkip" class="btn-ctrl" type="button">跳过本段</button>
+      <button id="btnPlayerEnd" class="btn-ctrl danger" type="button">结束</button>
+    </div>
+  </div>
+</dialog>
+
+<!-- 自然练完完成弹层 -->
+<dialog id="doneDialog" class="dialog-done" aria-labelledby="doneTitle">
+  <div class="dialog-card done-card">
+    <div class="done-icon" aria-hidden="true">🎉</div>
+    <h2 id="doneTitle" class="done-title">跟练完成！</h2>
+    <p id="doneSummary" class="done-summary">本次完成了 计划 A · 徒手根基（入门档）</p>
+    <p id="doneCycleUpdate" class="done-cycle-text">下次跟练推荐已自动推进为：<strong>计划 B · 哑铃塑形</strong></p>
+    <button id="btnDoneFinish" class="btn-primary wide" type="button">好，回到主页</button>
+  </div>
+</dialog>
+
+<!-- 预录口令音频播放器 -->
+<audio id="playerAudio" preload="auto"></audio>
+
 </body>
 </html>
