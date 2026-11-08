@@ -122,7 +122,7 @@ test('首次安装完整包并预缓存全部 3D 动图、海报与预录语音'
   const sw = worker(swText, { net });
 
   await sw.dispatch('install');
-  assert.equal(sw.skipped, 0);
+  assert.equal(sw.skipped, 1, '安装完成时必须自动调用 skipWaiting 接管旧版客户端');
   assert.equal(sw.claimed, 0);
 
   const status = await sw.status();

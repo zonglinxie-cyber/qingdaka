@@ -725,13 +725,35 @@ document.addEventListener('visibilitychange', function(){
   }
 });
 
-// Service Worker 离线状态
+// Service Worker 离线状态与强制接管更新
 if('serviceWorker' in navigator){
   window.addEventListener('load', function(){
     navigator.serviceWorker.register('./sw.js').then(function(reg){
+      reg.update().catch(function(){});
+      if(reg.waiting){
+        reg.waiting.postMessage({type: 'ACTIVATE_UPDATE'});
+      }
+      reg.addEventListener('updatefound', function(){
+        var newWorker = reg.installing;
+        if(newWorker){
+          newWorker.addEventListener('statechange', function(){
+            if(newWorker.state === 'installed' && navigator.serviceWorker.controller){
+              newWorker.postMessage({type: 'ACTIVATE_UPDATE'});
+            }
+          });
+        }
+      });
       if(offlineBadge){ offlineBadge.textContent = '离线就绪'; }
     }).catch(function(){
       if(offlineBadge){ offlineBadge.textContent = '本机运行'; }
+    });
+
+    var reloading = false;
+    navigator.serviceWorker.addEventListener('controllerchange', function(){
+      if(!reloading){
+        reloading = true;
+        window.location.reload();
+      }
     });
   });
 }

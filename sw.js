@@ -188,7 +188,9 @@ async function installRelease() {
 
 self.addEventListener('install', function (event) {
   installation = installRelease();
-  event.waitUntil(installation);
+  event.waitUntil(installation.then(function () {
+    return self.skipWaiting();
+  }));
 });
 
 self.addEventListener('activate', function (event) {
