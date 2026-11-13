@@ -1,7 +1,7 @@
 'use strict';
 
 // 构建会替换这四组标记，自动绑定内容 hash。
-var VERSION = /* BUILD_VERSION_START */ "coach-bb201f3c7e00dd0eee3f" /* BUILD_VERSION_END */;
+var VERSION = /* BUILD_VERSION_START */ "coach-0df5ed1c1fb2bbd2e19b" /* BUILD_VERSION_END */;
 var CORE = /* BUILD_PRECACHE_START */ [
   "./app.js",
   "./assets/exercise-guides/0257-poster.png",
@@ -66,46 +66,6 @@ var CORE = /* BUILD_PRECACHE_START */ [
   "./assets/exercise-guides/3221.gif",
   "./assets/exercise-guides/3239-poster.png",
   "./assets/exercise-guides/3239.gif",
-  "./assets/voice/countdown-3.m4a",
-  "./assets/voice/countdown-start.m4a",
-  "./assets/voice/encourage-1.m4a",
-  "./assets/voice/encourage-2.m4a",
-  "./assets/voice/encourage-3.m4a",
-  "./assets/voice/encourage-4.m4a",
-  "./assets/voice/encourage-5.m4a",
-  "./assets/voice/finish-done.m4a",
-  "./assets/voice/finish-stretch.m4a",
-  "./assets/voice/stretch-0643.m4a",
-  "./assets/voice/stretch-0669.m4a",
-  "./assets/voice/stretch-0794.m4a",
-  "./assets/voice/stretch-1365.m4a",
-  "./assets/voice/stretch-1377.m4a",
-  "./assets/voice/stretch-1403.m4a",
-  "./assets/voice/stretch-1424.m4a",
-  "./assets/voice/stretch-1576.m4a",
-  "./assets/voice/switch-side.m4a",
-  "./assets/voice/warmup-0257.m4a",
-  "./assets/voice/warmup-1167.m4a",
-  "./assets/voice/warmup-1368.m4a",
-  "./assets/voice/warmup-1428.m4a",
-  "./assets/voice/warmup-3221.m4a",
-  "./assets/voice/work-0276.m4a",
-  "./assets/voice/work-0291.m4a",
-  "./assets/voice/work-0292.m4a",
-  "./assets/voice/work-0404.m4a",
-  "./assets/voice/work-0576.m4a",
-  "./assets/voice/work-0579.m4a",
-  "./assets/voice/work-0588.m4a",
-  "./assets/voice/work-0599.m4a",
-  "./assets/voice/work-0603.m4a",
-  "./assets/voice/work-0659.m4a",
-  "./assets/voice/work-0710.m4a",
-  "./assets/voice/work-1373.m4a",
-  "./assets/voice/work-1459.m4a",
-  "./assets/voice/work-1677.m4a",
-  "./assets/voice/work-2287.m4a",
-  "./assets/voice/work-3013.m4a",
-  "./assets/voice/work-3239.m4a",
   "./content.js",
   "./icons/apple-touch-icon-180.png",
   "./icons/icon-192.png",
@@ -118,7 +78,7 @@ var CORE = /* BUILD_PRECACHE_START */ [
 ] /* BUILD_PRECACHE_END */;
 var COMPLETE_RELEASE = /* BUILD_COMPLETE_START */ true /* BUILD_COMPLETE_END */;
 var RELEASE_HASHES = /* BUILD_HASHES_START */ {
-  "./app.js": "fbc6c0949c931c1719bac8f6de3273a875ee830a05ee2e541b7b1896c75c592d",
+  "./app.js": "c83b37b428a567c8ab32a32a8f144cdb24f1ecd4b0609a98b3ae19b0d22f0f71",
   "./assets/exercise-guides/0257-poster.png": "1f1ffe6a159e58f71a4cd588dd12b476d65777ece75f7accf3c441273302dafa",
   "./assets/exercise-guides/0257.gif": "c16f80d17e0755607992ad4f7f8702fb590f778683eb082d22bdc36985329055",
   "./assets/exercise-guides/0276-poster.png": "2aea608c56fc02135862a14b4614674c8fbb27419e0c39212ff5bf9135267b68",
@@ -181,53 +141,13 @@ var RELEASE_HASHES = /* BUILD_HASHES_START */ {
   "./assets/exercise-guides/3221.gif": "4e66b42df0d2706d58aadcfcfd94c7eda79cca048bd7e9c244d349af686bf0fd",
   "./assets/exercise-guides/3239-poster.png": "71aaf71e726f05fb20c2d188b1af106ef62330064dacc08ceae2d13ac3328106",
   "./assets/exercise-guides/3239.gif": "25938cbaaf245e9918b63a722e6b07124cf6ad58a6f0d4464b7b814f7495feba",
-  "./assets/voice/countdown-3.m4a": "0d113b3c86ca3ea3e53942fc5722286db4ab9a6d7bee3aa42e0fcbbe42db2fc1",
-  "./assets/voice/countdown-start.m4a": "50500157e0a0633a5c6c3e4df0aba54286dc2ba3f9f5abbc83655ffeed12d077",
-  "./assets/voice/encourage-1.m4a": "274ea7b93bd66510b968acc447509c6f6052bcd1fe0f5970004a1f7e99442697",
-  "./assets/voice/encourage-2.m4a": "c1a8e07e1fc12015ce931ca38862c99f8a90d82488e860d188ce69294088f6d4",
-  "./assets/voice/encourage-3.m4a": "2ef519750d09de522e6ed6cbc7a990e88b231107f22d831886d7694b72e10dbb",
-  "./assets/voice/encourage-4.m4a": "3d3e311bc66a350d014fc18124a3f999858faf4b9931cb989198b7b69c6aea09",
-  "./assets/voice/encourage-5.m4a": "fbbcd33682480c743b635868cb73939bd15064dbc8c98b8fa078734017e4ec22",
-  "./assets/voice/finish-done.m4a": "387d985431231971c7b19afe1178d293f5d30f977255c408897a8a09e35fce25",
-  "./assets/voice/finish-stretch.m4a": "fa6b27813c5a561dcd20f6c350d652e6ebee05ed68c72c014280a9f6ca34dd5a",
-  "./assets/voice/stretch-0643.m4a": "0fed026d9b54a7c77582b28048c705f698305b38bf53916c9b67788d9c71aab7",
-  "./assets/voice/stretch-0669.m4a": "f48f8a958e11d0ab8e06aaf1a619f94f926827efb808a1a4cd0d0e07152de9a4",
-  "./assets/voice/stretch-0794.m4a": "66d4adeeb2083a853cefda0c43ce941ab4eb15362e95e7bb3e637c39b0bf5b29",
-  "./assets/voice/stretch-1365.m4a": "3420967ec3f0c24f095480619ae137bc39899bb38f6a62fc3374dc6c59e4b7b9",
-  "./assets/voice/stretch-1377.m4a": "3480080fcbae619068bd7c9a8e67ba49c24eab1ff5f11cc67c5a3363a0f85631",
-  "./assets/voice/stretch-1403.m4a": "833cb38bf455e84320bfb0b458b2508c7a650168bbf1c07173b0997501c61e3a",
-  "./assets/voice/stretch-1424.m4a": "1ccac5fd84bd38b524f6d3448e19d1f433e4580af9b0d206cd8599b292b05b79",
-  "./assets/voice/stretch-1576.m4a": "5ea4e9387a08ac04fd2eb5dbfd936147c051a801677348c0063ce49d1951fc19",
-  "./assets/voice/switch-side.m4a": "40811110cf3938fc4f56d0de0806821cec9848d45b7c76544d7e27bee80083c4",
-  "./assets/voice/warmup-0257.m4a": "beca94deb503ac10d7c952d8d7bb48118f8b5cbdc8de0d719184fb38c9f9ca03",
-  "./assets/voice/warmup-1167.m4a": "1feedb94409b25a3e0c597c6d1bd10893e31d657c86f2e6117988250bb9380bc",
-  "./assets/voice/warmup-1368.m4a": "170775ee4cb14a47c44228711143e12a6c258af2ba5fa59a2ec0706adc68865e",
-  "./assets/voice/warmup-1428.m4a": "d37c96773e09ef2e3794f20ba1a49df09ff130b05a0b76cc1c9c76e733681ddd",
-  "./assets/voice/warmup-3221.m4a": "001b1dfe1334ac48acdb3bd5bed9ec18793c5cfcaac48b594f09363955d71946",
-  "./assets/voice/work-0276.m4a": "20b5bad917aa873a57e005300b53ee97560c12a84a7507ce38c12e1532d7f810",
-  "./assets/voice/work-0291.m4a": "eee6650016a6e2ecfba71301515f38b4703e1423f7ae47f4acd7d54eab7677f1",
-  "./assets/voice/work-0292.m4a": "a5a3c3f94b9534ea0865fc8157b4654ac24dbf295ab02774598a89c8d22f1a75",
-  "./assets/voice/work-0404.m4a": "935d07508f337b5b5faddf38a493f6824b33c1d6edf481fbe6dc5b8eb2da04dc",
-  "./assets/voice/work-0576.m4a": "de634bbd38934bd4a7447de1f1316b03ce3f994e6c46875089a5151e2dbde1d9",
-  "./assets/voice/work-0579.m4a": "7512b00dc28f765b9ffc2fac04cfbe7aff1b33878469e714e653200a210b1de9",
-  "./assets/voice/work-0588.m4a": "91c38a52864605a6273234b53d18769809e48f38ab4388027e42bb27722e86af",
-  "./assets/voice/work-0599.m4a": "1ffa183598c1a9e2d432fb950fbe6381a4fd49726c4cf3cb7f96c3b2ec059d8b",
-  "./assets/voice/work-0603.m4a": "4614cfdf6b6c75d3b8457ede9cca57e663dbf1684d33964b67b11c363eb377fc",
-  "./assets/voice/work-0659.m4a": "fe8e355e75ad348421f85d5294c21fc038cf810ea44ef7aace9960da156ac9aa",
-  "./assets/voice/work-0710.m4a": "c41f5d6437098114eb6f6ea668fa5c933b4bc56c2f7866093f69761843831e0f",
-  "./assets/voice/work-1373.m4a": "407d7e13c773d84d55e2a66f02add2c0ecb9d22dae16f9c3449d835e37a01f00",
-  "./assets/voice/work-1459.m4a": "c512f7f4bccfbf3a146a83072f69ab44dcfc58ee6396b102832712ff746210d3",
-  "./assets/voice/work-1677.m4a": "30e4cc8987361289a3e4a5bdac6a9391e264d38816c7b341a32f3fd480ca016f",
-  "./assets/voice/work-2287.m4a": "323ea5dabe76073f2da7e5bbe886f5f424b813876f6121d9d9bc283d3a903d2e",
-  "./assets/voice/work-3013.m4a": "618a1bce96fcafa923ed58409b177ec2217f80c81a5e56e34041d2671fd21b49",
-  "./assets/voice/work-3239.m4a": "0db36a43e0a113d19187f3d6975a456f7377cc25c17e8ba75adfd34b8bea5055",
-  "./content.js": "13b2913d97a461bc5b1af4d2e07a06ddf012d0208143dbd4692dcba29cb0e347",
+  "./content.js": "c19966b3a60a30833b290f9179b2f22335c2c37163ecb1c832d8f32394cb2412",
   "./icons/apple-touch-icon-180.png": "989da9616e205b878097be824e97fb7da865b4c7b9546933da28fa62bed47bb6",
   "./icons/icon-192.png": "6c392bf8142fee95fce333905eab906a62abd37c7781e84ea2c07ff8d95bdfac",
   "./icons/icon-512-maskable.png": "b5b9a9e528e6f024db137a1ba0986f33b6c355c8608108d3e020bfdd29721153",
   "./icons/icon-512.png": "b5b9a9e528e6f024db137a1ba0986f33b6c355c8608108d3e020bfdd29721153",
-  "./index.html": "155c1da63c2bf733a6f8ae8be5ec7fb8b9593f4badb3ec70b0b7df56d7aa02f4",
-  "./manifest.webmanifest": "aa399110c2c1cb0ebb99e5584cc29311e7b019f68b5448f72f317a7c62a853d0",
+  "./index.html": "70c5cf5155dc751537a09923755736434f1b72409cbc03e319a2a4a8d187a08d",
+  "./manifest.webmanifest": "c3512fab4c19e67bb2f2e44fe66572608c72d225e74b8a455b2d303953ad8f1a",
   "./session.js": "cd0bbf1249e8e226bb87557316320d0a888c9db4bebc180870d870aff23685b7",
   "./styles.css": "bfda1120edc1fc428693071ff77d61bf024ae0c0139ee3c3383cc0a763d73655"
 } /* BUILD_HASHES_END */;
@@ -330,43 +250,13 @@ self.addEventListener('message', function (event) {
   }
 });
 
-function rangeResponse(response, rangeHeader) {
-  return response.arrayBuffer().then(function (buffer) {
-    var match = /^bytes=(\d*)-(\d*)$/i.exec(String(rangeHeader || '').trim());
-    var size = buffer.byteLength;
-    var start, end;
-    if (!match || (!match[1] && !match[2])) {
-      return new Response(null, { status: 416, headers: { 'Content-Range': 'bytes */' + size } });
-    }
-    if (!match[1]) {
-      var suffixLength = Number(match[2]);
-      if (!Number.isFinite(suffixLength) || suffixLength <= 0) {
-        return new Response(null, { status: 416, headers: { 'Content-Range': 'bytes */' + size } });
-      }
-      start = Math.max(0, size - suffixLength);
-      end = size - 1;
-    } else {
-      start = Number(match[1]);
-      end = match[2] ? Math.min(Number(match[2]), size - 1) : size - 1;
-    }
-    if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || start >= size || end < start) {
-      return new Response(null, { status: 416, headers: { 'Content-Range': 'bytes */' + size } });
-    }
-    var headers = new Headers(response.headers);
-    headers.set('Accept-Ranges', 'bytes');
-    headers.set('Content-Range', 'bytes ' + start + '-' + end + '/' + size);
-    headers.set('Content-Length', String(end - start + 1));
-    return new Response(buffer.slice(start, end + 1), { status: 206, statusText: 'Partial Content', headers: headers });
-  });
-}
-
-async function cacheFirst(url, file, rangeHeader) {
+async function cacheFirst(url, file) {
   var cache, hit;
   try {
     cache = await caches.open(CACHE_NAME);
     hit = await cache.match(url);
     if (hit) {
-      return rangeHeader ? rangeResponse(hit, rangeHeader) : hit;
+      return hit;
     }
   } catch (error) {}
   try {
@@ -374,7 +264,7 @@ async function cacheFirst(url, file, rangeHeader) {
     try {
       if (cache) { await cache.put(url, response.clone()); }
     } catch (error) {}
-    return rangeHeader ? rangeResponse(response, rangeHeader) : response;
+    return response;
   } catch (error) {
     return new Response('This release is unavailable offline. Reconnect and accept the complete update.', {
       status: 503,
@@ -394,11 +284,10 @@ self.addEventListener('fetch', function (event) {
   var file = FILES.get(url.href);
   if (!file && !COMPLETE_RELEASE) {
     var relative = url.pathname.slice(SCOPE.pathname.length);
-    if (/^assets\/(?:exercise-guides\/(?:[a-zA-Z0-9_-]+\/)*[a-zA-Z0-9_-]+\.(?:png|gif)|voice\/[a-zA-Z0-9_-]+\.m4a)$/.test(relative)) {
+    if (/^assets\/exercise-guides\/(?:[a-zA-Z0-9_-]+\/)*[a-zA-Z0-9_-]+\.(?:png|gif)$/.test(relative)) {
       file = './' + relative;
     }
   }
   if (!file) { return; }
-  var rangeHeader = request.headers && typeof request.headers.get === 'function' ? request.headers.get('Range') : null;
-  event.respondWith(cacheFirst(url.href, file, rangeHeader));
+  event.respondWith(cacheFirst(url.href, file));
 });

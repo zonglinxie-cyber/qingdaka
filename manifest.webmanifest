@@ -1,7 +1,7 @@
 {
   "name": "轻打卡 · 科学跟练",
   "short_name": "轻打卡",
-  "description": "个人科学跟练版 · 3D肌肉解剖动图与预录口令 · 周循环科学抗阻",
+  "description": "个人科学跟练版 · 3D肌肉解剖动图与节拍引导 · 周循环科学抗阻",
   "lang": "zh-CN",
   "dir": "ltr",
   "start_url": "./index.html",
