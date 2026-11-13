@@ -73,48 +73,8 @@ var CORE = /* BUILD_PRECACHE_START */ [
   './assets/exercise-guides/3013.gif',
   './assets/exercise-guides/3221-poster.png',
   './assets/exercise-guides/3221.gif',
-  './assets/exercise-guides/bird-dog-poster.png',
-  './assets/exercise-guides/bird-dog.gif',
-  './assets/exercise-guides/generated/wall-plank-anatomy.png',
-  './assets/voice/countdown-3.m4a',
-  './assets/voice/countdown-start.m4a',
-  './assets/voice/encourage-1.m4a',
-  './assets/voice/encourage-2.m4a',
-  './assets/voice/encourage-3.m4a',
-  './assets/voice/encourage-4.m4a',
-  './assets/voice/encourage-5.m4a',
-  './assets/voice/finish-done.m4a',
-  './assets/voice/finish-stretch.m4a',
-  './assets/voice/stretch-0643.m4a',
-  './assets/voice/stretch-0669.m4a',
-  './assets/voice/stretch-0794.m4a',
-  './assets/voice/stretch-1365.m4a',
-  './assets/voice/stretch-1377.m4a',
-  './assets/voice/stretch-1403.m4a',
-  './assets/voice/stretch-1424.m4a',
-  './assets/voice/stretch-1576.m4a',
-  './assets/voice/switch-side.m4a',
-  './assets/voice/warmup-0257.m4a',
-  './assets/voice/warmup-1167.m4a',
-  './assets/voice/warmup-1368.m4a',
-  './assets/voice/warmup-1428.m4a',
-  './assets/voice/warmup-3221.m4a',
-  './assets/voice/work-0276.m4a',
-  './assets/voice/work-0291.m4a',
-  './assets/voice/work-0292.m4a',
-  './assets/voice/work-0404.m4a',
-  './assets/voice/work-0576.m4a',
-  './assets/voice/work-0579.m4a',
-  './assets/voice/work-0588.m4a',
-  './assets/voice/work-0599.m4a',
-  './assets/voice/work-0603.m4a',
-  './assets/voice/work-0659.m4a',
-  './assets/voice/work-0710.m4a',
-  './assets/voice/work-1373.m4a',
-  './assets/voice/work-1459.m4a',
-  './assets/voice/work-1677.m4a',
-  './assets/voice/work-2287.m4a',
-  './assets/voice/work-3013.m4a'
+  './assets/exercise-guides/3239-poster.png',
+  './assets/exercise-guides/3239.gif'
 ] /* BUILD_PRECACHE_END */;
 var COMPLETE_RELEASE = /* BUILD_COMPLETE_START */ false /* BUILD_COMPLETE_END */;
 var RELEASE_HASHES = /* BUILD_HASHES_START */ {} /* BUILD_HASHES_END */;
@@ -217,43 +177,13 @@ self.addEventListener('message', function (event) {
   }
 });
 
-function rangeResponse(response, rangeHeader) {
-  return response.arrayBuffer().then(function (buffer) {
-    var match = /^bytes=(\d*)-(\d*)$/i.exec(String(rangeHeader || '').trim());
-    var size = buffer.byteLength;
-    var start, end;
-    if (!match || (!match[1] && !match[2])) {
-      return new Response(null, { status: 416, headers: { 'Content-Range': 'bytes */' + size } });
-    }
-    if (!match[1]) {
-      var suffixLength = Number(match[2]);
-      if (!Number.isFinite(suffixLength) || suffixLength <= 0) {
-        return new Response(null, { status: 416, headers: { 'Content-Range': 'bytes */' + size } });
-      }
-      start = Math.max(0, size - suffixLength);
-      end = size - 1;
-    } else {
-      start = Number(match[1]);
-      end = match[2] ? Math.min(Number(match[2]), size - 1) : size - 1;
-    }
-    if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || start >= size || end < start) {
-      return new Response(null, { status: 416, headers: { 'Content-Range': 'bytes */' + size } });
-    }
-    var headers = new Headers(response.headers);
-    headers.set('Accept-Ranges', 'bytes');
-    headers.set('Content-Range', 'bytes ' + start + '-' + end + '/' + size);
-    headers.set('Content-Length', String(end - start + 1));
-    return new Response(buffer.slice(start, end + 1), { status: 206, statusText: 'Partial Content', headers: headers });
-  });
-}
-
-async function cacheFirst(url, file, rangeHeader) {
+async function cacheFirst(url, file) {
   var cache, hit;
   try {
     cache = await caches.open(CACHE_NAME);
     hit = await cache.match(url);
     if (hit) {
-      return rangeHeader ? rangeResponse(hit, rangeHeader) : hit;
+      return hit;
     }
   } catch (error) {}
   try {
@@ -261,7 +191,7 @@ async function cacheFirst(url, file, rangeHeader) {
     try {
       if (cache) { await cache.put(url, response.clone()); }
     } catch (error) {}
-    return rangeHeader ? rangeResponse(response, rangeHeader) : response;
+    return response;
   } catch (error) {
     return new Response('This release is unavailable offline. Reconnect and accept the complete update.', {
       status: 503,
@@ -281,11 +211,10 @@ self.addEventListener('fetch', function (event) {
   var file = FILES.get(url.href);
   if (!file && !COMPLETE_RELEASE) {
     var relative = url.pathname.slice(SCOPE.pathname.length);
-    if (/^assets\/(?:exercise-guides\/(?:[a-zA-Z0-9_-]+\/)*[a-zA-Z0-9_-]+\.(?:png|gif)|voice\/[a-zA-Z0-9_-]+\.m4a)$/.test(relative)) {
+    if (/^assets\/exercise-guides\/(?:[a-zA-Z0-9_-]+\/)*[a-zA-Z0-9_-]+\.(?:png|gif)$/.test(relative)) {
       file = './' + relative;
     }
   }
   if (!file) { return; }
-  var rangeHeader = request.headers && typeof request.headers.get === 'function' ? request.headers.get('Range') : null;
-  event.respondWith(cacheFirst(url.href, file, rangeHeader));
+  event.respondWith(cacheFirst(url.href, file));
 });

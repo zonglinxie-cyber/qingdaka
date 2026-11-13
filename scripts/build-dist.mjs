@@ -13,8 +13,7 @@ const MARKERS = ['VERSION', 'PRECACHE', 'COMPLETE', 'HASHES'];
 export function allowedFile(name) {
   return REQUIRED_FILES.includes(name) ||
     /^icons\/(?:[a-zA-Z0-9_-]+\/)*[a-zA-Z0-9_-]+\.(?:png|svg|ico|webp|jpe?g)$/.test(name) ||
-    /^assets\/exercise-guides\/(?:[a-zA-Z0-9_-]+\/)*[a-zA-Z0-9_-]+\.(?:png|gif)$/.test(name) ||
-    /^assets\/voice\/[a-zA-Z0-9_-]+\.m4a$/.test(name);
+    /^assets\/exercise-guides\/(?:[a-zA-Z0-9_-]+\/)*[a-zA-Z0-9_-]+\.(?:png|gif)$/.test(name);
 }
 
 // 不跟随软链接，避免白名单目录间接带出文档、旧素材或项目外的文件。
@@ -82,7 +81,7 @@ export function precacheFiles(files) {
 export async function prepareBuild(root = PROJECT_ROOT) {
   const names = [...REQUIRED_FILES];
   try {
-    for (const directory of ['icons', 'assets/exercise-guides', 'assets/voice']) {
+    for (const directory of ['icons', 'assets/exercise-guides']) {
       names.push(...(await listFiles(root, directory)).filter(allowedFile));
     }
     const files = new Map();
@@ -93,9 +92,6 @@ export async function prepareBuild(root = PROJECT_ROOT) {
     }
     if (!names.some(name => name.startsWith('assets/exercise-guides/'))) {
       throw new Error('assets/exercise-guides/ 尚无动作示范资源');
-    }
-    if (!names.some(name => name.startsWith('assets/voice/'))) {
-      throw new Error('assets/voice/ 尚无预录语音资源');
     }
     const version = releaseVersion(files);
     const precache = precacheFiles(files);

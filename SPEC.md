@@ -4,14 +4,14 @@
 
 ## 1. 产品定位与原则
 
-1. **核心定调**：个人自用、**零记账打卡**、**零免责安检弹窗**、**100% 3D 肌肉解剖动图 + 预录女声口令**。
+1. **核心定调**：个人自用、**零记账打卡**、**零免责安检弹窗**、**100% 3D 肌肉解剖动图**。
 2. **纯粹跟练**：应用浓缩为一件事：**用科学编排的「A → B → C 周循环计划」清晰教你动作、带着你练完即走。**
 3. **保护膝踝、对冲久坐**：大肌群复合动作优先、椅子托底护膝、零跑跳冲击、推拉平衡、强化后侧链与抗旋转核心。
-4. **零负担偏好**：不记账、不设连胜或欠账惩罚；仅用极简 `localStorage['qingdaka-coach-prefs']` 保存当前偏好（`nextCycle`、`selectedPlan`、`level`、`voice`），不可用时静默退回内存。
+4. **零负担偏好**：不记账、不设连胜或欠账惩罚；仅用极简 `localStorage['qingdaka-coach-prefs']` 保存当前偏好（`nextCycle`、`selectedPlan`、`level`、`voiceMode`），不可用时静默退回内存。
 
 ## 2. 课程体系设计
 
-### 2.1 统一热身（所有抗阻课前置，5 动作全肌肉 GIF + 全预录语音）
+### 2.1 统一热身（所有抗阻课前置，5 动作全肌肉 GIF）
 1. `3221` **原地踏步激活**（全身/髋，按稳住的高度抬膝）
 2. `1167` **动态扩胸**（肩/胸展开，改善含胸）
 3. `1428` **腕关节绕环**（腕/前臂润滑）
@@ -42,9 +42,9 @@
 | `QDK_CONTENT` | `content.js` | 31 个精选动作元数据（100% 完整流畅 3D 解剖动图、海报、精炼教练口令/哨音、主次肌群、3步做法、呼吸发力、避坑红框）、5 套课程、cycleOrder、4 档强度、`buildSessionPlan(planId, levelId)` |
 | `QDK_SESSION` | `session.js` | 纯内存计时状态机；支持阶段 `countdown` / `warmup` / `work` / `rest` / `roundBreak` / `stretch`；`work` 与 `stretch` 计入 `activeSeconds`；提供 `onStep`、`onHalfway`（单侧换边）、`onCountdown3` 钩子；严格时间推进（>2000ms 间隔自动暂停不补算） |
 | UI 单页 | `index.html` / `styles.css` / `app.js` | 单页全屏跟练架构：顶栏语音开关与离线指示、周循环推荐书签、4档强度切换控制台、按顺序学与练动作列表、3D 动作教学弹层（含「单练体验 30 秒」）、全屏跟练播放器（白底正方形舞台融合 3D GIF、下一动作角标、换另一侧提示、直关退出）、自然完成卡与 A→B→C 书签自动推进 |
-| 离线缓存 | `sw.js` | Service Worker PWA 离线支持；支持 Range 头部放行返回 206 Partial Content（保证 iOS Safari `<audio>` 正常播放）；预缓存核心壳及全部引用的动图与语音 |
+| 离线缓存 | `sw.js` | Service Worker PWA 离线支持；预缓存核心壳及全部引用的动图 |
 
 ## 4. 视口与发布门槛
 
 - 视口硬性要求：在 `320×560` 和 `390×844` 尺寸下，主屏无横向滚动条；跟练播放器 `#player` 一屏内顶部状态、中部肌肉动图、短口令与底部控制按钮完整可见、互不遮挡。
-- 发布门槛：`scripts/check-dist.mjs` 强制验证 `content.js` 5 套课程 × 4 档强度的全部跟练步序列合法性，以及 `assets/exercise-guides/*` 与 `assets/voice/*.m4a` 双向 1:1 精确匹配（零死链、零未引用孤儿文件）。
+- 发布门槛：`scripts/check-dist.mjs` 强制验证 `content.js` 5 套课程 × 4 档强度的全部跟练步序列合法性，以及 `assets/exercise-guides/*` 双向 1:1 精确匹配（零死链、零未引用孤儿文件）。

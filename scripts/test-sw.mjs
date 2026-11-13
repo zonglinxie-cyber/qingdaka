@@ -115,7 +115,7 @@ test('完整包构建与检查：版本 hash 可复算且精确通过全部断�
   assert.match(version, /^coach-[a-f0-9]{20}$/);
 });
 
-test('首次安装完整包并预缓存全部 3D 动图、海报与预录语音', async () => {
+test('首次安装完整包并预缓存全部 3D 动图与海报', async () => {
   const { files, version } = await prepareBuild();
   const swText = files.get('sw.js').toString('utf8');
   const net = network(files);
@@ -133,40 +133,13 @@ test('首次安装完整包并预缓存全部 3D 动图、海报与预录语音'
 
   // 离线状态下全部预缓存资源均可命中
   net.online = false;
-  const sampleVoice = await sw.request('./assets/voice/countdown-3.m4a');
-  assert.equal(sampleVoice.status, 200);
-  assert.deepEqual(Buffer.from(await sampleVoice.arrayBuffer()), files.get('assets/voice/countdown-3.m4a'));
+  const samplePoster = await sw.request('./assets/exercise-guides/0291-poster.png');
+  assert.equal(samplePoster.status, 200);
+  assert.deepEqual(Buffer.from(await samplePoster.arrayBuffer()), files.get('assets/exercise-guides/0291-poster.png'));
 
   const sampleGif = await sw.request('./assets/exercise-guides/0291.gif');
   assert.equal(sampleGif.status, 200);
   assert.deepEqual(Buffer.from(await sampleGif.arrayBuffer()), files.get('assets/exercise-guides/0291.gif'));
-});
-
-test('Audio Range 请求放行并返回 206 Partial Content（支持 iOS Safari）', async () => {
-  const { files } = await prepareBuild();
-  const swText = files.get('sw.js').toString('utf8');
-  const net = network(files);
-  const sw = worker(swText, { net });
-  await sw.dispatch('install');
-  await sw.dispatch('activate');
-
-  const voiceData = files.get('assets/voice/countdown-3.m4a');
-  const totalSize = voiceData.byteLength;
-  assert.ok(totalSize > 32);
-
-  // 发起 Range: bytes=0-31
-  const res = await sw.request('./assets/voice/countdown-3.m4a', {
-    headers: { 'Range': 'bytes=0-31' }
-  });
-  assert.equal(res.status, 206);
-  assert.equal(res.statusText, 'Partial Content');
-  assert.equal(res.headers.get('Accept-Ranges'), 'bytes');
-  assert.equal(res.headers.get('Content-Range'), `bytes 0-31/${totalSize}`);
-  assert.equal(res.headers.get('Content-Length'), '32');
-
-  const slice = Buffer.from(await res.arrayBuffer());
-  assert.equal(slice.byteLength, 32);
-  assert.deepEqual(slice, voiceData.subarray(0, 32));
 });
 
 test('激活时清理匹配 scope 的旧版缓存，保留其他站点缓存', async () => {

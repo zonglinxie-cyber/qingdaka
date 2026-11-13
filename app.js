@@ -41,7 +41,6 @@ function savePrefs(prefs){
 var currentPrefs = loadPrefs();
 var currentSession = null;
 var activePlanSteps = [];
-var encouragePlayed = {};
 
 // DOM 元素引用
 var btnVoiceToggle = document.getElementById('btnVoiceToggle');
@@ -99,8 +98,7 @@ var doneSummary = document.getElementById('doneSummary');
 var doneCycleUpdate = document.getElementById('doneCycleUpdate');
 var btnDoneFinish = document.getElementById('btnDoneFinish');
 
-// 音频与屏幕常亮
-var playerAudio = document.getElementById('playerAudio');
+// 音效与屏幕常亮
 var sharedAudioCtx = null;
 var wakeLockSentinel = null;
 
@@ -164,9 +162,6 @@ function unlockAudio(){
 }
 
 function stopVoice(){
-  if(playerAudio){
-    try { playerAudio.pause(); } catch(e){}
-  }
   if(speechSynth && speechSynth.speaking){
     try { speechSynth.cancel(); } catch(e){}
   }
@@ -560,7 +555,6 @@ function closeLearnDialog(){
 // 启动播放器
 function startSessionWithPlan(steps, planId){
   unlockAudio();
-  encouragePlayed = {};
 
   if(currentSession){
     currentSession.destroy();
@@ -765,7 +759,6 @@ btnPractice30.addEventListener('click', function(){
       cue: move.cue,
       gif: move.gif,
       poster: move.poster,
-      voice: move.voice,
       primary: move.primary,
       secondary: move.secondary,
       sideMode: move.sideMode,

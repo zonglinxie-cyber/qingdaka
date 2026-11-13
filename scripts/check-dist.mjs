@@ -23,7 +23,7 @@ export async function checkArtifact(files) {
   assert.equal(readBuildBlock(sw, 'COMPLETE'), true, '发布 SW 未标记为完整包');
   assert.match(version, /^coach-[a-f0-9]{20}$/, '版本必须来自发布内容 hash');
   assert.equal(version, releaseVersion(files), '发布包内容与版本 hash 不符');
-  assert.deepEqual(precache, precacheFiles(files), '预缓存必须精确覆盖所有核心文件、icons、动图和预录语音');
+  assert.deepEqual(precache, precacheFiles(files), '预缓存必须精确覆盖所有核心文件、icons 和动图');
   assert.deepEqual(Object.keys(hashes).sort(), precache.slice().sort(), '完整性清单与预缓存不符');
   for (const file of precache) {
     assert.equal(hashes[file], sha256(files.get(file.slice(2))), `SW 文件校验值不符：${file}`);
@@ -61,7 +61,7 @@ export async function checkArtifact(files) {
 
   const html = text('index.html');
   assert.ok(html.includes("img-src 'self' data: blob:;"), 'CSP 必须允许 img-src data: blob:');
-  assert.ok(html.includes("media-src 'self' data: blob:;"), 'CSP 必须允许 media-src data: blob:');
+  assert.ok(!html.includes('playerAudio'), '首页不得残留已移除的 playerAudio 元素');
   assert.ok(!html.includes('store.js'), '首页不得加载已废弃的 store.js');
 
   const scripts = [];
@@ -88,17 +88,6 @@ export async function checkArtifact(files) {
 
   // 动作与媒体精确校验
   const referencedAssets = new Set();
-  const operationalVoices = [
-    'assets/voice/countdown-start.m4a', 'assets/voice/countdown-3.m4a',
-    'assets/voice/switch-side.m4a', 'assets/voice/finish-done.m4a', 'assets/voice/finish-stretch.m4a',
-    'assets/voice/encourage-1.m4a', 'assets/voice/encourage-2.m4a', 'assets/voice/encourage-3.m4a',
-    'assets/voice/encourage-4.m4a', 'assets/voice/encourage-5.m4a'
-  ];
-  for (const op of operationalVoices) {
-    referencedAssets.add(op);
-    assert.ok(files.has(op), `缺少运行语音：${op}`);
-    assert.ok(precached.has('./' + op), `运行语音未预缓存：${op}`);
-  }
 
   const moves = Object.values(content.movesDict);
   assert.equal(moves.length, 31, '动作清单必须精确为 31 个');
@@ -107,6 +96,7 @@ export async function checkArtifact(files) {
     assert.ok(Array.isArray(m.steps) && m.steps.length === 3, `动作步骤必须为 3 步拆解：${m.id}`);
     assert.ok(m.shortCue && m.shortCue.length <= 32, `动作口令过长：${m.id} (${m.shortCue})`);
     assert.ok(!m.mistake.startsWith('常见错误：'), `避坑提醒不要重复带常见错误前缀：${m.id}`);
+    assert.equal('voice' in m, false, `动作元数据不得残留预录语音字段：${m.id}`);
 
     assert.ok(files.has(m.gif), `动图不存在：${m.gif}`);
     assert.ok(precached.has('./' + m.gif), `动图未预缓存：${m.gif}`);
@@ -115,12 +105,6 @@ export async function checkArtifact(files) {
     assert.ok(files.has(m.poster), `海报图不存在：${m.poster}`);
     assert.ok(precached.has('./' + m.poster), `海报图未预缓存：${m.poster}`);
     referencedAssets.add(m.poster);
-
-    if (m.voice) {
-      assert.ok(files.has(m.voice), `动作语音不存在：${m.voice}`);
-      assert.ok(precached.has('./' + m.voice), `动作语音未预缓存：${m.voice}`);
-      referencedAssets.add(m.voice);
-    }
   }
 
   // 校验 5 套课程 × 4 档强度的全部跟练步序列
@@ -141,9 +125,9 @@ export async function checkArtifact(files) {
     }
   }
 
-  // 双向精确匹配：发布包中的 exercise-guides 与 voice 媒体文件不得含有未引用的孤儿文件
+  // 双向精确匹配：发布包中的 exercise-guides 媒体文件不得含有未引用的孤儿文件
   for (const name of files.keys()) {
-    if (name.startsWith('assets/exercise-guides/') || name.startsWith('assets/voice/')) {
+    if (name.startsWith('assets/exercise-guides/')) {
       assert.ok(referencedAssets.has(name), `发布包中存在未被引用的孤儿媒体文件：${name}`);
     }
   }
